@@ -1,0 +1,16 @@
+# Local only (never tracked)
+LOCAL_RESTRICTIONS.md
+
+# Tooling / local caches
+.atl/
+.codegraph/
+
+# JavaScript / Cloudflare
+node_modules/
+dist/
+coverage/
+.wrangler/
+.dev.vars
+
+# macOS
+.DS_Store
