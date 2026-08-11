@@ -93,7 +93,9 @@ export function buildServer(env: Env): McpServer {
     },
     async ({ url, strategy, apiKey }) => {
       try {
-        return jsonResult(await analyzePageSpeed(url, strategy, env, undefined, apiKey));
+        return jsonResult(
+          await analyzePageSpeed(url, strategy, env, undefined, apiKey),
+        );
       } catch (error) {
         return errorResult(error);
       }
