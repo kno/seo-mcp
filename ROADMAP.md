@@ -15,7 +15,7 @@ The first release proves a bounded, Workers-native SEO MCP before adding authent
 ## Current — reproducible build and runtime verification
 
 - [ ] Generate and commit `package-lock.json`, then change CI from `npm install` to `npm ci`
-- [ ] Run the real Vitest suite, typecheck, and Wrangler dry-run with installed dependencies
+- [x] Run the real Vitest suite, typecheck, and Wrangler dry-run with installed dependencies
 - [ ] Add a lightweight Wrangler/Miniflare integration test for `HTMLRewriter` and `/mcp`
 - [ ] Exercise a deployed Worker with multiple MCP hosts
 - [ ] Record real Free-plan CPU, output-size, and subrequest telemetry
