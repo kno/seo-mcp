@@ -82,11 +82,18 @@ export function buildServer(env: Env): McpServer {
       inputSchema: z.object({
         url: z.url().describe("Public HTTP or HTTPS page URL"),
         strategy: z.enum(["mobile", "desktop"]).default("mobile"),
+        apiKey: z
+          .string()
+          .min(1)
+          .optional()
+          .describe(
+            "Google PageSpeed API key. Overrides the PAGESPEED_API_KEY environment variable when provided.",
+          ),
       }),
     },
-    async ({ url, strategy }) => {
+    async ({ url, strategy, apiKey }) => {
       try {
-        return jsonResult(await analyzePageSpeed(url, strategy, env));
+        return jsonResult(await analyzePageSpeed(url, strategy, env, undefined, apiKey));
       } catch (error) {
         return errorResult(error);
       }

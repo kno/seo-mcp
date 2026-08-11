@@ -112,6 +112,7 @@ export async function analyzePageSpeed(
   strategy: Strategy = "mobile",
   env: Env = {},
   fetcher?: typeof fetch,
+  apiKey?: string,
 ): Promise<PageSpeedResult> {
   const targetUrl = normalizePublicUrl(target);
   const api = new URL(
@@ -127,7 +128,8 @@ export async function analyzePageSpeed(
   ]) {
     api.searchParams.append("category", category);
   }
-  if (env.PAGESPEED_API_KEY) api.searchParams.set("key", env.PAGESPEED_API_KEY);
+  const effectiveKey = apiKey ?? env.PAGESPEED_API_KEY;
+  if (effectiveKey) api.searchParams.set("key", effectiveKey);
 
   const response = await fetchBounded(api, {
     maxBytes: LIMITS.maxJsonBytes,

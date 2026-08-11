@@ -90,4 +90,57 @@ describe("normalizePageSpeed", () => {
       "seo",
     ]);
   });
+
+  it("uses explicit apiKey as the key query param", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({ lighthouseResult: { categories: {}, audits: {} } }),
+    );
+    await analyzePageSpeed(
+      "https://example.com/",
+      "mobile",
+      {},
+      fetcher,
+      "explicit-key-123",
+    );
+    const requested = new URL(fetcher.mock.calls[0][0].toString());
+    expect(requested.searchParams.get("key")).toBe("explicit-key-123");
+  });
+
+  it("falls back to env.PAGESPEED_API_KEY when no apiKey is passed", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({ lighthouseResult: { categories: {}, audits: {} } }),
+    );
+    await analyzePageSpeed(
+      "https://example.com/",
+      "mobile",
+      { PAGESPEED_API_KEY: "env-key-456" },
+      fetcher,
+    );
+    const requested = new URL(fetcher.mock.calls[0][0].toString());
+    expect(requested.searchParams.get("key")).toBe("env-key-456");
+  });
+
+  it("explicit apiKey wins over env.PAGESPEED_API_KEY", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({ lighthouseResult: { categories: {}, audits: {} } }),
+    );
+    await analyzePageSpeed(
+      "https://example.com/",
+      "mobile",
+      { PAGESPEED_API_KEY: "env-key-456" },
+      fetcher,
+      "explicit-key-123",
+    );
+    const requested = new URL(fetcher.mock.calls[0][0].toString());
+    expect(requested.searchParams.get("key")).toBe("explicit-key-123");
+  });
+
+  it("omits key param when neither apiKey nor env.PAGESPEED_API_KEY is set", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({ lighthouseResult: { categories: {}, audits: {} } }),
+    );
+    await analyzePageSpeed("https://example.com/", "mobile", {}, fetcher);
+    const requested = new URL(fetcher.mock.calls[0][0].toString());
+    expect(requested.searchParams.has("key")).toBe(false);
+  });
 });
