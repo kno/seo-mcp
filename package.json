@@ -8,6 +8,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "dev:bff": "wrangler dev -c bff/wrangler.jsonc",
+    "predeploy:bff": "pnpm build:ui",
     "deploy:bff": "wrangler deploy -c bff/wrangler.jsonc",
     "types:bff": "wrangler types -c bff/wrangler.jsonc --path bff/worker-configuration.d.ts",
     "build:ui": "vite build --config bff/ui/vite.config.ts",
