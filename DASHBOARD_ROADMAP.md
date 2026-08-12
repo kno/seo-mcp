@@ -45,7 +45,13 @@ Blocks Phase 1. Pulled forward from `ROADMAP.md` "Protocol and tooling".
 
 Without this the dashboard consumes untyped, unvalidated JSON: a field rename on the server would not break the build, it would break the UI in production.
 
-The server also registers `search_console_query` (commit `9e570a3`). It is **deferred** from Phase −1 and Phase 0: it depends on an external authenticated source (a Google refresh token), so its secret handling, per-property authorization and cacheability need their own change. Its OAuth is Google's, not MCP-client OAuth, so Phase 6's blocker is unaffected.
+The server also registers `search_console_query` (commit `9e570a3`). It is **deferred** from Phase −1 and Phase 0 into Phase 5: it depends on an external authenticated source (a Google refresh token held as a Worker secret), so its caching and staleness semantics differ from the crawl tools. Its auth is Google's, not MCP-client auth.
+
+## Principle: the dashboard tracks the tool set
+
+The dashboard exists to surface everything the MCP produces, so **every tool the server registers gets a view, and a new tool's view lands as part of adding it** — not as a later catch-up. This roadmap has already been caught out twice by tools landing mid-planning (`check_links`, then `search_console_query`).
+
+Consequence for planning: specs for tools that do not exist yet are written against the roadmap's stated intent, not against a verified result shape. They are provisional by construction and MUST be reconciled against the real output schema when each tool ships. Each such spec says so explicitly.
 
 Smaller than it looks: the installed `@modelcontextprotocol/server@2.0.0` accepts a Zod schema as `outputSchema` beside `inputSchema`, converts it to JSON Schema itself, and **already validates `structuredContent` at runtime**. Declaring the schema buys the validation. One constraint: every schema root must be an object, or the SDK applies a legacy `{result:…}` wire wrap.
 
@@ -88,16 +94,25 @@ Smaller than it looks: the installed `@modelcontextprotocol/server@2.0.0` accept
 - [ ] Result export (JSON/CSV).
 - [ ] Usage/quota visibility: surface how close the shared bucket is to its limit.
 
-## Phase 5 — history and comparison (gated by server persistence)
+## Phase 5 — authenticated data sources
 
-- [ ] Persist crawl/PageSpeed snapshots and render period-over-period diffs and trend charts.
-- [ ] BLOCKED until the server ROADMAP resolves durable storage (D1/KV/R2) and exposes history.
+`ROADMAP.md` resolved the deployment shape as **single-tenant**: one owner, their own sites, one Google account. Google access uses a stored refresh token held as a Worker secret, not a user OAuth flow — so these are no longer blocked on an authorization server. Specced in `openspec/changes/dashboard-insights/`.
 
-## Phase 6 — multi-tenant (gated by server OAuth/quotas)
+- [ ] Search Console view: `search_console_query` (shipped), then `find_striking_distance_keywords`, `find_low_ctr_opportunities`, content-decay and period-over-period comparison.
+- [ ] Keyword research view: `get_keyword_metrics` first, then `discover_keywords` — volume, CPC, competition, intent, clustering.
+- [ ] SEO intelligence view: `analyze_domain`, `find_seo_opportunities`, keyword-to-page mapping, content gaps, cannibalizations, internal-linking recommendations, impact/effort prioritization.
 
-- [ ] Per-client MCP credentials replacing the shared token; per-client quota/usage display.
-- [ ] BLOCKED until the server ROADMAP ships OAuth and per-client quotas.
-- Note: dashboard _access_ auth is Phase 0 and is not blocked by this. What is blocked is issuing distinct MCP credentials per user.
+## Phase 6 — history and comparison (gated by server persistence)
+
+- [ ] Persist snapshots and render period-over-period diffs and trend charts.
+- [ ] Storage decision is resolved (**D1** for metrics and history, rolling 90-day retention; R2 only if full archival is later wanted). Still BLOCKED on the server actually implementing history and exposing it.
+
+## Phase 7 — multi-tenant (only if the deployment shape changes)
+
+`ROADMAP.md` resolved to keep the shared bearer token, with per-client tokens only if a second consumer appears. This phase is therefore **conditional, not scheduled**.
+
+- [ ] Per-client MCP credentials and per-client quota display.
+- Note: dashboard _access_ auth is Phase 0 and was never blocked by this. What this phase adds is distinct MCP credentials per user, which single-tenant does not need.
 
 ## Pending decisions
 
