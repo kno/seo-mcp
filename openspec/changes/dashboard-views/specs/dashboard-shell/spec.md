@@ -18,6 +18,13 @@ change ships), the shell MUST render a distinct, actionable presentation. An unr
 newly added `code` value MUST fall into an explicit "unmapped error" state that still names the
 raw `code` and message, and MUST NOT be silently rendered as empty or success.
 
+The authenticated-source codes introduced by the `dashboard-insights` change MUST have mapped
+presentations rather than falling into the unmapped state, because each demands a different user
+response: an upstream credential failure requires operator action and no retry, an upstream
+source-quota rejection requires waiting, and an indeterminate authenticated failure MUST be
+treated as non-retryable. Relying on the unmapped fallback for these would tell the user nothing
+about what to do.
+
 #### Scenario: Known code renders its mapped presentation
 
 - GIVEN a view's fetch fails with a normalized error whose `code` identifies upstream 401
@@ -30,6 +37,14 @@ raw `code` and message, and MUST NOT be silently rendered as empty or success.
 - WHEN the shell renders the failure
 - THEN it MUST show an explicit unmapped-error state naming the raw `code` and message
 - AND MUST NOT render the view as empty or successful
+
+#### Scenario: Authenticated-source failure classes are separately actionable
+
+- GIVEN one request fails with an upstream credential failure and another with an upstream source-quota rejection
+- WHEN the shell renders both
+- THEN the two presentations MUST differ
+- AND the credential-failure presentation MUST indicate that operator action is required rather than offering a retry
+- AND neither MUST fall into the unmapped-error state
 
 ### Requirement: Rate-Limit Errors Surface `retryAfter` and Block Resubmission
 

@@ -61,3 +61,11 @@ When a request is rejected with a normalized rate-limit error carrying `retryAft
 - GIVEN a rate-limit error state's `retryAfter` delay has fully elapsed
 - WHEN the user views the view again
 - THEN a retry/resubmit action MAY become available
+
+#### Scenario: A rate-limit error without a retry delay is handled honestly
+
+- GIVEN a request is rejected by an upstream quota that supplies no retry delay (an authenticated source's quota rejection carries no `retry-after`)
+- WHEN the view renders the resulting error state
+- THEN it MUST state that the limit was reached without displaying a specific wait time
+- AND it MUST NOT fabricate or default a delay value, because an invented wait time is a false statement to the user
+- AND it MUST still avoid presenting an affordance that invites immediate repeated retry
