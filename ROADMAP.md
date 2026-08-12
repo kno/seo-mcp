@@ -60,10 +60,10 @@ The first release proves a bounded, Workers-native SEO MCP before adding authent
 
 ### Persistence and operation
 
-- [ ] Crawl history and comparisons
-- [ ] Scheduled jobs if the data justifies them
-- [ ] OAuth, per-client quotas, and revocation, replacing the shared token once there are multiple consumers
-- [ ] Real telemetry of Workers Free-plan limits
+- [x] Crawl history and comparisons (`snapshot_crawl`, `list_crawl_snapshots`, `compare_crawls` — D1)
+- [x] Scheduled jobs — weekly cron auto-snapshots GSC into D1 (`GSC_SNAPSHOT_PROPERTIES`)
+- [ ] OAuth, per-client quotas, and revocation — now the MULTI-TENANT pivot (see "Deployment decisions"); large change, designed separately
+- [x] Real telemetry of Workers Free-plan limits — structured per-request `request_metrics` logging
 
 ### Protocol and tooling
 
