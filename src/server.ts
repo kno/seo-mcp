@@ -5,6 +5,7 @@ import { crawlPage } from "./crawl/page";
 import { crawlSite } from "./crawl/site";
 import { checkLinks } from "./crawl/links";
 import { analyzePageSpeed } from "./pagespeed/client";
+import { searchConsoleQuery } from "./google/search-console";
 
 const jsonResult = (value: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }],
@@ -114,6 +115,49 @@ export function buildServer(env: Env): McpServer {
       try {
         return jsonResult(
           await analyzePageSpeed(url, strategy, env, undefined, apiKey),
+        );
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "search_console_query",
+    {
+      description:
+        "Query Google Search Console Search Analytics (single-tenant) for rows by dimension over a date range.",
+      inputSchema: z.object({
+        siteUrl: z
+          .string()
+          .min(1)
+          .describe(
+            "Search Console property, e.g. 'sc-domain:example.com' or 'https://example.com/'",
+          ),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD"),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD"),
+        dimensions: z
+          .array(
+            z.enum([
+              "query",
+              "page",
+              "country",
+              "device",
+              "date",
+              "searchAppearance",
+            ]),
+          )
+          .optional(),
+        rowLimit: z.number().int().min(1).max(250).optional(),
+      }),
+    },
+    async ({ siteUrl, startDate, endDate, dimensions, rowLimit }) => {
+      try {
+        return jsonResult(
+          await searchConsoleQuery(
+            { siteUrl, startDate, endDate, dimensions, rowLimit },
+            env,
+          ),
         );
       } catch (error) {
         return errorResult(error);

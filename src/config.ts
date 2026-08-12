@@ -2,6 +2,9 @@ export interface Env {
   MCP_AUTH_TOKEN?: string;
   MCP_RATE_LIMITER?: RateLimit;
   PAGESPEED_API_KEY?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  GOOGLE_REFRESH_TOKEN?: string;
 }
 
 export const LIMITS = {
@@ -22,4 +25,7 @@ export const LIMITS = {
   linkCheckConcurrency: 6,
   linkProbeTimeoutMs: 6_000,
   linkCheckSubrequestBudget: 60,
+  maxGscRows: 250,
+  gscTimeoutMs: 15_000,
+  googleTokenTimeoutMs: 10_000,
 } as const;
