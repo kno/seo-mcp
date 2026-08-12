@@ -25,13 +25,14 @@ The first release proves a bounded, Workers-native SEO MCP before adding authent
 
 ### Complete on-page analysis
 
-- [ ] Canonical, robots, H2/H3, internal/external links, JSON-LD, Open Graph, word count, indexability, and timings
-- [ ] Domain summaries: duplicates, missing/multiple H1s, thin content, non-indexable pages, and images without alt text
+- [x] Canonical, robots, H2/H3, internal/external links, JSON-LD, Open Graph, word count, and indexability
+- [ ] Per-page response timings (fetch-layer instrumentation)
+- [x] Domain summaries: duplicates, missing/multiple H1s, thin content, non-indexable pages, and images without alt text
 
 ### More useful crawling
 
-- [ ] Robots.txt awareness
-- [ ] Explicit crawl policy reported in the result
+- [x] Robots.txt awareness
+- [x] Explicit crawl policy reported in the result
 - [ ] Broken-link checking as a separately budgeted crawl job, not silently added to `crawl_site`
 
 ### Google Search Console
