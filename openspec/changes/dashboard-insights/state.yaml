@@ -43,6 +43,20 @@ capabilities:
     - result-export
 
 notes: |
+  RECONCILED (second pass): the worktree branch was rebased twice more onto main mid-tasks-phase.
+  find_striking_distance_keywords, find_low_ctr_opportunities (commit a5b4f22), get_keyword_metrics,
+  discover_keywords (commit 1044d82) and cluster_keywords (commit ef5b0d2, credential-free, never in
+  original scope) all shipped and are now reconciled in gsc-insight-views and keyword-research-view.
+  Only content-decay/period-comparison, analyze_domain, find_seo_opportunities, and history remain
+  genuinely unbuilt.
+
+  keyword-research-view found two real defects in the shipped tools: no currency field exists
+  anywhere for bid values (view needs an operator-configured label, not a per-response one), and
+  normalizeMetric in src/google/ads.ts collapses absent-vs-zero into 0 via `Number(value) || 0` --
+  that distinction is unrecoverable client-side, so the original spec requirement was withdrawn and
+  replaced with a hedged-zero-label requirement. Both flagged as future src/google/ads.ts follow-ups,
+  not tasked in this change.
+
   Covers the authenticated and analytical half of the dashboard (DASHBOARD_ROADMAP.md Phases 5-6).
   dashboard-bff-foundations owns the server side; dashboard-views owns the crawl/PageSpeed views.
   Neither is redefined here.

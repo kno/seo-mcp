@@ -32,17 +32,24 @@ not repeat the miss.
 
 This is the load-bearing honesty constraint of the change.
 
-| Tool                              | Status                | What the spec may assert                                            |
-| --------------------------------- | --------------------- | ------------------------------------------------------------------- |
-| `search_console_query`            | **SHIPPED, verified** | Field-level requirements from the real shape (below)                |
-| `find_striking_distance_keywords` | UNBUILT               | Intent + behavioral invariants only                                 |
-| `find_low_ctr_opportunities`      | UNBUILT               | Intent + behavioral invariants only                                 |
-| content decay / period comparison | UNBUILT               | Intent + behavioral invariants only                                 |
-| `get_keyword_metrics`             | UNBUILT               | Intent + behavioral invariants only                                 |
-| `discover_keywords`               | UNBUILT               | Intent + behavioral invariants only                                 |
-| `analyze_domain`                  | UNBUILT               | Intent + behavioral invariants only                                 |
-| `find_seo_opportunities`          | UNBUILT               | Intent + behavioral invariants only                                 |
-| history / snapshots               | UNBUILT, no interface | Nothing beyond the blocker; D1 is decided, exposure is not designed |
+| Tool                              | Status                                     | What the spec may assert                                                                                                      |
+| --------------------------------- | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `search_console_query`            | **SHIPPED, verified**                      | Field-level requirements from the real shape (below)                                                                          |
+| `find_striking_distance_keywords` | **SHIPPED, RECONCILED** (commit `a5b4f22`) | Field-level requirements from the real `OpportunityResult` shape (`gsc-insight-views` spec)                                   |
+| `find_low_ctr_opportunities`      | **SHIPPED, RECONCILED** (commit `a5b4f22`) | Field-level requirements from the real `OpportunityResult` shape (`gsc-insight-views` spec)                                   |
+| content decay / period comparison | UNBUILT                                    | Intent + behavioral invariants only                                                                                           |
+| `get_keyword_metrics`             | **SHIPPED, RECONCILED** (commit `1044d82`) | Field-level requirements from the real `KeywordMetric[]` shape (`keyword-research-view` spec)                                 |
+| `discover_keywords`               | **SHIPPED, RECONCILED** (commit `1044d82`) | Field-level requirements from the real `KeywordMetric[]` shape (`keyword-research-view` spec)                                 |
+| `cluster_keywords`                | **SHIPPED, RECONCILED** (commit `ef5b0d2`) | Field-level requirements from the real `ClusterResult` shape — not in this proposal's original scope, added on reconciliation |
+| `analyze_domain`                  | UNBUILT                                    | Intent + behavioral invariants only                                                                                           |
+| `find_seo_opportunities`          | UNBUILT                                    | Intent + behavioral invariants only                                                                                           |
+| history / snapshots               | UNBUILT, no interface                      | Nothing beyond the blocker; D1 is decided, exposure is not designed                                                           |
+
+**Reconciliation note (added after this proposal was first written):** four tools shipped mid-planning
+across two rebases of this session's worktree — `find_striking_distance_keywords`, `find_low_ctr_opportunities`,
+`get_keyword_metrics`, `discover_keywords` — plus `cluster_keywords`, which was never in scope at all. All
+five are now reconciled in their respective specs. Only content decay, `analyze_domain`, and
+`find_seo_opportunities` remain genuinely unbuilt.
 
 Verified shape, read from `src/google/search-console.ts:4-19` and `src/server.ts:125-165`:
 `{ siteUrl, startDate, endDate, dimensions: string[], rowCount, rows: [{ keys: string[], clicks,
@@ -207,7 +214,7 @@ above.
 | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `search-console-view`     | Nothing. `search_console_query` ships and is verified live (`ROADMAP.md:41`).                                                                                                                                                                                                                                                                                                                                                                |
 | `gsc-insight-views`       | **Partially unblocked.** `find_striking_distance_keywords` and `find_low_ctr_opportunities` shipped (commit `a5b4f22`) and are now reconciled against their real `OpportunityResult` shape in the amended `gsc-insight-views` spec — these two are buildable now, pending an `outputSchema` for each (they have none yet). Content-decay / period-over-period comparison remains fully unbuilt and still blocks that third part of the view. |
-| `keyword-research-view`   | Google Ads Keyword Planner integration plus `get_keyword_metrics` (then `discover_keywords`), with the Ads developer token provisioned as a Worker secret.                                                                                                                                                                                                                                                                                   |
+| `keyword-research-view`   | **Fully unblocked.** `get_keyword_metrics`, `discover_keywords` (commit `1044d82`), and `cluster_keywords` (commit `ef5b0d2`, credential-free, not originally in scope) all shipped and are reconciled in the amended `keyword-research-view` spec, pending an `outputSchema` for each (none exist yet). Remaining prerequisite is operational only: the Ads developer token as a Worker secret.                                             |
 | `seo-intelligence-view`   | `analyze_domain` and `find_seo_opportunities` exist with published output schemas.                                                                                                                                                                                                                                                                                                                                                           |
 | `history-comparison-view` | **Precise blocker**: the server must (a) create the D1 binding and a snapshot schema with 90-day rolling retention, (b) write snapshots, and (c) expose history through an MCP tool. `ROADMAP.md:81` decides the storage engine only. There is no tool, no binding, and no interface today — so nothing to render and nothing to spec beyond the blocker.                                                                                    |
 
