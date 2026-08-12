@@ -71,7 +71,10 @@ The first release proves a bounded, Workers-native SEO MCP before adding authent
 
 ### Additional free sources
 
-- [ ] Evaluate Google Trends, Bing Webmaster Tools, Google Business Profile, structured-data validation, and permitted SERP data
+- [ ] Evaluate Google Trends, Bing Webmaster Tools, structured-data validation, and permitted SERP data
+- [~] Google Business Profile — read + write tools scaffolded (`business_*`), **PROVISIONAL** (unverified against live API). BLOCKED on Google Business Profile API access approval (project quota is 0 until granted). Reconcile shapes and verify live once approved.
+
+> **Contract note:** the MCP was "read-only analysis". The `business_*` write tools (`business_reply_review`, `business_update_info`, `business_create_post`) are the first **write** tools — they modify a live public Business Profile and are guarded by a required `confirm: true`. The dashboard's read-only assumption no longer holds universally; write tools must be surfaced with explicit confirmation UX, never auto-invoked.
 
 ## Deployment decisions
 
