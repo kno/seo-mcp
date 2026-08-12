@@ -10,6 +10,7 @@ import {
   findStrikingDistanceKeywords,
   findLowCtrOpportunities,
 } from "./google/opportunities";
+import { getKeywordMetrics, discoverKeywords } from "./google/ads";
 
 const jsonResult = (value: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }],
@@ -249,6 +250,74 @@ export function buildServer(env: Env): McpServer {
               minImpressions,
               maxCtr,
               limit,
+            },
+            env,
+          ),
+        );
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_keyword_metrics",
+    {
+      description:
+        "Google Ads Keyword Planner: search volume, competition, and top-of-page bids for the given keywords (single-tenant).",
+      inputSchema: z.object({
+        keywords: z.array(z.string().min(1)).min(1).max(100),
+        geoTargetIds: z.array(z.string()).optional(),
+        languageId: z.string().optional(),
+        customerId: z.string().optional(),
+      }),
+    },
+    async ({ keywords, geoTargetIds, languageId, customerId }) => {
+      try {
+        return jsonResult(
+          await getKeywordMetrics(
+            { keywords, geoTargetIds, languageId, customerId },
+            env,
+          ),
+        );
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "discover_keywords",
+    {
+      description:
+        "Google Ads Keyword Planner: discover related keyword ideas (with metrics) from seed keywords and/or a URL.",
+      inputSchema: z.object({
+        seedKeywords: z.array(z.string().min(1)).optional(),
+        seedUrl: z.string().optional(),
+        geoTargetIds: z.array(z.string()).optional(),
+        languageId: z.string().optional(),
+        limit: z.number().int().min(1).max(200).optional(),
+        customerId: z.string().optional(),
+      }),
+    },
+    async ({
+      seedKeywords,
+      seedUrl,
+      geoTargetIds,
+      languageId,
+      limit,
+      customerId,
+    }) => {
+      try {
+        return jsonResult(
+          await discoverKeywords(
+            {
+              seedKeywords,
+              seedUrl,
+              geoTargetIds,
+              languageId,
+              limit,
+              customerId,
             },
             env,
           ),

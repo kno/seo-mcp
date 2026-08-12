@@ -5,6 +5,9 @@ export interface Env {
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_REFRESH_TOKEN?: string;
+  GOOGLE_ADS_DEVELOPER_TOKEN?: string;
+  GOOGLE_ADS_CUSTOMER_ID?: string;
+  GOOGLE_ADS_LOGIN_CUSTOMER_ID?: string;
 }
 
 export const LIMITS = {
@@ -28,4 +31,7 @@ export const LIMITS = {
   maxGscRows: 250,
   gscTimeoutMs: 15_000,
   googleTokenTimeoutMs: 10_000,
+  maxKeywords: 100,
+  maxKeywordIdeas: 200,
+  adsTimeoutMs: 20_000,
 } as const;
