@@ -132,3 +132,230 @@ describe("router — gate authorizes before any upstream dispatch", () => {
     expect(body.error.code).toBe("upstream_unavailable");
   });
 });
+
+function stubToolFetch(structuredContent: unknown) {
+  return vi.fn(async () =>
+    Response.json({
+      jsonrpc: "2.0",
+      id: "1",
+      result: { structuredContent },
+    }),
+  );
+}
+
+describe("router — crawl_page input validation", () => {
+  it("rejects a request missing the required url", async () => {
+    const env = fakeEnv();
+    const request = await authenticatedRequest(env, "/api/tools/crawl_page");
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(400);
+    expect(env.SEO_MCP.fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects a non-URL value for url", async () => {
+    const env = fakeEnv();
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/crawl_page?url=not-a-url",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(400);
+    expect(env.SEO_MCP.fetch).not.toHaveBeenCalled();
+  });
+
+  it("dispatches a valid request to the MCP tool", async () => {
+    const env = fakeEnv({
+      SEO_MCP: {
+        fetch: stubToolFetch({
+          url: "https://example.com",
+          status: 200,
+          bytesRead: 10,
+          title: "t",
+          description: "d",
+          h1: [],
+          h2: [],
+          h3: [],
+          links: [],
+          internalLinkTargets: [],
+          internalLinks: 0,
+          externalLinks: 0,
+          imageCount: 0,
+          imagesMissingAlt: 0,
+          openGraph: {},
+          jsonLd: { blocks: 0, types: [], invalid: 0 },
+          wordCount: 0,
+          indexable: true,
+          issues: [],
+        }),
+      } as unknown as Fetcher,
+    });
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/crawl_page?url=https%3A%2F%2Fexample.com",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(200);
+    expect(env.SEO_MCP.fetch).toHaveBeenCalledOnce();
+  });
+});
+
+describe("router — crawl_site input validation", () => {
+  it("rejects a limit outside 1-20 before calling the MCP tool", async () => {
+    const env = fakeEnv();
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/crawl_site?url=https%3A%2F%2Fexample.com&limit=21",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(400);
+    expect(env.SEO_MCP.fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects a concurrency outside 1-4 before calling the MCP tool", async () => {
+    const env = fakeEnv();
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/crawl_site?url=https%3A%2F%2Fexample.com&concurrency=5",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(400);
+    expect(env.SEO_MCP.fetch).not.toHaveBeenCalled();
+  });
+
+  it("accepts limit and concurrency at their default values when omitted", async () => {
+    const env = fakeEnv({
+      SEO_MCP: {
+        fetch: stubToolFetch({
+          site: "https://example.com",
+          sitemap: "https://example.com/sitemap.xml",
+          sitemapFound: true,
+          crawlPolicy: {
+            robotsUrl: "https://example.com/robots.txt",
+            robotsFound: false,
+            userAgent: "seo-mcp",
+            sitemapsDeclared: [],
+            disallowedSkipped: { count: 0, sample: [] },
+          },
+          requested: 1,
+          crawled: 1,
+          failed: 0,
+          documentsRead: 1,
+          subrequests: 1,
+          bytesRead: 1,
+          outputBytes: 1,
+          pages: [],
+          issueCounts: {},
+          summary: {
+            pagesAnalyzed: 1,
+            duplicateTitles: [],
+            duplicateDescriptions: [],
+            missingH1: { count: 0, sample: [] },
+            multipleH1: { count: 0, sample: [] },
+            thinContent: { count: 0, sample: [] },
+            nonIndexable: { count: 0, sample: [] },
+            imagesMissingAlt: { pages: 0, images: 0 },
+          },
+          linkGraph: {
+            crawledPages: 1,
+            orphanPages: { count: 0, sample: [] },
+            topLinkedPages: [],
+          },
+        }),
+      } as unknown as Fetcher,
+    });
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/crawl_site?url=https%3A%2F%2Fexample.com",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(200);
+    expect(env.SEO_MCP.fetch).toHaveBeenCalledOnce();
+  });
+});
+
+describe("router — check_links input validation", () => {
+  it("rejects a request missing the required url", async () => {
+    const env = fakeEnv();
+    const request = await authenticatedRequest(env, "/api/tools/check_links");
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(400);
+    expect(env.SEO_MCP.fetch).not.toHaveBeenCalled();
+  });
+
+  it("dispatches a valid request to the MCP tool", async () => {
+    const env = fakeEnv({
+      SEO_MCP: {
+        fetch: stubToolFetch({
+          url: "https://example.com",
+          pageStatus: 200,
+          checked: 1,
+          ok: 1,
+          broken: 0,
+          errors: 0,
+          results: [],
+        }),
+      } as unknown as Fetcher,
+    });
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/check_links?url=https%3A%2F%2Fexample.com",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(200);
+    expect(env.SEO_MCP.fetch).toHaveBeenCalledOnce();
+  });
+});
+
+describe("router — analyze_pagespeed input validation", () => {
+  it("rejects an invalid strategy", async () => {
+    const env = fakeEnv();
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/analyze_pagespeed?url=https%3A%2F%2Fexample.com&strategy=tablet",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(400);
+    expect(env.SEO_MCP.fetch).not.toHaveBeenCalled();
+  });
+
+  it("accepts an omitted apiKey (optional field)", async () => {
+    const env = fakeEnv({
+      SEO_MCP: {
+        fetch: stubToolFetch({
+          url: "https://example.com",
+          strategy: "mobile",
+          labMetrics: {},
+          opportunities: [],
+        }),
+      } as unknown as Fetcher,
+    });
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/analyze_pagespeed?url=https%3A%2F%2Fexample.com",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(200);
+    expect(env.SEO_MCP.fetch).toHaveBeenCalledOnce();
+  });
+
+  it("accepts an explicit apiKey and never echoes it back in the response", async () => {
+    const env = fakeEnv({
+      SEO_MCP: {
+        fetch: stubToolFetch({
+          url: "https://example.com",
+          strategy: "desktop",
+          labMetrics: {},
+          opportunities: [],
+        }),
+      } as unknown as Fetcher,
+    });
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/analyze_pagespeed?url=https%3A%2F%2Fexample.com&strategy=desktop&apiKey=secret-key",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(200);
+    const bodyText = JSON.stringify(await response.clone().json());
+    expect(bodyText).not.toContain("secret-key");
+  });
+});

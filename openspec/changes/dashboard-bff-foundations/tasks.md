@@ -51,15 +51,15 @@ Chain strategy: pending
 
 ## Phase 3: Remaining Routes, Timeouts, Platform Failures — PR3
 
-- [ ] 3.1 RED: `bff/test/router.test.ts` cases for `crawl_page`, `crawl_site` (`limit` 1-20, `concurrency` 1-4 validation), `check_links`, `analyze_pagespeed` (`apiKey` optional) input validation.
-- [ ] 3.2 GREEN: extend `bff/src/router.ts` with the four remaining routes; Zod input schemas per route.
-- [ ] 3.3 RED: `bff/test/mcp-client.test.ts` — token injected only on the service-binding fetch; structuredContent re-validated against shared schema; malformed reply -> `upstream_protocol`.
-- [ ] 3.4 GREEN: `bff/src/mcp-client.ts` full implementation, `VALIDATE_UPSTREAM_RESULTS` flag.
-- [ ] 3.5 RED: `bff/test/timeout.test.ts` — per-tool `TOOL_TIMEOUT_MS` race maps `AbortError` to `bff_timeout`; normal-latency call completes.
-- [ ] 3.6 GREEN: `bff/src/timeout.ts` using `AbortSignal.timeout`.
-- [ ] 3.7 RED: `bff/test/mcp-client.test.ts` (platform-failure case) — `check_links` subrequest-ceiling failure surfaces as normalized error, never empty success; bounded `checked/ok/broken/errors` counts preserved.
-- [ ] 3.8 GREEN: map upstream 401/429/503/403 statuses to `upstream_*` codes with `retryAfter` from header.
-- [ ] 3.9 Integration RED+GREEN: `bff/test/integration/routes.test.ts` — stub MCP asserts `Authorization` header per route; 401/429/503 mapping exercised without the real limiter.
+- [x] 3.1 RED: `bff/test/router.test.ts` cases for `crawl_page`, `crawl_site` (`limit` 1-20, `concurrency` 1-4 validation), `check_links`, `analyze_pagespeed` (`apiKey` optional) input validation.
+- [x] 3.2 GREEN: extend `bff/src/router.ts` with the four remaining routes; Zod input schemas per route.
+- [x] 3.3 RED: `bff/test/mcp-client.test.ts` — token injected only on the service-binding fetch; structuredContent re-validated against shared schema; malformed reply -> `upstream_protocol`.
+- [x] 3.4 GREEN: `bff/src/mcp-client.ts` full implementation, `VALIDATE_UPSTREAM_RESULTS` flag.
+- [x] 3.5 RED: `bff/test/timeout.test.ts` — per-tool `TOOL_TIMEOUT_MS` race maps `AbortError` to `bff_timeout`; normal-latency call completes.
+- [x] 3.6 GREEN: `bff/src/timeout.ts` using `AbortSignal.timeout`.
+- [x] 3.7 RED: `bff/test/mcp-client.test.ts` (platform-failure case) — `check_links` subrequest-ceiling failure surfaces as normalized error, never empty success; bounded `checked/ok/broken/errors` counts preserved.
+- [x] 3.8 GREEN: map upstream 401/429/503/403 statuses to `upstream_*` codes with `retryAfter` from header.
+- [x] 3.9 Integration RED+GREEN: `bff/test/integration/routes.test.ts` — stub MCP asserts `Authorization` header per route; 401/429/503 mapping exercised without the real limiter.
 
 ## Phase 4: Result Cache & Single-Flight (`bff-result-cache`) — PR4
 

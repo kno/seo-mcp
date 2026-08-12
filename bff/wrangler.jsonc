@@ -12,6 +12,7 @@
   "vars": {
     "GATE_STRATEGY": "shared-secret-cookie",
     "MCP_ORIGIN": "https://seo-mcp.internal",
+    "VALIDATE_UPSTREAM_RESULTS": "true",
   },
   "observability": {
     "enabled": true,
