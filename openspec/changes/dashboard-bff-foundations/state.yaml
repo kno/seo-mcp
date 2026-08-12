@@ -1,0 +1,28 @@
+schema: spec-driven
+change: dashboard-bff-foundations
+artifactStore: openspec
+
+session:
+  executionMode: auto
+  deliveryStrategy: ask-on-risk
+  reviewBudgetLines: 800
+  strictTdd: true
+  testCommand: pnpm test
+
+phases:
+  explore: done
+  propose: pending
+  specs: pending
+  design: pending
+  tasks: pending
+  apply: pending
+  verify: pending
+  archive: pending
+
+notes: |
+  Exploration verified all ten orchestrator claims against source with file:line evidence.
+  Two findings changed the plan:
+    - The subrequest ceiling concern is already defended by the 48-fetch budget
+      (src/crawl/site.ts:274, src/http/fetch.ts:39-41), so it needs no new work.
+    - The result types already exist as exported interfaces; the real gaps are publishing
+      them and adding runtime validation via MCP output schemas (src/server.ts:8-11).
