@@ -11,6 +11,10 @@ import {
   findLowCtrOpportunities,
 } from "./google/opportunities";
 import { getKeywordMetrics, discoverKeywords } from "./google/ads";
+import {
+  findKeywordCannibalization,
+  findSeoOpportunities,
+} from "./seo/intelligence";
 import { clusterKeywords } from "./seo/keywords";
 import { diffGscRows } from "./seo/gsc-diff";
 import {
@@ -259,6 +263,59 @@ export function buildServer(env: Env): McpServer {
               maxCtr,
               limit,
             },
+            env,
+          ),
+        );
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "find_keyword_cannibalization",
+    {
+      description:
+        "Find queries where multiple pages of the same site compete (keyword cannibalization), from Search Console.",
+      inputSchema: z.object({
+        siteUrl: z.string().min(1),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        minImpressions: z.number().int().min(0).optional(),
+        limit: z.number().int().min(1).max(50).optional(),
+      }),
+    },
+    async ({ siteUrl, startDate, endDate, minImpressions, limit }) => {
+      try {
+        return jsonResult(
+          await findKeywordCannibalization(
+            { siteUrl, startDate, endDate, minImpressions, limit },
+            env,
+          ),
+        );
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "find_seo_opportunities",
+    {
+      description:
+        "Synthesize Search Console data into a prioritized SEO action list (low-CTR, striking-distance, cannibalization) ranked by impact/effort.",
+      inputSchema: z.object({
+        siteUrl: z.string().min(1),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        limit: z.number().int().min(1).max(100).optional(),
+      }),
+    },
+    async ({ siteUrl, startDate, endDate, limit }) => {
+      try {
+        return jsonResult(
+          await findSeoOpportunities(
+            { siteUrl, startDate, endDate, limit },
             env,
           ),
         );
