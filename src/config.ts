@@ -39,4 +39,6 @@ export const LIMITS = {
   maxClusterKeywords: 500,
   maxSnapshotRows: 500,
   maxDiffRows: 100,
+  maxKeywordPages: 100,
+  maxContentGaps: 100,
 } as const;

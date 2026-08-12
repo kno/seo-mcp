@@ -15,6 +15,10 @@ import {
   findKeywordCannibalization,
   findSeoOpportunities,
 } from "./seo/intelligence";
+import {
+  mapKeywordsToPagesForSite,
+  findContentGapsForSite,
+} from "./seo/keyword-pages";
 import { analyzeDomain } from "./seo/domain-report";
 import { clusterKeywords } from "./seo/keywords";
 import { diffGscRows } from "./seo/gsc-diff";
@@ -317,6 +321,68 @@ export function buildServer(env: Env): McpServer {
         return jsonResult(
           await findSeoOpportunities(
             { siteUrl, startDate, endDate, limit },
+            env,
+          ),
+        );
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "map_keywords_to_pages",
+    {
+      description:
+        "Map which Search Console queries each page ranks for (page → top queries), from Search Console.",
+      inputSchema: z.object({
+        siteUrl: z.string().min(1),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        limit: z.number().int().min(1).max(100).optional(),
+        topQueriesPerPage: z.number().int().min(1).max(50).optional(),
+      }),
+    },
+    async ({ siteUrl, startDate, endDate, limit, topQueriesPerPage }) => {
+      try {
+        return jsonResult(
+          await mapKeywordsToPagesForSite(
+            { siteUrl, startDate, endDate, limit, topQueriesPerPage },
+            env,
+          ),
+        );
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "find_content_gaps",
+    {
+      description:
+        "Find queries with demand (impressions) where the site ranks poorly (page 3+), i.e. content opportunities, from Search Console.",
+      inputSchema: z.object({
+        siteUrl: z.string().min(1),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        minPosition: z.number().min(1).max(100).optional(),
+        minImpressions: z.number().int().min(0).optional(),
+        limit: z.number().int().min(1).max(100).optional(),
+      }),
+    },
+    async ({
+      siteUrl,
+      startDate,
+      endDate,
+      minPosition,
+      minImpressions,
+      limit,
+    }) => {
+      try {
+        return jsonResult(
+          await findContentGapsForSite(
+            { siteUrl, startDate, endDate, minPosition, minImpressions, limit },
             env,
           ),
         );
