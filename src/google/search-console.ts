@@ -1,7 +1,7 @@
 import { LIMITS, type Env } from "../config";
 import { getGoogleAccessToken } from "./auth";
 
-interface GscRow {
+export interface GscRow {
   keys: string[];
   clicks: number;
   impressions: number;

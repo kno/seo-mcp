@@ -6,6 +6,10 @@ import { crawlSite } from "./crawl/site";
 import { checkLinks } from "./crawl/links";
 import { analyzePageSpeed } from "./pagespeed/client";
 import { searchConsoleQuery } from "./google/search-console";
+import {
+  findStrikingDistanceKeywords,
+  findLowCtrOpportunities,
+} from "./google/opportunities";
 
 const jsonResult = (value: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }],
@@ -161,6 +165,96 @@ export function buildServer(env: Env): McpServer {
         );
       } catch (error) {
         return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "find_striking_distance_keywords",
+    {
+      description:
+        "Find Search Console keywords ranking just off page 1 (positions 11-20 by default) — near-term ranking wins.",
+      inputSchema: z.object({
+        siteUrl: z.string().min(1),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        minPosition: z.number().min(1).max(100).optional(),
+        maxPosition: z.number().min(1).max(100).optional(),
+        minImpressions: z.number().int().min(0).optional(),
+        limit: z.number().int().min(1).max(250).optional(),
+      }),
+    },
+    async ({
+      siteUrl,
+      startDate,
+      endDate,
+      minPosition,
+      maxPosition,
+      minImpressions,
+      limit,
+    }) => {
+      try {
+        return jsonResult(
+          await findStrikingDistanceKeywords(
+            {
+              siteUrl,
+              startDate,
+              endDate,
+              minPosition,
+              maxPosition,
+              minImpressions,
+              limit,
+            },
+            env,
+          ),
+        );
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "find_low_ctr_opportunities",
+    {
+      description:
+        "Find Search Console queries with good position and impressions but low CTR — title/meta optimization targets.",
+      inputSchema: z.object({
+        siteUrl: z.string().min(1),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        maxPosition: z.number().min(1).max(100).optional(),
+        minImpressions: z.number().int().min(0).optional(),
+        maxCtr: z.number().min(0).max(1).optional(),
+        limit: z.number().int().min(1).max(250).optional(),
+      }),
+    },
+    async ({
+      siteUrl,
+      startDate,
+      endDate,
+      maxPosition,
+      minImpressions,
+      maxCtr,
+      limit,
+    }) => {
+      try {
+        return jsonResult(
+          await findLowCtrOpportunities(
+            {
+              siteUrl,
+              startDate,
+              endDate,
+              maxPosition,
+              minImpressions,
+              maxCtr,
+              limit,
+            },
+            env,
+          ),
+        );
+      } catch (e) {
+        return errorResult(e);
       }
     },
   );
