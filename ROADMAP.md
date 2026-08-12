@@ -73,9 +73,14 @@ The first release proves a bounded, Workers-native SEO MCP before adding authent
 
 - [ ] Evaluate Google Trends, Bing Webmaster Tools, Google Business Profile, structured-data validation, and permitted SERP data
 
-## Pending decisions
+## Resolved decisions — single-tenant deployment
 
-- [ ] Which MCP hosts and authentication flow must be supported first?
-- [ ] Should durable history use D1, KV, R2, or remain external?
-- [ ] Which Search Console dimensions and Google Ads reports provide the first valuable slice?
-- [ ] What rate limits and retention policy fit the expected deployment?
+The target is single-tenant: one owner, their own sites, one Google account. This collapses the earlier open questions.
+
+- [x] **Client → MCP auth:** keep the current shared bearer token. Per-client tokens only if a second consumer appears.
+- [x] **Durable history storage:** D1 (SQLite) for metrics and history; R2 for raw payloads only if full archival is later wanted; KV not needed now.
+- [x] **Google auth (GSC/Ads):** no user OAuth flow. One-time offline consent produces a refresh token stored as a Worker secret (`refresh_token` + `client_id` + `client_secret`); the Worker exchanges it for short-lived access tokens server-side. This unblocks GSC/Ads now.
+- [x] **First data slice:** GSC `query + page` by date (striking-distance, low-CTR, content decay); Google Ads `get_keyword_metrics` before `discover_keywords`.
+- [x] **Rate limit + retention:** keep the current global rate limit (single user, no contention); rolling 90-day retention in D1.
+
+Consequence: the Google Search Console and Keyword research capabilities above are no longer blocked — they need a stored refresh token, not an authorization server. Multi-tenant auth/quotas remain future work if the deployment shape ever changes.
