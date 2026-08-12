@@ -67,14 +67,144 @@ describe("HtmlExtractionState", () => {
       [
         "canonical",
         "description",
+        "externalLinks",
         "h1",
+        "h2",
+        "h3",
         "imageCount",
         "imagesMissingAlt",
+        "indexable",
+        "internalLinks",
+        "jsonLd",
         "lang",
         "links",
+        "openGraph",
         "robots",
         "title",
+        "wordCount",
       ].sort(),
     );
+  });
+
+  it("captures, trims, and bounds h2 and h3 headings", () => {
+    const state = new HtmlExtractionState();
+    state.beginH2();
+    state.appendH2({ text: "  Section  " });
+    state.appendH2({ text: "one  " });
+    state.beginH3();
+    state.appendH3({ text: "Sub " });
+    state.appendH3({ text: "topic" });
+    for (let index = 0; index < 30; index++) {
+      state.beginH2();
+      state.appendH2({ text: "x".repeat(500) });
+      state.beginH3();
+      state.appendH3({ text: "y".repeat(500) });
+    }
+    const result = state.finish();
+    expect(result.h2[0]).toBe("Section one");
+    expect(result.h3[0]).toBe("Sub topic");
+    expect(result.h2).toHaveLength(20);
+    expect(result.h3).toHaveLength(20);
+    expect(result.h2.every((value) => value.length <= 300)).toBe(true);
+    expect(result.h3.every((value) => value.length <= 300)).toBe(true);
+  });
+
+  it("classifies links as internal or external against the base url", () => {
+    const state = new HtmlExtractionState();
+    state.onBaseUrl(new URL("https://example.com/blog/"));
+    state.onLink(element({ href: "/about" }));
+    state.onLink(element({ href: "post" }));
+    state.onLink(element({ href: "https://EXAMPLE.com/contact" }));
+    state.onLink(element({ href: "https://other.com/page" }));
+    state.onLink(element({ href: "mailto:hi@example.com" }));
+    state.onLink(element({ href: "tel:+123" }));
+    state.onLink(element({ href: "javascript:void(0)" }));
+    state.onLink(element({ href: "#section" }));
+
+    const result = state.finish();
+    expect(result.internalLinks).toBe(3);
+    expect(result.externalLinks).toBe(1);
+    expect(result.links).toEqual([
+      "https://example.com/about",
+      "https://example.com/blog/post",
+      "https://example.com/contact",
+      "https://other.com/page",
+    ]);
+  });
+
+  it("falls back to raw hrefs when no base url is set", () => {
+    const state = new HtmlExtractionState();
+    state.onLink(element({ href: "/about" }));
+    const result = state.finish();
+    expect(result.links).toEqual(["/about"]);
+    expect(result.internalLinks).toBe(0);
+    expect(result.externalLinks).toBe(0);
+  });
+
+  it("captures Open Graph properties and bounds them", () => {
+    const state = new HtmlExtractionState();
+    state.onMeta(element({ property: "og:title", content: "Hello" }));
+    state.onMeta(element({ property: "og:type", content: "article" }));
+    state.onMeta(element({ name: "description", content: "Desc" }));
+    for (let index = 0; index < 40; index++)
+      state.onMeta(element({ property: `og:extra${index}`, content: "v" }));
+    const result = state.finish();
+    expect(result.openGraph["og:title"]).toBe("Hello");
+    expect(result.openGraph["og:type"]).toBe("article");
+    expect(result.description).toBe("Desc");
+    expect(Object.keys(result.openGraph).length).toBeLessThanOrEqual(25);
+  });
+
+  it("collects JSON-LD @type values including arrays and node lists", () => {
+    const state = new HtmlExtractionState();
+    state.beginJsonLd();
+    state.appendJsonLd({ text: '{"@type":"Article"}' });
+    state.beginJsonLd();
+    state.appendJsonLd({ text: '{"@type":["WebPage","Thing"]}' });
+    state.beginJsonLd();
+    state.appendJsonLd({
+      text: '[{"@type":"Person"},{"@type":"Organization"}]',
+    });
+    const result = state.finish();
+    expect(result.jsonLd.blocks).toBe(3);
+    expect(result.jsonLd.invalid).toBe(0);
+    expect(result.jsonLd.types.sort()).toEqual(
+      ["Article", "WebPage", "Thing", "Person", "Organization"].sort(),
+    );
+  });
+
+  it("flags malformed JSON-LD blocks as invalid", () => {
+    const state = new HtmlExtractionState();
+    state.beginJsonLd();
+    state.appendJsonLd({ text: "{not valid json" });
+    const result = state.finish();
+    expect(result.jsonLd.blocks).toBe(1);
+    expect(result.jsonLd.invalid).toBe(1);
+    expect(result.jsonLd.types).toEqual([]);
+  });
+
+  it("counts visible words but excludes suppressed regions", () => {
+    const state = new HtmlExtractionState();
+    state.appendBodyText({ text: "one two three" });
+    state.enterSuppressed();
+    state.appendBodyText({ text: "script text should not count here" });
+    state.exitSuppressed();
+    state.appendBodyText({ text: "four five" });
+    const result = state.finish();
+    expect(result.wordCount).toBe(5);
+  });
+
+  it("derives indexable from robots directives", () => {
+    const allowed = new HtmlExtractionState();
+    allowed.onMeta(element({ name: "robots", content: "index,follow" }));
+    expect(allowed.robotsAllowsIndexing()).toBe(true);
+
+    const blocked = new HtmlExtractionState();
+    blocked.onMeta(element({ name: "robots", content: "noindex,follow" }));
+    expect(blocked.robotsAllowsIndexing()).toBe(false);
+
+    const none = new HtmlExtractionState();
+    none.onMeta(element({ name: "robots", content: "none" }));
+    expect(none.robotsAllowsIndexing()).toBe(false);
   });
 });

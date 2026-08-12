@@ -5,9 +5,17 @@ export interface PageSignals {
   robots?: string;
   lang?: string;
   h1: string[];
+  h2: string[];
+  h3: string[];
   links: string[];
+  internalLinks: number;
+  externalLinks: number;
   imageCount: number;
   imagesMissingAlt: number;
+  openGraph: Record<string, string>;
+  jsonLd: { blocks: number; types: string[]; invalid: number };
+  wordCount: number;
+  indexable: boolean;
 }
 
 export interface SeoIssue {
@@ -73,6 +81,34 @@ export function detectSeoIssues(page: PageSignals): SeoIssue[] {
       code: "images_missing_alt",
       severity: "warning",
       message: `${page.imagesMissingAlt} image(s) are missing alt text`,
+    });
+  }
+  if (!page.indexable && /\b(noindex|none)\b/i.test(page.robots ?? "")) {
+    issues.push({
+      code: "noindex",
+      severity: "warning",
+      message: "Page is marked noindex",
+    });
+  }
+  if (page.jsonLd.invalid > 0) {
+    issues.push({
+      code: "invalid_jsonld",
+      severity: "warning",
+      message: `${page.jsonLd.invalid} JSON-LD block(s) failed to parse`,
+    });
+  }
+  if (Object.keys(page.openGraph).length === 0) {
+    issues.push({
+      code: "missing_open_graph",
+      severity: "info",
+      message: "Page has no Open Graph metadata",
+    });
+  }
+  if (page.wordCount > 0 && page.wordCount < 250) {
+    issues.push({
+      code: "thin_content",
+      severity: "info",
+      message: "Page has thin content (fewer than 250 words)",
     });
   }
   return issues;
