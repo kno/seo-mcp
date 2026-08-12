@@ -255,3 +255,153 @@ None blocking. Carried forward: link-check subrequest-budget defect (separate ch
 confirmation (open design decision), and the unresolved `redactSecrets()` wiring gap (WARNING above) — none
 affect Phase 3 correctness as implemented, since the spec's actual secret-leak requirement is satisfied by
 the fixed generic messages currently in use.
+
+---
+
+# Verify Report — dashboard-bff-foundations, Phase 4 / PR4
+
+Scope: this change ships as 5 chained PRs (`stacked-to-main`). Phase 1 (PR1, `f896684`), Phase 2 (PR2,
+`96377f1`), and Phase 3 (PR3, `d7872ce`) already verified PASS / PASS WITH WARNINGS. Phase 4 (PR4, commit
+`c185340` on `feat/bff-result-schemas`) is now implemented: KV-backed result cache and isolate-local
+single-flight dedupe. Phase 5 is correctly `[ ]` in `tasks.md` and is out of scope for this pass.
+
+## Verdict: PASS WITH WARNINGS
+
+## Command evidence (executed fresh, this session)
+
+- `pnpm test` -> 437/437 passed (46 test files).
+- `pnpm typecheck` -> clean (exit 0).
+- `pnpm format:check` -> clean (exit 0).
+
+## Spec compliance — `bff-result-cache` (3 requirements / 6 scenarios, all in scope for this PR)
+
+- **KV-Backed Result Cache With Configurable TTL** (PASS): `bff/src/cache.ts`'s `CACHE_TTL_SECONDS` is a
+  per-tool map (not a single hardcoded value), every value clamped to `[60, 86400]` via `clampTtlSeconds`.
+  "Repeated identical request within TTL served from cache" and "expired entry triggers a fresh call" are
+  both proven at the real-KV integration level (`bff/test/integration/cache.test.ts`, real `RESULT_CACHE`
+  binding via `SELF.fetch`, asserting the stub upstream call counter stays at 1 across a repeated request)
+  and the expiry path is proven at the unit level against a fake KV whose stored `expiresAt` has already
+  elapsed (`bff/test/cache.test.ts` -- "treats an entry past its own expiresAt as a miss").
+- **Best-Effort Single-Flight Dedupe** (PASS): `bff/src/single-flight.ts`'s module-level
+  `Map<string, Promise<T>>` is genuinely exercised for both the leader/follower coalescing case (one real
+  call for two concurrent identical keys) and the non-coalescing case (different keys each get their own
+  call) in `bff/test/single-flight.test.ts`. Cross-isolate coalescing is correctly NOT asserted -- the test
+  file's closing comment explicitly documents this as an accepted best-effort limitation, matching the
+  spec's "MAY independently invoke" scenario wording exactly.
+- **Cache Failure Does Not Block Requests** (PASS, with a coverage-precision WARNING below): confirmed by
+  direct code inspection -- `getCached`/`putCached` wrap every KV `get`/`put` call in try/catch and return
+  `{status:"unavailable"}` / resolve silently on throw; `dispatch()` in `router.ts` treats `"unavailable"`
+  identically to `"miss"` (same `withSingleFlight(key, callUpstream)` call, no branching), so a throwing KV
+  structurally cannot fail the request. "KV binding is not configured" is proven end-to-end: every one of
+  the several dozen tests in `bff/test/router.test.ts` uses a `fakeEnv()` that never sets `RESULT_CACHE`
+  (left `undefined`), and each one asserts the tool is still invoked and a successful response returned.
+
+## Verification specific to this pass (re-read fresh, not trusting the apply report)
+
+1. **Cache key stability** -- confirmed genuinely order-independent. `canonicalJson` (`bff/src/cache.ts:61-75`)
+   recursively sorts object keys before `JSON.stringify`; `bff/test/cache.test.ts` directly asserts
+   `canonicalJson({a:1,b:2}) === canonicalJson({b:2,a:1})`, including a nested-object variant, and
+   `cacheKey("crawl_site", {url,limit})` produces the identical hash regardless of field order.
+2. **apiKey exclusion, gating both paths** -- `isCacheable(tool, inputs)` (`bff/src/cache.ts:98-105`) checks
+   specifically for `analyze_pagespeed` + a non-empty string `apiKey`. `router.ts:108-115`'s `dispatch()`
+   checks `isCacheable` BEFORE computing `cacheKey` or calling `withSingleFlight` -- an apiKey-bearing request
+   takes an early-return branch that calls `callUpstream()` directly, so it is excluded from single-flight as
+   well as the cache, not merely from the cache. This is proven at the real integration level, not just a
+   unit test on `isCacheable` in isolation: `bff/test/integration/cache.test.ts`'s `"never caches an
+analyze_pagespeed request carrying an explicit apiKey"` sends the SAME apiKey-bearing request twice and
+   asserts the upstream call counter increments both times (`before + 1`, then `before + 2`) with
+   `cacheStatus: "bypass"` on both -- i.e., upstream is hit every time, never served from a coalesced or
+   cached result.
+3. **KV-failure tolerance** -- `bff/src/cache.ts` wraps every `kv.get`/`kv.put` in try/catch
+   (`getCached:145-157`, `putCached:181-185`), confirmed by reading the implementation directly.
+   `bff/test/cache.test.ts`'s `"is unavailable when the KV get() throws"` and `"does not throw when the KV
+put() throws"` exercise a `throwingKv()` fake and assert the outcome is `{status:"unavailable"}` /
+   resolves without throwing -- genuine, not thin. However: this throwing-KV exercise stops at the isolated
+   `cache.ts` function level. No test anywhere in the suite (unit, `router.test.ts`, or
+   `bff/test/integration/cache.test.ts`) drives a throwing `RESULT_CACHE` binding through the actual
+   `dispatch`/`handleRequest` path and asserts the end-to-end JSON response carries `cacheStatus:
+"unavailable"` with a successful upstream-backed result. `router.test.ts`'s `fakeEnv()` never sets
+   `RESULT_CACHE` at all (always `undefined`, not a throwing mock), so every one of its tests exercises only
+   the "absent binding" half of this requirement, not "present but throwing." Since `dispatch()` branches
+   identically on `"unavailable"` and `"miss"` (no special-casing), this is a low-severity coverage gap, not
+   a logic defect -- flagged as WARNING below.
+4. **Single-flight cleanup on failure** -- `single-flight.ts:29-33`'s `finally` block genuinely deletes the
+   map entry (`inFlight.delete(key)`), not merely present as boilerplate. Directly confirmed by reading the
+   block. `bff/test/single-flight.test.ts` exercises exactly the requested scenario: `"allows a fresh leader
+for the same key after a prior failure cleared it"` -- a first `withSingleFlight` call that throws,
+   followed by a second call for the identical key that succeeds normally (not stuck awaiting the dead
+   promise). A companion test also confirms the leader's rejection propagates to a concurrently-waiting
+   follower rather than hanging.
+5. **TTL clamp** -- every `CACHE_TTL_SECONDS` value (60, 3600, 3600, 1800, 21600) is within `[60, 86400]`, and
+   the clamp itself is exercised directly from both directions: `"clamps a value below the minimum up to
+60"` (input `1`), `"clamps a value above the maximum down to 86400"` (input `1_000_000`), plus a dedicated
+   `putCached`-level test asserting `kv.put` is called with `expirationTtl: MIN_TTL_SECONDS` when a 5-second
+   TTL is requested -- not just that the chosen defaults happen to already be in range.
+6. **Refresh bypass still writes** -- confirmed by reading `router.ts:120-141`: `shouldBypassCacheRead` only
+   gates the `getCached` read call; the `withSingleFlight`/`putCached` write path below runs unconditionally
+   whenever the upstream call succeeds, regardless of whether the read was bypassed. Proven end-to-end in
+   `bff/test/integration/cache.test.ts`'s `"bypasses the cache read with ?refresh=1 but still repopulates
+it"`: a `?refresh=1` request forces a second real upstream call even though a cached entry already exists,
+   and a subsequent plain request is then served `"hit"` from the refreshed entry without a third upstream
+   call.
+7. **Test coverage honesty** -- `bff/test/cache.test.ts` (23 tests), `bff/test/single-flight.test.ts` (6
+   tests), and `bff/test/integration/cache.test.ts` (4 tests) were read in full. All are genuine,
+   scenario-specific assertions against real or realistically-faked KV behavior -- not placeholder or
+   trivially-true coverage. The one identified gap is item 3 above.
+
+## Regression / scope check
+
+- `git show --stat c185340` (this PR's own commit, isolated from other commits merged into this branch in
+  the interim) touches exactly: `bff/src/{cache,router,single-flight}.ts`, `bff/test/{cache,single-flight}
+.test.ts`, `bff/test/integration/{cache,stub-mcp-worker}`, `bff/worker-configuration.d.ts`,
+  `bff/wrangler.jsonc` (9-line KV binding addition, placeholder ID with a comment directing a real
+  `wrangler kv namespace create` before production deploy), and `tasks.md`.
+- Confirmed via `git diff fe7888b..HEAD` restricted to `bff/src/gate.ts bff/src/session.ts bff/src/timeout.ts
+src/http/ src/security/ wrangler.jsonc src/schemas/ src/types/` -> zero lines. All Phase 2/3 frozen files
+  and root-level config/schema/type files are untouched.
+- Two commits unrelated to this PR (`2f8d5dc` docs reconciliation, plus the broader `DASHBOARD_ROADMAP.md`/
+  `dashboard-insights` diffs visible in a naive `fe7888b..HEAD` diff) belong to separate planning work merged
+  into this branch between Phase 3 and Phase 4 -- not part of PR4's own commit. Isolating `git show --stat
+c185340` confirms PR4 itself carries none of that drift.
+
+## Issues
+
+None CRITICAL.
+
+WARNING: the "KV read fails transiently" scenario (spec `bff-result-cache`, third requirement) is proven
+genuinely at the isolated `cache.ts` function level (`getCached`/`putCached` against a throwing fake KV) but
+never end-to-end through `dispatch`/`handleRequest` with an actual throwing `RESULT_CACHE` binding -- every
+`router.test.ts` test instead exercises the "binding absent" half of the same requirement (`RESULT_CACHE`
+left `undefined` in `fakeEnv()`), and the real-KV integration suite never injects a throwing binding either.
+Code inspection shows `dispatch()` cannot distinguish `"unavailable"` from `"miss"` (identical downstream
+code path), so this is very unlikely to hide a real defect, but it is a genuine coverage gap relative to
+task 4.4's own stated intent ("KV binding absent OR throwing yields cacheStatus: 'unavailable' ... never
+fail-closed"). Recommend a follow-up test (`fakeEnv({ RESULT_CACHE: throwingKv() })` through
+`handleRequest`, or an integration-level throwing KV double) before or shortly after Phase 5 -- not blocking
+this PR's merge.
+
+SUGGESTION: none new this pass. Carried forward (non-blocking, not this PR's concern): Phase 2/3's
+`redactSecrets()` still has no live call site.
+
+## Files inspected
+
+`bff/src/cache.ts`, `bff/src/single-flight.ts`, `bff/src/router.ts`, `bff/test/cache.test.ts`,
+`bff/test/single-flight.test.ts`, `bff/test/router.test.ts`, `bff/test/integration/cache.test.ts`,
+`bff/wrangler.jsonc`, `openspec/changes/dashboard-bff-foundations/{design.md,tasks.md,
+specs/bff-result-cache/spec.md}`.
+
+## Next recommended
+
+`sdd-apply` for Phase 5 (usage/headroom observability). PR4 is a self-contained, independently revertible
+slice (revert the PR4 diff; Phase 3's four tool routes, timeouts, and platform-failure mapping are
+unaffected -- they simply lose caching/dedupe, not correctness) and is safe to merge on its own before Phase
+5 starts.
+
+## Risks
+
+None blocking. Carried forward: link-check subrequest-budget defect (separate change), gate-mechanism
+confirmation (open design decision), and the unresolved `redactSecrets()` wiring gap -- none affect Phase 4
+correctness. New this pass: the throwing-KV end-to-end coverage gap (WARNING above) -- low risk given the
+identical code path for "absent" and "throwing," but should be closed with an explicit test before this
+becomes a load-bearing assumption for later phases (e.g. Phase 5's observability work reading cache-status
+signals).
