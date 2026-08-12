@@ -2,12 +2,12 @@
 
 ## Blocking Precondition
 
-**HARD DEPENDENCY**: `dashboard-bff-foundations` MUST be applied and archived first — this change
-consumes its published result types, `POST /api/tools/{tool}` route, `bff/src/gate.ts`, the
-`BffErrorCode` union, and `cacheStatus`/`resultAge`. None of these exist yet. Do not start Phase 1
-until `openspec/changes/dashboard-bff-foundations/tasks.md` is complete and its spec is merged.
+**RESOLVED** — `dashboard-bff-foundations` is applied and archived
+(`openspec/changes/archive/2026-08-12-dashboard-bff-foundations/`). Its published result types,
+`POST /api/tools/{tool}` route, `bff/src/gate.ts`, the `BffErrorCode` union, `cacheStatus`/`resultAge`,
+and `bff/src/usage.ts`/`GET /api/usage` all exist and are verified. Phase 1 may start.
 
-- [ ] 0.1 Verify `dashboard-bff-foundations` is archived; verify `bff/src/errors.ts`, `bff/src/gate.ts`, `src/types/index.ts` exports exist before writing any file below.
+- [x] 0.1 Verified: `bff/src/errors.ts`, `bff/src/gate.ts`, `src/types/index.ts`, and `bff/src/usage.ts` all exist on disk.
 
 ## Review Workload Forecast
 
@@ -18,11 +18,11 @@ until `openspec/changes/dashboard-bff-foundations/tasks.md` is complete and its 
 | Chained PRs recommended | Yes                                       |
 | Suggested split         | PR1→PR2→PR3→PR4→PR5→PR6→PR7               |
 | Delivery strategy       | ask-on-risk                               |
-| Chain strategy          | pending — ask user                        |
+| Chain strategy          | stacked-to-main (confirmed by user)       |
 
-Decision needed before apply: Yes
+Decision needed before apply: No — chain strategy confirmed.
 Chained PRs recommended: Yes
-Chain strategy: pending
+Chain strategy: stacked-to-main
 400-line budget risk: High
 
 ### Suggested Work Units
@@ -74,5 +74,9 @@ Chain strategy: pending
 
 ## Phase 7: Export & Quota (PR7)
 
-- [ ] 7.1 RED: JSON fidelity + freshness; CSV golden/stability/`columns ∪ omitted` coverage; truncation/sample markers present only when bounded; no secret in either export; `GET /api/usage` gated (integration).
-- [ ] 7.2 GREEN: `export/json.ts`, `export/csv.ts` + `CSV_SHAPES`, `ExportMenu`, `bff/src/usage.ts`, `HeadroomIndicator`, `FreshnessBadge`, `UsageContainer`.
+**Correction (this file predates `dashboard-bff-foundations` PR5):** `bff/src/usage.ts` and the
+`GET /api/usage` route already exist and are archived/verified — do NOT recreate them. This phase
+builds only the UI layer consuming the existing route.
+
+- [ ] 7.1 RED: JSON fidelity + freshness; CSV golden/stability/`columns ∪ omitted` coverage; truncation/sample markers present only when bounded; no secret in either export; a jsdom test asserting the UI calls the existing `GET /api/usage` route and renders its `estimate`/`note` fields without claiming an authoritative count.
+- [ ] 7.2 GREEN: `export/json.ts`, `export/csv.ts` + `CSV_SHAPES`, `ExportMenu`, `HeadroomIndicator`, `FreshnessBadge`, `UsageContainer` (consumes the existing `bff/src/usage.ts` backend, no new backend file).
