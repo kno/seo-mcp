@@ -1,0 +1,78 @@
+# Tasks: Dashboard Views
+
+## Blocking Precondition
+
+**HARD DEPENDENCY**: `dashboard-bff-foundations` MUST be applied and archived first — this change
+consumes its published result types, `POST /api/tools/{tool}` route, `bff/src/gate.ts`, the
+`BffErrorCode` union, and `cacheStatus`/`resultAge`. None of these exist yet. Do not start Phase 1
+until `openspec/changes/dashboard-bff-foundations/tasks.md` is complete and its spec is merged.
+
+- [ ] 0.1 Verify `dashboard-bff-foundations` is archived; verify `bff/src/errors.ts`, `bff/src/gate.ts`, `src/types/index.ts` exports exist before writing any file below.
+
+## Review Workload Forecast
+
+| Field                   | Value                                     |
+| ----------------------- | ----------------------------------------- |
+| Estimated changed lines | 3500-5000 (new SPA + 6 slices + new deps) |
+| 400-line budget risk    | High                                      |
+| Chained PRs recommended | Yes                                       |
+| Suggested split         | PR1→PR2→PR3→PR4→PR5→PR6→PR7               |
+| Delivery strategy       | ask-on-risk                               |
+| Chain strategy          | pending — ask user                        |
+
+Decision needed before apply: Yes
+Chained PRs recommended: Yes
+Chain strategy: pending
+400-line budget risk: High
+
+### Suggested Work Units
+
+| Unit | Goal                                                                                         | PR  | Focused test command                        | Runtime harness                                    | Rollback boundary                                 |
+| ---- | -------------------------------------------------------------------------------------------- | --- | ------------------------------------------- | -------------------------------------------------- | ------------------------------------------------- |
+| 1    | Build/typecheck/test wiring, `assets` binding, gate-ordering RED test                        | PR1 | `pnpm test -- vitest.integration.config.ts` | Miniflare integration, unauthenticated asset fetch | Remove `assets` binding, revert wrangler.jsonc    |
+| 2    | Shell: nav, `StateRegion`, `errors.ts`, `bounds.ts`, atoms, a11y/no-polling structural tests | PR2 | `pnpm test -- --project ui`                 | jsdom axe-core                                     | Revert `app/`,`data/`,`atoms/`                    |
+| 3    | `page-report-view`                                                                           | PR3 | `pnpm test -- PageReport`                   | jsdom                                              | Disable route, revert `organisms/OnPageCard` etc. |
+| 4    | `broken-links-view`                                                                          | PR4 | `pnpm test -- BrokenLinks`                  | jsdom                                              | Revert panel, shell shows disabled-view           |
+| 5    | `site-crawl-view` + `BarChart`                                                               | PR5 | `pnpm test -- SiteCrawl`                    | jsdom + Miniflare (progress seam)                  | Revert route/organisms                            |
+| 6    | `pagespeed-view` + `ScoreGauge` + secret handling                                            | PR6 | `pnpm test -- PageSpeed`                    | jsdom secrets suite                                | Revert route/organisms                            |
+| 7    | `result-export` + `quota-visibility` + `GET /api/usage`                                      | PR7 | `pnpm test -- export usage`                 | jsdom + Miniflare (`/api/usage` gate)              | Revert `export/`, `bff/src/usage.ts`              |
+
+## Phase 1: Build Wiring (PR1)
+
+- [ ] 1.1 RED: Integration test asserting unauthenticated `GET /`, `/index.html`, hashed asset, favicon, unknown deep link return `gate_unauthorized` before `assets` exists.
+- [ ] 1.2 Create `bff/ui/{index.html,vite.config.ts,tsconfig.json}` (DOM lib, excluded from root tsconfig).
+- [ ] 1.3 Add `assets` binding (`run_worker_first: true`) to `bff/wrangler.jsonc`; regenerate `Env` via `pnpm types:bff`.
+- [ ] 1.4 GREEN: wire `env.ASSETS.fetch` after gate in `bff/src/router.ts`; test 1.1 passes authenticated, fails unauthenticated per spec.
+- [ ] 1.5 Add `vitest.ui.config.ts` (jsdom) to `vitest.config.ts` projects; add `build:ui`/`dev:ui` scripts; update `.gitignore`/`.prettierignore`.
+
+## Phase 2: Shell (PR2)
+
+- [ ] 2.1 RED per `dashboard-shell` scenarios: unmapped-code state, retryAfter countdown, loading/empty/bound distinction, keyboard/focus, no-polling structural test.
+- [ ] 2.2 GREEN: `data/errors.ts` (`ERROR_PRESENTATION` + `presentFor`), `data/bounds.ts` types, `data/client.ts` (`UserIntent`, `requestTool`), `StateRegion`, atoms.
+- [ ] 2.3 Structural test: no `visibilitychange`/`focus`/`setInterval`/`useEffect→requestTool` under `bff/ui/src`.
+- [ ] 2.4 Manual check (documented, not automated): 360px/1440px layout, per design's jsdom-layout limitation.
+
+## Phase 3: Page Report (PR3)
+
+- [ ] 3.1 RED per `page-report-view` scenarios (absence, headings, OG/JSON-LD, all 13 issue codes + unknown, failure-not-empty).
+- [ ] 3.2 GREEN: `OnPageCard`, `HeadingsPanel`, `OpenGraphPanel`, `JsonLdPanel`, `IssuesList`, `PageReportContainer`.
+
+## Phase 4: Broken Links (PR4)
+
+- [ ] 4.1 RED: no fetch on page-report load; exactly one fetch on explicit action; all 4 counts visible; broken-vs-error distinct; probe-cap-at-50 badge; platform failure ≠ empty success.
+- [ ] 4.2 GREEN: `BrokenLinksPanel`, `ProbeRow`, `BrokenLinksContainer` (button-only trigger, no auto-effect).
+
+## Phase 5: Site Crawl (PR5)
+
+- [ ] 5.1 RED: defaults 5/2; out-of-range blocked; max-value warned confirm; per-panel sample labeling incl. `outputBytes` bound; drill-down reuses in-memory page data (no new `crawl_page` call); duplicate-submit blocked in flight.
+- [ ] 5.2 GREEN: `CrawlForm`, `DomainSummaryPanel`, `CrawlPolicyPanel`, `LinkGraphPanel`, `BarChart`, `PerPageTable`, `SiteCrawlContainer`, `readToolResponse` seam.
+
+## Phase 6: PageSpeed (PR6)
+
+- [ ] 6.1 RED: mobile default; missing score/metric/field-data shows unavailable not 0; opportunity with no savings still listed; secrets suite (storage/URL/echo/export/cache-key).
+- [ ] 6.2 GREEN: `PageSpeedForm` (uncontrolled input), `ScorePanel`, `LabMetricsPanel`, `FieldDataPanel`, `OpportunitiesTable`, `ScoreGauge`, `data/secret.ts`, `PageSpeedContainer`.
+
+## Phase 7: Export & Quota (PR7)
+
+- [ ] 7.1 RED: JSON fidelity + freshness; CSV golden/stability/`columns ∪ omitted` coverage; truncation/sample markers present only when bounded; no secret in either export; `GET /api/usage` gated (integration).
+- [ ] 7.2 GREEN: `export/json.ts`, `export/csv.ts` + `CSV_SHAPES`, `ExportMenu`, `bff/src/usage.ts`, `HeadroomIndicator`, `FreshnessBadge`, `UsageContainer`.
