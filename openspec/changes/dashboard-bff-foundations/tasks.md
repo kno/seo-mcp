@@ -38,16 +38,16 @@ Chain strategy: pending
 
 ## Phase 2: BFF Scaffold & Access Gate (`dashboard-bff`, `dashboard-access-gate`) — PR2
 
-- [ ] 2.1 Create `bff/wrangler.jsonc` (service binding `SEO_MCP`, vars, no KV yet); run `wrangler types -c bff/wrangler.jsonc` for `bff/worker-configuration.d.ts`.
-- [ ] 2.2 Wire `tsconfig.json` (`include` += `bff`), `vitest.config.ts` (unit project += `bff/test/**`), new `vitest.bff-integration.config.ts` with stub-MCP auxiliary worker; add `package.json` scripts `dev:bff`, `deploy:bff`, `types:bff`.
-- [ ] 2.3 RED: `bff/test/gate.test.ts` — allowed/denied/unavailable outcomes; timing-safe compare; unauthenticated request never reaches the service binding.
-- [ ] 2.4 GREEN: `bff/src/gate.ts`, `bff/src/session.ts` — `shared-secret-cookie` strategy over `GateStrategy` interface, HMAC session cookie, `POST /auth/session` using imported `verifyTokens`.
-- [ ] 2.5 RED: `bff/test/errors.test.ts` — code-mapping table (`gate_unauthorized` .. `bff_timeout`) with HTTP status and sanitized message.
-- [ ] 2.6 GREEN: `bff/src/errors.ts` — `BffError`/`BffOk` types, code table, `Bearer`/auth-header redaction.
-- [ ] 2.7 RED: `bff/test/router.test.ts` — `GET /api/tools/health` authorizes before any upstream call; unknown tool route returns 404 without a proxied call.
-- [ ] 2.8 GREEN: `bff/src/router.ts`, `bff/src/index.ts`, `bff/src/mcp-client.ts` (health only) — gate wired before dispatch.
-- [ ] 2.9 Integration RED+GREEN: `bff/test/integration/gate-ordering.test.ts` against `vitest.bff-integration.config.ts` — asserts stub MCP receives zero calls for unauthenticated/unknown-route requests.
-- [ ] 2.10 Add `bff/.dev.vars` (git-ignored) and `.gitignore` entry.
+- [x] 2.1 Create `bff/wrangler.jsonc` (service binding `SEO_MCP`, vars, no KV yet); run `wrangler types -c bff/wrangler.jsonc` for `bff/worker-configuration.d.ts`.
+- [x] 2.2 Wire `tsconfig.json` (`include` += `bff`), `vitest.config.ts` (unit project += `bff/test/**`), new `vitest.bff-integration.config.ts` with stub-MCP auxiliary worker; add `package.json` scripts `dev:bff`, `deploy:bff`, `types:bff`.
+- [x] 2.3 RED: `bff/test/gate.test.ts` — allowed/denied/unavailable outcomes; timing-safe compare; unauthenticated request never reaches the service binding.
+- [x] 2.4 GREEN: `bff/src/gate.ts`, `bff/src/session.ts` — `shared-secret-cookie` strategy over `GateStrategy` interface, HMAC session cookie, `POST /auth/session` using imported `verifyTokens`.
+- [x] 2.5 RED: `bff/test/errors.test.ts` — code-mapping table (`gate_unauthorized` .. `bff_timeout`) with HTTP status and sanitized message.
+- [x] 2.6 GREEN: `bff/src/errors.ts` — `BffError`/`BffOk` types, code table, `Bearer`/auth-header redaction.
+- [x] 2.7 RED: `bff/test/router.test.ts` — `GET /api/tools/health` authorizes before any upstream call; unknown tool route returns 404 without a proxied call.
+- [x] 2.8 GREEN: `bff/src/router.ts`, `bff/src/index.ts`, `bff/src/mcp-client.ts` (health only) — gate wired before dispatch.
+- [x] 2.9 Integration RED+GREEN: `bff/test/integration/gate-ordering.test.ts` against `vitest.bff-integration.config.ts` — asserts stub MCP receives zero calls for unauthenticated/unknown-route requests.
+- [x] 2.10 Add `bff/.dev.vars` (git-ignored) and `.gitignore` entry.
 
 ## Phase 3: Remaining Routes, Timeouts, Platform Failures — PR3
 

@@ -6,9 +6,21 @@
     "strict": true,
     "noEmit": true,
     "lib": ["ES2022", "WebWorker"],
-    "types": ["@cloudflare/workers-types", "node", "vitest/globals"],
+    "types": [
+      "@cloudflare/workers-types",
+      "node",
+      "vitest/globals",
+      "@cloudflare/vitest-pool-workers"
+    ],
     "skipLibCheck": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src", "test", "vitest.config.ts", "vitest.integration.config.ts"]
+  "include": [
+    "src",
+    "test",
+    "bff",
+    "vitest.config.ts",
+    "vitest.integration.config.ts",
+    "vitest.bff-integration.config.ts"
+  ]
 }

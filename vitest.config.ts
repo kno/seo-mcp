@@ -9,11 +9,12 @@ export default defineConfig({
       {
         test: {
           name: "unit",
-          include: ["test/**/*.test.ts"],
-          exclude: ["test/integration/**"],
+          include: ["test/**/*.test.ts", "bff/test/**/*.test.ts"],
+          exclude: ["test/integration/**", "bff/test/integration/**"],
         },
       },
       "./vitest.integration.config.ts",
+      "./vitest.bff-integration.config.ts",
     ],
   },
 });

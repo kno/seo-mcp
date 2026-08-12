@@ -7,6 +7,9 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "dev:bff": "wrangler dev -c bff/wrangler.jsonc",
+    "deploy:bff": "wrangler deploy -c bff/wrangler.jsonc",
+    "types:bff": "wrangler types -c bff/wrangler.jsonc --path bff/worker-configuration.d.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",

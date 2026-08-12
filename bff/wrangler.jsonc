@@ -1,0 +1,19 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "seo-dashboard-bff",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-10",
+  "services": [
+    {
+      "binding": "SEO_MCP",
+      "service": "seo-mcp",
+    },
+  ],
+  "vars": {
+    "GATE_STRATEGY": "shared-secret-cookie",
+    "MCP_ORIGIN": "https://seo-mcp.internal",
+  },
+  "observability": {
+    "enabled": true,
+  },
+}
