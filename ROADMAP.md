@@ -52,11 +52,11 @@ The first release proves a bounded, Workers-native SEO MCP before adding authent
 
 ### SEO intelligence
 
-- [ ] `analyze_domain`
-- [ ] `find_seo_opportunities`
+- [ ] `analyze_domain` (unified crawl + GSC + link-graph report)
+- [x] `find_seo_opportunities`
 - [ ] Keyword-to-page mapping
-- [ ] Content gaps, cannibalizations, and internal-linking recommendations
-- [ ] Impact/effort prioritization
+- [~] Content gaps, cannibalizations, and internal-linking recommendations (cannibalization via `find_keyword_cannibalization`; gaps + internal-linking pending)
+- [x] Impact/effort prioritization
 
 ### Persistence and operation
 
