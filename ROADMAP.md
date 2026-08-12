@@ -17,7 +17,7 @@ The first release proves a bounded, Workers-native SEO MCP before adding authent
 
 - [x] Reproducible installs: committed `pnpm-lock.yaml`, pinned `packageManager`, and CI on `pnpm install --frozen-lockfile`
 - [x] Run the real Vitest suite, typecheck, and Wrangler dry-run with installed dependencies
-- [ ] Add a lightweight Wrangler/Miniflare integration test for `HTMLRewriter` and `/mcp`
+- [x] Wrangler/Miniflare integration test for real `HTMLRewriter` extraction (the `/mcp` auth path stays out — the ratelimit binding is not reliably simulated)
 - [ ] Exercise a deployed Worker with multiple MCP hosts
 - [ ] Record real Free-plan CPU, output-size, and subrequest telemetry
 
