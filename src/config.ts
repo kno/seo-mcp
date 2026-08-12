@@ -9,6 +9,8 @@ export interface Env {
   GOOGLE_ADS_CUSTOMER_ID?: string;
   GOOGLE_ADS_LOGIN_CUSTOMER_ID?: string;
   GSC_SNAPSHOT_PROPERTIES?: string;
+  GOOGLE_BUSINESS_ACCOUNT?: string;
+  GOOGLE_BUSINESS_LOCATION?: string;
   DB?: D1Database;
 }
 
@@ -44,4 +46,6 @@ export const LIMITS = {
   maxContentGaps: 100,
   maxCrawlSnapshotPages: 100,
   maxCrawlDiffRows: 100,
+  maxBusinessReviews: 50,
+  businessTimeoutMs: 20_000,
 } as const;
