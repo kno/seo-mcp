@@ -1,0 +1,88 @@
+schema: spec-driven
+change: dashboard-insights
+artifactStore: openspec
+
+session:
+  executionMode: auto
+  deliveryStrategy: ask-on-risk
+  reviewBudgetLines: 800
+  strictTdd: true
+  testCommand: pnpm test
+
+phases:
+  explore: skipped
+  propose: done
+  specs: pending
+  design: pending
+  tasks: pending
+  apply: pending
+  verify: pending
+  archive: pending
+
+dependsOn:
+  - dashboard-bff-foundations
+  - dashboard-views
+
+capabilities:
+  new:
+    - authenticated-source-contract
+    - search-console-view
+    - gsc-insight-views
+    - keyword-research-view
+    - seo-intelligence-view
+    - history-comparison-view
+  modified:
+    - mcp-result-contract
+    - dashboard-bff
+    - bff-result-cache
+    - mcp-error-contract
+    - dashboard-shell
+    - quota-visibility
+    - result-export
+
+notes: |
+  Covers the authenticated and analytical half of the dashboard (DASHBOARD_ROADMAP.md Phases 5-6).
+  dashboard-bff-foundations owns the server side; dashboard-views owns the crawl/PageSpeed views.
+  Neither is redefined here.
+
+  Explore was skipped: ROADMAP.md "Resolved decisions", DASHBOARD_ROADMAP.md Phases 5-7, the two
+  sibling changes, and the real src/google/* code carry the evidence a proposal needs.
+
+  EVIDENCE STATUS - load-bearing for the specs phase. Only search_console_query exists
+  (src/google/search-console.ts, src/server.ts:125-165, verified live per ROADMAP.md:41). Its shape
+  is: { siteUrl, startDate, endDate, dimensions[], rowCount, rows[{ keys[], clicks, impressions,
+  ctr, position }] }, bounded by LIMITS.maxGscRows 250 / gscTimeoutMs 15000.
+  Grounded in a real shape: search-console-view, authenticated-source-contract (its invariants are
+  verifiable today).
+  ANTICIPATORY / provisional by construction: gsc-insight-views, keyword-research-view,
+  seo-intelligence-view, history-comparison-view. Specs MUST say so inline, MUST NOT invent field
+  names/units/scales, and MUST carry a reconciliation clause naming the tool whose real output
+  schema settles them.
+
+  Only ONE server-side deliverable: the search_console_query output schema + published type, which
+  edits src/server.ts (MCP tool surface -> higher risk per openspec/config.yaml). Implementing any
+  unbuilt tool, the Google Ads client, D1, or a history endpoint is a DEPENDENCY, not a deliverable.
+
+  Blocked-by per view: search-console-view is unblocked today; gsc-insight-views, keyword-research-
+  view and seo-intelligence-view each wait on their tools shipping with published output schemas;
+  history-comparison-view is blocked on the server creating a D1 binding, writing snapshots AND
+  exposing history through an MCP tool - ROADMAP.md:81 decides only the storage engine.
+
+  Two semantics that must NOT be copied from the crawl tools: (1) two staleness axes - our
+  resultAge and Google's reporting lag / as-of date, displayed separately; (2) Google-side quota is
+  a second independently exhaustible budget, unaffected by the MCP 60-req/60s bucket.
+
+  Known gap to resolve in specs: Google credential failure and Google quota exhaustion both arrive
+  as tool_failed with plain text (search-console.ts:76-81 throws -> errorResult), so they are
+  currently indistinguishable to the dashboard.
+
+  Non-goals with rationale: additional free sources (ROADMAP.md:74 marks them "evaluate" - no tool,
+  no shape); scheduled jobs (ROADMAP.md:64 conditional); multi-tenant auth and any user-facing
+  Google OAuth flow (resolved single-tenant, refresh token as Worker secret).
+
+  Open decisions awaiting the user: accept the ship-GSC-first slicing; authenticated cache TTL;
+  property list configured vs typed; default GSC date range/comparison window; how to distinguish
+  credential failure from quota exhaustion; Google quota accounting source and wording; whether the
+  GSC output schema belongs here or folds back into dashboard-bff-foundations; charting mechanism.
+  A "Proposal question round" section in proposal.md carries the five product questions and the
+  assumptions taken in their absence.
