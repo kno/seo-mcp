@@ -45,10 +45,10 @@ The first release proves a bounded, Workers-native SEO MCP before adding authent
 
 ### Keyword research
 
-- [ ] Google Ads Keyword Planner integration
-- [ ] `discover_keywords`
-- [ ] `get_keyword_metrics`
-- [ ] Volume, CPC, competition, intent, and clustering
+- [x] Google Ads Keyword Planner integration (single-tenant, API v23)
+- [x] `discover_keywords`
+- [x] `get_keyword_metrics`
+- [ ] Volume, CPC, competition, intent, and clustering (volume/competition/bids done; intent + clustering pending)
 
 ### SEO intelligence
 
