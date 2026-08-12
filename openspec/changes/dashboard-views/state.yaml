@@ -1,0 +1,54 @@
+schema: spec-driven
+change: dashboard-views
+artifactStore: openspec
+
+session:
+  executionMode: auto
+  deliveryStrategy: ask-on-risk
+  reviewBudgetLines: 800
+  strictTdd: true
+  testCommand: pnpm test
+
+phases:
+  explore: skipped
+  propose: done
+  specs: pending
+  design: pending
+  tasks: pending
+  apply: pending
+  verify: pending
+  archive: pending
+
+dependsOn:
+  - dashboard-bff-foundations
+
+capabilities:
+  new:
+    - dashboard-shell
+    - page-report-view
+    - broken-links-view
+    - site-crawl-view
+    - pagespeed-view
+    - result-export
+    - quota-visibility
+  modified:
+    - dashboard-bff
+
+notes: |
+  Covers the user-facing dashboard views; dashboard-bff-foundations covers the server side.
+  Explore was skipped: DASHBOARD_ROADMAP.md plus the verified constraints table and the
+  dashboard-bff-foundations exploration/design already carry the evidence a proposal needs.
+
+  Blocked-by: all five dashboard-bff-foundations capabilities must land before any view work
+  starts (published types, per-tool routes, access gate, error envelope, cache metadata).
+
+  Recommendations awaiting confirmation: React SPA served as BFF static assets; hand-rolled SVG
+  charts; no polling or auto-refresh anywhere; crawl_site UI defaults limit 5 / concurrency 2.
+
+  quota-visibility carries a real gap: the Workers rate-limit binding exposes no remaining count,
+  so shared-bucket headroom must be derived from BFF-side call accounting. If dashboard-bff-
+  foundations has not archived when specs are written, fold that requirement into it rather than
+  writing a delta against an unmerged spec.
+
+  Deferred with named blockers: search-console-view (Google refresh token / secret handling),
+  history-comparison (server durable storage), multi-tenant-dashboard (server OAuth and quotas).
