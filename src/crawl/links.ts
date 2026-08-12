@@ -1,26 +1,13 @@
+import type * as z from "zod/v4";
 import { LIMITS } from "../config";
 import { createFetchBudget } from "../http/fetch";
 import { normalizePublicUrl, resolvePublicUrl } from "../security/url-policy";
 import { crawlPage } from "./page";
 import { mapConcurrent } from "./site";
+import { linkCheckResultSchema, linkProbeSchema } from "../schemas/links";
 
-export interface LinkProbe {
-  url: string;
-  state: "ok" | "broken" | "error";
-  status?: number;
-  redirects?: number;
-  error?: string;
-}
-
-export interface LinkCheckResult {
-  url: string;
-  pageStatus: number;
-  checked: number;
-  ok: number;
-  broken: number;
-  errors: number;
-  results: LinkProbe[];
-}
+export type LinkProbe = z.infer<typeof linkProbeSchema>;
+export type LinkCheckResult = z.infer<typeof linkCheckResultSchema>;
 
 const PROBE_ACCEPT = "text/html,application/xhtml+xml;q=0.9";
 const PROBE_USER_AGENT = "seo-mcp/0.1 (+https://github.com/kno/seo-mcp)";

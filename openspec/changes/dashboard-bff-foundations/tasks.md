@@ -28,13 +28,13 @@ Chain strategy: pending
 
 ## Phase 1: Result Schemas & Cast Removal (`mcp-result-contract`) — PR1
 
-- [ ] 1.1 RED: schema tests in `test/schemas/*.test.ts` for `health`, `crawl_page`, `crawl_site`, `check_links`, `analyze_pagespeed` fixtures incl. optional-field and nested `LinkProbe` state cases.
-- [ ] 1.2 GREEN: add `src/schemas/{health,page,site,links,pagespeed}.ts` Zod object schemas; convert result interfaces to `z.infer` aliases in `src/seo/html.ts`, `src/crawl/site.ts`, `src/crawl/links.ts`, `src/pagespeed/types.ts`.
-- [ ] 1.3 RED: `test/server.test.ts` — tool registration exposes `outputSchema`; non-conforming result becomes `tool_failed`, not silent cast.
-- [ ] 1.4 GREEN: `src/server.ts` — add `outputSchema` per tool, typed `jsonResult` helper, remove `as Record<string, unknown>`.
-- [ ] 1.5 RED: `test/types/index.test.ts` — imported type identical to server's, zero runtime import under `verbatimModuleSyntax`.
-- [ ] 1.6 GREEN: create `src/types/index.ts` (type-only re-exports) and `src/types/schemas.ts` (runtime schema re-exports).
-- [ ] 1.7 Verify `pnpm typecheck` and `test/integration/**` still pass; structured content round-trips.
+- [x] 1.1 RED: schema tests in `test/schemas/*.test.ts` for `health`, `crawl_page`, `crawl_site`, `check_links`, `analyze_pagespeed` fixtures incl. optional-field and nested `LinkProbe` state cases.
+- [x] 1.2 GREEN: add `src/schemas/{health,page,site,links,pagespeed}.ts` Zod object schemas; convert result interfaces to `z.infer` aliases in `src/seo/html.ts`, `src/crawl/site.ts`, `src/crawl/links.ts`, `src/pagespeed/types.ts`.
+- [x] 1.3 RED: `test/server.test.ts` — tool registration exposes `outputSchema`; non-conforming result becomes `tool_failed`, not silent cast.
+- [x] 1.4 GREEN: `src/server.ts` — add `outputSchema` per tool, typed `jsonResult` helper, remove `as Record<string, unknown>`.
+- [x] 1.5 RED: `test/types/index.test.ts` — imported type identical to server's, zero runtime import under `verbatimModuleSyntax`.
+- [x] 1.6 GREEN: create `src/types/index.ts` (type-only re-exports) and `src/types/schemas.ts` (runtime schema re-exports).
+- [x] 1.7 Verify `pnpm typecheck` and `test/integration/**` still pass; structured content round-trips.
 
 ## Phase 2: BFF Scaffold & Access Gate (`dashboard-bff`, `dashboard-access-gate`) — PR2
 

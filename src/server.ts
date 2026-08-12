@@ -43,11 +43,51 @@ import {
   getCrawlSnapshotPages,
   twoMostRecentCrawls,
 } from "./db/crawl-store";
+import { healthSchema } from "./schemas/health";
+import { pageAnalysisSchema } from "./schemas/page";
+import { siteCrawlResultSchema } from "./schemas/site";
+import { linkCheckResultSchema } from "./schemas/links";
+import { pageSpeedResultSchema } from "./schemas/pagespeed";
 
-const jsonResult = (value: unknown) => ({
-  content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }],
-  structuredContent: value as Record<string, unknown>,
-});
+/**
+ * Builds the `structuredContent` payload for a tool response.
+ *
+ * Two call shapes:
+ * - `jsonResult(schema, value)` — the five tools scoped by
+ *   `mcp-result-contract` in this change. `schema.parse` validates `value`
+ *   against the tool's own declared `outputSchema` before it is returned; a
+ *   thrown `ZodError` is caught by the same try/catch each tool handler
+ *   already uses for `errorResult`, so a result violating its own schema
+ *   surfaces as a normal tool failure rather than invalid `structuredContent`.
+ * - `jsonResult(value)` — legacy single-argument form kept for the
+ *   Google/Ads tools that do not yet declare an `outputSchema`
+ *   (`search_console_query`, `find_striking_distance_keywords`,
+ *   `find_low_ctr_opportunities`, `get_keyword_metrics`,
+ *   `discover_keywords`, `cluster_keywords`); out of scope for this change.
+ */
+function jsonResult<T extends Record<string, unknown>>(
+  schema: z.ZodType<T>,
+  value: T,
+): { content: [{ type: "text"; text: string }]; structuredContent: T };
+function jsonResult(value: unknown): {
+  content: [{ type: "text"; text: string }];
+  structuredContent: Record<string, unknown>;
+};
+function jsonResult(schemaOrValue: unknown, value?: unknown) {
+  if (arguments.length < 2) {
+    return {
+      content: [
+        { type: "text" as const, text: JSON.stringify(schemaOrValue, null, 2) },
+      ],
+      structuredContent: schemaOrValue as Record<string, unknown>,
+    };
+  }
+  const parsed = (schemaOrValue as z.ZodType).parse(value);
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(parsed, null, 2) }],
+    structuredContent: parsed,
+  };
+}
 
 const errorResult = (error: unknown) => ({
   content: [
@@ -70,9 +110,14 @@ export function buildServer(env: Env): McpServer {
     {
       description: "Check whether the SEO MCP Worker is ready.",
       inputSchema: z.object({}),
+      outputSchema: healthSchema,
     },
     async () =>
-      jsonResult({ status: "ok", service: "seo-mcp", version: "0.1.0" }),
+      jsonResult(healthSchema, {
+        status: "ok",
+        service: "seo-mcp",
+        version: "0.1.0",
+      }),
   );
 
   server.registerTool(
@@ -83,10 +128,11 @@ export function buildServer(env: Env): McpServer {
       inputSchema: z.object({
         url: z.url().describe("Public HTTP or HTTPS page URL"),
       }),
+      outputSchema: pageAnalysisSchema,
     },
     async ({ url }) => {
       try {
-        return jsonResult(await crawlPage(url));
+        return jsonResult(pageAnalysisSchema, await crawlPage(url));
       } catch (error) {
         return errorResult(error);
       }
@@ -103,10 +149,14 @@ export function buildServer(env: Env): McpServer {
         limit: z.number().int().min(1).max(20).default(10),
         concurrency: z.number().int().min(1).max(4).default(4),
       }),
+      outputSchema: siteCrawlResultSchema,
     },
     async ({ url, limit, concurrency }) => {
       try {
-        return jsonResult(await crawlSite(url, limit, concurrency));
+        return jsonResult(
+          siteCrawlResultSchema,
+          await crawlSite(url, limit, concurrency),
+        );
       } catch (error) {
         return errorResult(error);
       }
@@ -121,10 +171,11 @@ export function buildServer(env: Env): McpServer {
       inputSchema: z.object({
         url: z.url().describe("Public HTTP or HTTPS page URL"),
       }),
+      outputSchema: linkCheckResultSchema,
     },
     async ({ url }) => {
       try {
-        return jsonResult(await checkLinks(url));
+        return jsonResult(linkCheckResultSchema, await checkLinks(url));
       } catch (error) {
         return errorResult(error);
       }
@@ -147,10 +198,12 @@ export function buildServer(env: Env): McpServer {
             "Google PageSpeed API key. Overrides the PAGESPEED_API_KEY environment variable when provided.",
           ),
       }),
+      outputSchema: pageSpeedResultSchema,
     },
     async ({ url, strategy, apiKey }) => {
       try {
         return jsonResult(
+          pageSpeedResultSchema,
           await analyzePageSpeed(url, strategy, env, undefined, apiKey),
         );
       } catch (error) {

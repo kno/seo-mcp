@@ -1,3 +1,4 @@
+import type * as z from "zod/v4";
 import { LIMITS } from "../config";
 import { createFetchBudget, createResponseByteBudget } from "../http/fetch";
 import { crawlPage } from "./page";
@@ -5,67 +6,23 @@ import { fetchRobots, isPathAllowed, ROBOTS_USER_AGENT } from "./robots";
 import { discoverSitemapUrls } from "./sitemap";
 import { normalizePublicUrl } from "../security/url-policy";
 import type { PageAnalysis } from "../seo/html";
+import {
+  crawlPolicySchema,
+  domainCategorySchema,
+  domainSummarySchema,
+  duplicateGroupSchema,
+  linkGraphSummarySchema,
+  siteCrawlResultSchema,
+  sitePageAnalysisSchema,
+} from "../schemas/site";
 
-export interface DomainCategory {
-  count: number;
-  sample: string[];
-}
-
-export interface DuplicateGroup {
-  value: string;
-  count: number;
-  sample: string[];
-}
-
-export interface DomainSummary {
-  pagesAnalyzed: number;
-  duplicateTitles: DuplicateGroup[];
-  duplicateDescriptions: DuplicateGroup[];
-  missingH1: DomainCategory;
-  multipleH1: DomainCategory;
-  thinContent: DomainCategory;
-  nonIndexable: DomainCategory;
-  imagesMissingAlt: { pages: number; images: number };
-}
-
-export interface CrawlPolicy {
-  robotsUrl: string;
-  robotsFound: boolean;
-  userAgent: string;
-  sitemapsDeclared: string[];
-  disallowedSkipped: { count: number; sample: string[] };
-}
-
-export interface LinkGraphSummary {
-  crawledPages: number;
-  orphanPages: { count: number; sample: string[] };
-  topLinkedPages: Array<{ url: string; inbound: number }>;
-}
-
-export interface SiteCrawlResult {
-  site: string;
-  sitemap: string;
-  sitemapFound: boolean;
-  crawlPolicy: CrawlPolicy;
-  requested: number;
-  crawled: number;
-  failed: number;
-  documentsRead: number;
-  subrequests: number;
-  bytesRead: number;
-  outputBytes: number;
-  pages: Array<{ url: string; result?: SitePageAnalysis; error?: string }>;
-  issueCounts: Record<string, number>;
-  summary: DomainSummary;
-  linkGraph: LinkGraphSummary;
-}
-
-export type SitePageAnalysis = Omit<
-  PageAnalysis,
-  "links" | "internalLinkTargets"
-> & {
-  linkCount: number;
-};
+export type DomainCategory = z.infer<typeof domainCategorySchema>;
+export type DuplicateGroup = z.infer<typeof duplicateGroupSchema>;
+export type DomainSummary = z.infer<typeof domainSummarySchema>;
+export type CrawlPolicy = z.infer<typeof crawlPolicySchema>;
+export type LinkGraphSummary = z.infer<typeof linkGraphSummarySchema>;
+export type SiteCrawlResult = z.infer<typeof siteCrawlResultSchema>;
+export type SitePageAnalysis = z.infer<typeof sitePageAnalysisSchema>;
 
 function compactPage(result: PageAnalysis): SitePageAnalysis {
   const { links, internalLinkTargets, ...signals } = result;

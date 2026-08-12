@@ -1,4 +1,6 @@
+import type * as z from "zod/v4";
 import { detectSeoIssues, type PageSignals } from "./analyze";
+import { pageAnalysisSchema } from "../schemas/page";
 
 type ElementLike = { getAttribute(name: string): string | null };
 type TextChunkLike = { text: string };
@@ -278,13 +280,7 @@ export class HtmlExtractionState implements PageSignals {
   }
 }
 
-export interface PageAnalysis extends PageSignals {
-  url: string;
-  status: number;
-  bytesRead: number;
-  issues: ReturnType<typeof detectSeoIssues>;
-  fetchTimeMs?: number;
-}
+export type PageAnalysis = z.infer<typeof pageAnalysisSchema>;
 
 export async function extractHtml(
   bytes: Uint8Array,
