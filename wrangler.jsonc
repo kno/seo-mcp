@@ -16,4 +16,12 @@
   "observability": {
     "enabled": true,
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "seo-mcp-db",
+      "database_id": "88c4a581-adc2-41e4-a7c6-5e47d3a20435",
+      "migrations_dir": "migrations",
+    },
+  ],
 }

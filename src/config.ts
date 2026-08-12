@@ -8,6 +8,7 @@ export interface Env {
   GOOGLE_ADS_DEVELOPER_TOKEN?: string;
   GOOGLE_ADS_CUSTOMER_ID?: string;
   GOOGLE_ADS_LOGIN_CUSTOMER_ID?: string;
+  DB?: D1Database;
 }
 
 export const LIMITS = {
@@ -35,4 +36,6 @@ export const LIMITS = {
   maxKeywordIdeas: 200,
   adsTimeoutMs: 20_000,
   maxClusterKeywords: 500,
+  maxSnapshotRows: 500,
+  maxDiffRows: 100,
 } as const;

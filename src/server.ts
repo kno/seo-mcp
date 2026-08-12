@@ -1,6 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
-import type { Env } from "./config";
+import { LIMITS, type Env } from "./config";
 import { crawlPage } from "./crawl/page";
 import { crawlSite } from "./crawl/site";
 import { checkLinks } from "./crawl/links";
@@ -12,6 +12,13 @@ import {
 } from "./google/opportunities";
 import { getKeywordMetrics, discoverKeywords } from "./google/ads";
 import { clusterKeywords } from "./seo/keywords";
+import { diffGscRows } from "./seo/gsc-diff";
+import {
+  storeGscSnapshot,
+  listSnapshots,
+  getSnapshotRows,
+  twoMostRecent,
+} from "./db/gsc-store";
 
 const jsonResult = (value: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }],
@@ -341,6 +348,133 @@ export function buildServer(env: Env): McpServer {
     async ({ keywords }) => {
       try {
         return jsonResult(clusterKeywords(keywords));
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "snapshot_search_console",
+    {
+      description:
+        "Capture a Search Console query as a stored snapshot in D1 for later period-over-period comparison and content-decay detection.",
+      inputSchema: z.object({
+        siteUrl: z.string().min(1),
+        startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD"),
+        endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD"),
+        dimensions: z
+          .array(
+            z.enum([
+              "query",
+              "page",
+              "country",
+              "device",
+              "date",
+              "searchAppearance",
+            ]),
+          )
+          .optional(),
+        label: z.string().min(1).optional(),
+      }),
+    },
+    async ({ siteUrl, startDate, endDate, dimensions, label }) => {
+      if (!env.DB)
+        return errorResult(new Error("D1 storage is not configured"));
+      try {
+        const result = await searchConsoleQuery(
+          {
+            siteUrl,
+            startDate,
+            endDate,
+            dimensions,
+            rowLimit: LIMITS.maxSnapshotRows,
+          },
+          env,
+        );
+        const capturedAt = new Date().toISOString();
+        const { snapshotId, rowCount } = await storeGscSnapshot(env.DB, {
+          siteUrl: result.siteUrl,
+          startDate: result.startDate,
+          endDate: result.endDate,
+          label,
+          capturedAt,
+          rows: result.rows,
+        });
+        return jsonResult({
+          snapshotId,
+          siteUrl: result.siteUrl,
+          rowCount,
+          capturedAt,
+        });
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "list_search_console_snapshots",
+    {
+      description:
+        "List stored Search Console snapshots for a site, most recent first.",
+      inputSchema: z.object({
+        siteUrl: z.string().min(1),
+        limit: z.number().int().min(1).max(50).optional(),
+      }),
+    },
+    async ({ siteUrl, limit }) => {
+      if (!env.DB)
+        return errorResult(new Error("D1 storage is not configured"));
+      try {
+        const snapshots = await listSnapshots(env.DB, siteUrl, limit);
+        return jsonResult({ siteUrl, count: snapshots.length, snapshots });
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "compare_search_console",
+    {
+      description:
+        "Compare two stored Search Console snapshots (defaulting to the two most recent) to surface decayed, improved, lost, and gained queries.",
+      inputSchema: z.object({
+        siteUrl: z.string().min(1),
+        baseSnapshotId: z.number().int().positive().optional(),
+        currentSnapshotId: z.number().int().positive().optional(),
+      }),
+    },
+    async ({ siteUrl, baseSnapshotId, currentSnapshotId }) => {
+      if (!env.DB)
+        return errorResult(new Error("D1 storage is not configured"));
+      try {
+        let baseId: number;
+        let currentId: number;
+        if (baseSnapshotId != null && currentSnapshotId != null) {
+          baseId = baseSnapshotId;
+          currentId = currentSnapshotId;
+        } else {
+          const pair = await twoMostRecent(env.DB, siteUrl);
+          if (!pair)
+            return errorResult(
+              new Error("Need at least two snapshots to compare"),
+            );
+          baseId = pair.base.id;
+          currentId = pair.current.id;
+        }
+        const [baseRows, currentRows] = await Promise.all([
+          getSnapshotRows(env.DB, baseId),
+          getSnapshotRows(env.DB, currentId),
+        ]);
+        const diff = diffGscRows(baseRows, currentRows);
+        return jsonResult({
+          siteUrl,
+          baseSnapshotId: baseId,
+          currentSnapshotId: currentId,
+          diff,
+        });
       } catch (e) {
         return errorResult(e);
       }
