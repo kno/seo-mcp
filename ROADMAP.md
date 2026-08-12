@@ -39,8 +39,8 @@ The first release proves a bounded, Workers-native SEO MCP before adding authent
 
 - [x] Single-tenant Google auth (stored refresh token → cached access token)
 - [x] `search_console_query` — verified live against real Search Console data
-- [ ] `find_striking_distance_keywords`
-- [ ] `find_low_ctr_opportunities`
+- [x] `find_striking_distance_keywords`
+- [x] `find_low_ctr_opportunities`
 - [ ] Content-decay detection and period-over-period comparison
 
 ### Keyword research
