@@ -3,6 +3,7 @@ import * as z from "zod/v4";
 import type { Env } from "./config";
 import { crawlPage } from "./crawl/page";
 import { crawlSite } from "./crawl/site";
+import { checkLinks } from "./crawl/links";
 import { analyzePageSpeed } from "./pagespeed/client";
 
 const jsonResult = (value: unknown) => ({
@@ -68,6 +69,24 @@ export function buildServer(env: Env): McpServer {
     async ({ url, limit, concurrency }) => {
       try {
         return jsonResult(await crawlSite(url, limit, concurrency));
+      } catch (error) {
+        return errorResult(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "check_links",
+    {
+      description:
+        "Fetch one public page and probe its links, reporting broken (4xx/5xx) and unreachable links within a bounded subrequest budget.",
+      inputSchema: z.object({
+        url: z.url().describe("Public HTTP or HTTPS page URL"),
+      }),
+    },
+    async ({ url }) => {
+      try {
+        return jsonResult(await checkLinks(url));
       } catch (error) {
         return errorResult(error);
       }

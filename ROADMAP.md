@@ -33,7 +33,7 @@ The first release proves a bounded, Workers-native SEO MCP before adding authent
 
 - [x] Robots.txt awareness
 - [x] Explicit crawl policy reported in the result
-- [ ] Broken-link checking as a separately budgeted crawl job, not silently added to `crawl_site`
+- [x] Broken-link checking as a separately budgeted job — the `check_links` tool (single page; recursive/site-wide stays future work)
 
 ### Google Search Console
 

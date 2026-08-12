@@ -18,4 +18,8 @@ export const LIMITS = {
   maxSitemapLocations: 100,
   maxRedirects: 3,
   maxOpportunities: 10,
+  maxLinkChecks: 50,
+  linkCheckConcurrency: 6,
+  linkProbeTimeoutMs: 6_000,
+  linkCheckSubrequestBudget: 60,
 } as const;
