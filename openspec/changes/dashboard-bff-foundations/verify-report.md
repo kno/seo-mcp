@@ -405,3 +405,171 @@ correctness. New this pass: the throwing-KV end-to-end coverage gap (WARNING abo
 identical code path for "absent" and "throwing," but should be closed with an explicit test before this
 becomes a load-bearing assumption for later phases (e.g. Phase 5's observability work reading cache-status
 signals).
+
+---
+
+# Verify Report — dashboard-bff-foundations, Phase 5 / PR5 (final)
+
+Scope: this change ships as 5 chained PRs (`stacked-to-main`). Phase 1 (PR1, `f896684`), Phase 2 (PR2,
+`96377f1`), Phase 3 (PR3, `d7872ce`), and Phase 4 (PR4, `c185340`) already verified PASS / PASS WITH
+WARNINGS. Phase 5 (PR5, commit `c5ada29` on `feat/bff-result-schemas`) is now implemented: the read-only
+usage/headroom source route and structured `bff.upstream` logging. This is the LAST phase — all 38 tasks
+(1.1 through 5.4) are `[x]` in `tasks.md`. This pass also performs a holistic check across all 5 specs now
+that every phase is complete.
+
+## Verdict: PASS WITH WARNINGS
+
+## Task completion
+
+`grep -c '\[x\]' tasks.md` returns 38; `grep -c '\[ \]' tasks.md` returns 0. All tasks complete, no pending
+work.
+
+## Command evidence (executed fresh, this session)
+
+- `pnpm test` -> 444/444 passed (47 test files; 437 Phase 1-4 baseline + 7 new in `bff/test/usage.test.ts`).
+- `pnpm typecheck` -> clean (exit 0).
+- `pnpm format:check` -> clean (exit 0).
+
+## Spec compliance — `dashboard-bff`'s "Read-Only Usage and Headroom Source" (2 scenarios, in scope for PR5)
+
+- **Headroom is reported as an estimate** (PASS): `bff/src/usage.ts`'s `UsageSnapshot` interface declares
+  `estimate: true` as a TypeScript **literal type**, not `boolean` — confirmed by direct read of the
+  interface (`usage.ts:43-49`). This means the field cannot silently become `false` at runtime; the type
+  system itself enforces the spec's "MUST NOT present derived headroom as an authoritative upstream figure"
+  clause, not merely a docstring promise. `bff/test/usage.test.ts` exercises this through both the isolated
+  module (`estimate` always `true`, paired with a non-empty explanatory `note`) AND end-to-end through
+  `handleRequest` for the real `GET /api/usage` route: one test asserts 401 for an unauthenticated request,
+  a second asserts 200 with `estimate: true` in the JSON body for an authenticated request — a genuine
+  route-level test, not just a call into `usage.ts` directly.
+- **Served result carries its age** (PASS): `resultAge` is computed in `bff/src/cache.ts`'s `getCached`
+  (`Math.floor((Date.now() - entry.storedAt) / 1000)`, `cache.ts:150-154`) — from the cache entry's own
+  stored timestamp (`storedAt`, set at `putCached` time in Phase 4), never from request-start time. No new
+  code was needed for this half since Phase 4 already wired it correctly end-to-end into `router.ts`'s
+  `toolResponse` and Phase 4's own `bff/test/integration/cache.test.ts` already asserts `resultAge >= 0` on
+  a cache hit. Re-derived and confirmed directly from `cache.ts`, not trusted from the apply report.
+
+## keyHash identity (re-traced across `router.ts` and `mcp-client.ts`)
+
+`router.ts:106` computes `const key = await cacheKey(toolName, args)` unconditionally, before the
+`isCacheable` branch. That same `key` value is passed as `keyHash: key` into the `callTool` dependencies
+object on both the cacheable path (`callUpstream`, line 108-116) and the non-cacheable bypass path (same
+`callUpstream` closure, invoked at line 124). In `mcp-client.ts`, the outer `callTool` wrapper passes
+`dependencies.keyHash` straight into `logUpstreamEvent(...)` without any independent hashing — confirmed by
+reading `mcp-client.ts:127-141` directly: `keyHash` in the log line is the literal same value `cacheKey()`
+produced for that call, threaded through, never recomputed. Live stdout during the full test run (captured
+above) shows the log line's `keyHash` matching the exact `v1:{tool}:{sha256hex}` shape `cacheKey()`
+produces.
+
+## Full-change task completion
+
+Confirmed directly against `tasks.md`, not the apply report: 38 tasks marked `[x]`, 0 marked `[ ]`.
+
+## Holistic spec compliance across all 5 specs (17 requirements total, first pass where all can be checked together)
+
+- **`mcp-result-contract`** (3 requirements) — satisfied by Phase 1 (PR1): output schemas, cast removal,
+  published types module. Re-confirmed unchanged this pass (PR5's commit diff stat shows zero touch to
+  `src/schemas/*`, `src/types/*`, `src/server.ts`).
+- **`dashboard-bff`** (5 requirements) — Token-holding and One-Route-Per-Tool by Phase 2/3; Bounded
+  Handling of Long-Running Tools and Upstream Platform Failures by Phase 3; Read-Only Usage and Headroom
+  Source by Phase 5 (this pass, confirmed above). All 5 now demonstrated.
+- **`dashboard-access-gate`** (3 requirements) — satisfied by Phase 2 (PR2): auth precedes any MCP call,
+  timing-safe comparison, credential never reaches the browser. Unchanged this pass.
+- **`bff-result-cache`** (3 requirements) — satisfied by Phase 4 (PR4): KV-backed cache with TTL, best-
+  effort single-flight dedupe, cache failure does not block requests (with the coverage-precision WARNING
+  below). Unchanged this pass — PR5 only reordered `cacheKey()`'s call site, still covered by the full
+  existing cache test suite (all still passing).
+- **`mcp-error-contract`** (3 requirements) — the code-mapping table and gate/upstream/timeout distinctness
+  by Phase 2/3. PR5 adds the `status` field to the structured `bff.upstream` log line, reusing the same
+  `BffErrorCode` values already established — no new requirement surface, no regression.
+
+All 17 requirements across all 5 specs are now satisfied by some phase's implementation, confirmed by
+fresh code inspection this session, not solely by re-reading prior verify reports.
+
+## The two carried-forward WARNINGs — re-checked fresh, both still present
+
+1. **`redactSecrets()` has no live call site.** Searching `redactSecrets` across `bff/src/` and
+   `bff/test/` shows: defined in `errors.ts:116`, imported and re-exported (unchanged, comment-only) in
+   `mcp-client.ts:47,218`, and exercised only by its own unit tests in `errors.test.ts`. No production call
+   site anywhere. Unchanged by Phase 5 — this phase's log-line wiring never touches the redaction/message-
+   forwarding path (the structured `bff.upstream` log line carries only `tool`/`keyHash`/`status`, never
+   free-text upstream error content, so there was no natural point of contact). Not incidentally resolved.
+2. **KV-failure path lacks an end-to-end router-level test.** Searching for `RESULT_CACHE` usage in
+   `router.test.ts` and for `throwingKv`/a throwing binding anywhere outside `cache.test.ts` confirms:
+   `throwingKv()` is defined and used only in `bff/test/cache.test.ts` (isolated `cache.ts` function level),
+   never threaded through `handleRequest`/`dispatch` in `router.test.ts` or the real-KV integration suite.
+   Unchanged by Phase 5 — PR5 touched `router.ts` only to reorder `cacheKey()` computation and pass
+   `keyHash`, not the KV get/put failure paths. Not incidentally resolved.
+
+Both WARNINGs remain exactly as previously described; PR5 neither fixed nor worsened either.
+
+## Regression check — PR5's own commit scope
+
+The PR5 commit (isolated from the chain) touches exactly: `bff/src/mcp-client.ts`, `bff/src/router.ts`,
+`bff/src/usage.ts` (new), `bff/test/usage.test.ts` (new), and
+`openspec/changes/dashboard-bff-foundations/tasks.md`. Zero drift into `src/http/*`, `src/security/*`,
+root `wrangler.jsonc`, `src/schemas/*`, `src/types/*`, `bff/src/gate.ts`, `bff/src/session.ts`,
+`bff/src/timeout.ts`, `bff/src/single-flight.ts` — all frozen files from earlier phases are confirmed
+absent from this commit's diff stat.
+
+## Issues
+
+None CRITICAL.
+
+WARNING (carried forward, unresolved, non-blocking — item 1 above): `redactSecrets()` still has no
+live call site; `mcp-error-contract`'s actual secret-leak requirement remains satisfied by the fixed
+generic per-code messages currently in use, so this is a documented design-vs-implementation gap, not a
+spec violation.
+
+WARNING (carried forward, unresolved, non-blocking — item 2 above): the KV-failure ("binding present
+but throwing") path is proven only at the isolated `cache.ts` function level, never end-to-end through
+`dispatch`/`handleRequest`. Since `dispatch()` cannot distinguish `"unavailable"` from `"miss"` (identical
+downstream code path, confirmed again this pass), this is very unlikely to hide a real defect, but remains
+a genuine coverage gap relative to task 4.4's own stated intent.
+
+SUGGESTION: none new this pass.
+
+## Files inspected
+
+`bff/src/usage.ts`, `bff/src/router.ts`, `bff/src/mcp-client.ts`, `bff/src/cache.ts`, `bff/src/errors.ts`,
+`bff/test/usage.test.ts`, `bff/test/cache.test.ts`, `bff/test/router.test.ts`,
+`openspec/changes/dashboard-bff-foundations/{design.md,tasks.md,verify-report.md,
+specs/{dashboard-bff,mcp-result-contract,dashboard-access-gate,bff-result-cache,mcp-error-contract}/spec.md}`.
+
+## Next recommended
+
+`sdd-archive`. This is the final phase; all 38 tasks are complete, all 17 requirements across the 5 specs
+are demonstrated with passing runtime evidence, and the only open items are two low-severity, well-
+understood, non-blocking WARNINGs (both pre-existing, both unaffected by Phase 5, both documented as
+deliberate deferrals rather than defects).
+
+## Risks
+
+None blocking archive. Carried forward: link-check subrequest-budget defect (tracked in a separate
+change), gate-mechanism confirmation (open design decision, does not affect the shared-secret-cookie
+implementation as shipped), the `redactSecrets()` wiring gap, and the KV-failure end-to-end coverage gap.
+Recommend a lightweight follow-up change to either wire `redactSecrets()` into a real call site or update
+`design.md` to reflect the simpler fixed-message behavior actually shipped, and to add one
+`handleRequest`-level test with a throwing `RESULT_CACHE` binding. Neither blocks archiving
+`dashboard-bff-foundations` as complete.
+
+## Overall change verdict — dashboard-bff-foundations (all 5 phases)
+
+| Phase                                             | PR  | Commit    | Verdict            |
+| ------------------------------------------------- | --- | --------- | ------------------ |
+| 1 — Result Schemas & Cast Removal                 | PR1 | `f896684` | PASS               |
+| 2 — BFF Scaffold & Access Gate                    | PR2 | `96377f1` | PASS               |
+| 3 — Remaining Routes, Timeouts, Platform Failures | PR3 | `d7872ce` | PASS WITH WARNINGS |
+| 4 — Result Cache & Single-Flight                  | PR4 | `c185340` | PASS WITH WARNINGS |
+| 5 — Usage/Headroom Source & Observability         | PR5 | `c5ada29` | PASS WITH WARNINGS |
+
+**Full-change verdict: PASS WITH WARNINGS — READY FOR ARCHIVE.**
+
+All 38 tasks complete. All 17 requirements across the 5 specs (`mcp-result-contract`, `dashboard-bff`,
+`dashboard-access-gate`, `bff-result-cache`, `mcp-error-contract`) are satisfied with passing runtime
+evidence, verified fresh in this session rather than trusted from prior reports. `pnpm test` 444/444,
+`pnpm typecheck` clean, `pnpm format:check` clean, on the actual current worktree state. Two WARNINGs
+persist unchanged across PR3, PR4, and PR5 (`redactSecrets()` unused; KV-failure path untested
+end-to-end) — both are low-severity, well-understood, non-blocking coverage/design-documentation gaps, not
+spec violations or logic defects, and do not warrant blocking `sdd-archive`. Recommend opening a small
+follow-up change to close both before they become load-bearing assumptions for a future dashboard-bff
+change.
