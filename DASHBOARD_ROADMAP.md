@@ -8,7 +8,14 @@ The near-term slice is specced under `openspec/changes/dashboard-bff-foundations
 
 ## Architecture decision — resolved
 
-- **Backend-for-frontend (BFF), non-negotiable.** The server authenticates every `/mcp` request with the shared `MCP_AUTH_TOKEN`. That token must NEVER reach the browser. The dashboard runs a server component that holds the token; the browser talks only to the BFF.
+> **⚠️ Deployment pivot — MULTI-TENANT (server decision, {see ROADMAP.md "Deployment decisions"}).** The server is moving from single-tenant (one shared `MCP_AUTH_TOKEN`) to **multi-tenant: the MCP will receive per-user authentications (OAuth)**. This changes the auth foundation below. Implications for the dashboard:
+>
+> - The "single shared token held server-side" BFF model is an MVP stopgap, NOT the end state. Plan for **per-user identity**: the browser authenticates a real user, the BFF exchanges/forwards a **per-user** credential to the MCP, and each user sees only their own Google (GSC/Ads) data.
+> - Phase 7 (multi-tenant) is no longer "only if the deployment shape changes" — it IS the direction. Bring per-user auth forward in the design rather than treating it as an afterthought.
+> - The multi-tenant server auth (OAuth 2.1 / authorization server, per-user Google credentials, per-client quotas, revocation) is a large server-side change being designed separately. Do NOT assume the shared-token model is permanent; design the BFF so swapping the shared token for per-user OAuth is not a rewrite.
+> - Until that server change lands, the shared-token BFF still works for a single operator — build Phase 0 against it, but keep the auth boundary swappable.
+
+- **Backend-for-frontend (BFF), non-negotiable.** The server currently authenticates every `/mcp` request with the shared `MCP_AUTH_TOKEN` (MVP). That token must NEVER reach the browser. The dashboard runs a server component that holds the token; the browser talks only to the BFF. Under multi-tenant this becomes per-user credential handling, still server-side.
 - **BFF placement: a sibling Worker in this repo, wired to `seo-mcp` by a service binding.** Service bindings are in-process RPC, so the token never crosses the public network, and the two Workers keep separate release and failure domains.
 - **Platform.** Same stack as the server: Cloudflare Workers, TypeScript, pnpm, the MCP TypeScript SDK client. Reuse the server repo's prettier/vitest conventions.
 - **Contract.** The dashboard only consumes MCP tools. It never re-implements crawling and never issues writes — the MCP is read-only analysis.

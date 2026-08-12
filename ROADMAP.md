@@ -73,14 +73,16 @@ The first release proves a bounded, Workers-native SEO MCP before adding authent
 
 - [ ] Evaluate Google Trends, Bing Webmaster Tools, Google Business Profile, structured-data validation, and permitted SERP data
 
-## Resolved decisions — single-tenant deployment
+## Deployment decisions
 
-The target is single-tenant: one owner, their own sites, one Google account. This collapses the earlier open questions.
+> **⚠️ Decision update — pivoting to MULTI-TENANT.** The deployment shape is changing: the MCP will serve multiple users and must **receive per-user authentications** (OAuth), not a single shared bearer token. This supersedes the single-tenant auth and quota decisions below. It is a large architecture change (authorization server, per-user identity, per-user Google credentials, per-client quotas, revocation) that MUST be designed as its own change, not added ad hoc. The dashboard design is affected — see [DASHBOARD_ROADMAP.md](DASHBOARD_ROADMAP.md); the shared-token BFF model no longer holds.
 
-- [x] **Client → MCP auth:** keep the current shared bearer token. Per-client tokens only if a second consumer appears.
-- [x] **Durable history storage:** D1 (SQLite) for metrics and history; R2 for raw payloads only if full archival is later wanted; KV not needed now.
-- [x] **Google auth (GSC/Ads):** no user OAuth flow. One-time offline consent produces a refresh token stored as a Worker secret (`refresh_token` + `client_id` + `client_secret`); the Worker exchanges it for short-lived access tokens server-side. This unblocks GSC/Ads now.
+The MVP was built single-tenant (one owner, one Google account); that is why GSC/Ads currently use one stored refresh token. The multi-tenant pivot re-opens the auth decisions:
+
+- [ ] **Client → MCP auth (SUPERSEDED → multi-tenant):** move from the shared bearer token to OAuth 2.1 / per-user identity with per-client quotas and revocation. To be designed.
+- [x] **Durable history storage:** D1 (SQLite) for metrics and history; R2 for raw payloads only if full archival is later wanted; KV not needed now. (Still valid; multi-tenant will add per-user scoping to the D1 schema.)
+- [ ] **Google auth (GSC/Ads) (SUPERSEDED → multi-tenant):** each user connects their own Google account; refresh tokens become per-user, not one Worker secret. The current single stored refresh token is an MVP stopgap.
 - [x] **First data slice:** GSC `query + page` by date (striking-distance, low-CTR, content decay); Google Ads `get_keyword_metrics` before `discover_keywords`.
-- [x] **Rate limit + retention:** keep the current global rate limit (single user, no contention); rolling 90-day retention in D1.
+- [ ] **Rate limit + retention (SUPERSEDED → multi-tenant):** global shared rate limit becomes per-user/per-client quotas. Rolling 90-day retention in D1 still applies.
 
-Consequence: the Google Search Console and Keyword research capabilities above are no longer blocked — they need a stored refresh token, not an authorization server. Multi-tenant auth/quotas remain future work if the deployment shape ever changes.
+Consequence: the multi-tenant auth work is now IN SCOPE (no longer deferred) and blocks Phase 6/7 of the dashboard. Existing GSC/Ads/persistence code keeps working under the MVP stored-token model until the multi-tenant auth change lands.
