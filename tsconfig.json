@@ -22,5 +22,10 @@
     "vitest.config.ts",
     "vitest.integration.config.ts",
     "vitest.bff-integration.config.ts"
-  ]
+  ],
+  // `bff/ui` has its own `tsconfig.json` (DOM lib, no Workers types) because
+  // DOM's `fetch`/`Response`/`caches` declarations collide with
+  // `@cloudflare/workers-types`. It is type-checked separately by
+  // `pnpm typecheck` (`tsc --noEmit -p bff/ui`).
+  "exclude": ["bff/ui"]
 }

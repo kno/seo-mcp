@@ -12,6 +12,8 @@ coverage/
 .wrangler/
 .dev.vars
 bff/.dev.vars
+bff/ui/dist/
+bff/ui/.vite/
 
 # macOS
 .DS_Store

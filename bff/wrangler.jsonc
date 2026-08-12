@@ -23,6 +23,19 @@
     "MCP_ORIGIN": "https://seo-mcp.internal",
     "VALIDATE_UPSTREAM_RESULTS": "true",
   },
+  // `run_worker_first: true` is load-bearing, not decorative: without it
+  // the Asset Worker answers matching paths BEFORE the User Worker, so
+  // `bff/src/gate.ts` never runs for asset requests. Verified against
+  // `node_modules/wrangler/config-schema.json` (`Assets.run_worker_first`
+  // accepts `true`, meaning "every request routed to the User Worker
+  // first"). `bff/test/integration/asset-gate-ordering.test.ts` fails on
+  // exactly this bypass when this flag is removed.
+  "assets": {
+    "directory": "./ui/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true,
+  },
   "observability": {
     "enabled": true,
   },

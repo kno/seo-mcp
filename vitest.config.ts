@@ -15,6 +15,7 @@ export default defineConfig({
       },
       "./vitest.integration.config.ts",
       "./vitest.bff-integration.config.ts",
+      "./vitest.ui.config.ts",
     ],
   },
 });

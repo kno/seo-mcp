@@ -4,3 +4,5 @@ coverage
 .wrangler
 .codegraph
 .atl
+bff/ui/dist
+bff/ui/.vite

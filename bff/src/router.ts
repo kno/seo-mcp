@@ -1,9 +1,11 @@
 /**
  * BFF request router. The single most important property this module
- * upholds: `authenticate()` runs BEFORE any dispatch to the MCP client, for
- * every route — including unknown routes, which return 404 without ever
- * reaching `SEO_MCP`. `POST /auth/session` is the sole exception: it is
- * the login endpoint itself, so it cannot require a prior session.
+ * upholds: `authenticate()` runs BEFORE any dispatch to the MCP client and
+ * BEFORE any static asset is served, for every route — including unknown
+ * GET routes, which fall through to `env.ASSETS.fetch` (the SPA shell)
+ * rather than reaching `SEO_MCP`; unknown non-GET routes return 404.
+ * `POST /auth/session` is the sole exception: it is the login endpoint
+ * itself, so it cannot require a prior session.
  *
  * Each tool route validates its own inputs with a Zod schema mirroring
  * `src/server.ts`'s `inputSchema` for that tool exactly (same fields, same
@@ -230,5 +232,18 @@ export async function handleRequest(
     );
   }
 
-  return new Response("Not found", { status: 404 });
+  // An unmatched `/api/*` path is a bad API call, not a page — return 404
+  // rather than silently falling back to the SPA shell.
+  if (url.pathname.startsWith("/api/")) {
+    return new Response("Not found", { status: 404 });
+  }
+
+  // Every other GET request (SPA pages, hashed assets, unknown deep
+  // links) falls through to the static SPA bundle. Safe only because
+  // `authenticate()` above already ran unconditionally for this request;
+  // the `assets` binding's `run_worker_first: true` (`bff/wrangler.jsonc`)
+  // is what makes that ordering hold at the platform level too — without
+  // it the Asset Worker would answer this request before this Worker
+  // (and this gate check) ever ran.
+  return env.ASSETS.fetch(request);
 }

@@ -39,11 +39,11 @@ Chain strategy: stacked-to-main
 
 ## Phase 1: Build Wiring (PR1)
 
-- [ ] 1.1 RED: Integration test asserting unauthenticated `GET /`, `/index.html`, hashed asset, favicon, unknown deep link return `gate_unauthorized` before `assets` exists.
-- [ ] 1.2 Create `bff/ui/{index.html,vite.config.ts,tsconfig.json}` (DOM lib, excluded from root tsconfig).
-- [ ] 1.3 Add `assets` binding (`run_worker_first: true`) to `bff/wrangler.jsonc`; regenerate `Env` via `pnpm types:bff`.
-- [ ] 1.4 GREEN: wire `env.ASSETS.fetch` after gate in `bff/src/router.ts`; test 1.1 passes authenticated, fails unauthenticated per spec.
-- [ ] 1.5 Add `vitest.ui.config.ts` (jsdom) to `vitest.config.ts` projects; add `build:ui`/`dev:ui` scripts; update `.gitignore`/`.prettierignore`.
+- [x] 1.1 RED: Integration test asserting unauthenticated `GET /`, `/index.html`, hashed asset, favicon, unknown deep link return `gate_unauthorized` before `assets` exists.
+- [x] 1.2 Create `bff/ui/{index.html,vite.config.ts,tsconfig.json}` (DOM lib, excluded from root tsconfig).
+- [x] 1.3 Add `assets` binding (`run_worker_first: true`) to `bff/wrangler.jsonc`; regenerate `Env` via `pnpm types:bff`.
+- [x] 1.4 GREEN: wire `env.ASSETS.fetch` after gate in `bff/src/router.ts`; test 1.1 passes authenticated, fails unauthenticated per spec.
+- [x] 1.5 Add `vitest.ui.config.ts` (jsdom) to `vitest.config.ts` projects; add `build:ui`/`dev:ui` scripts; update `.gitignore`/`.prettierignore`.
 
 ## Phase 2: Shell (PR2)
 
