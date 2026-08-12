@@ -8,6 +8,7 @@ export interface Env {
   GOOGLE_ADS_DEVELOPER_TOKEN?: string;
   GOOGLE_ADS_CUSTOMER_ID?: string;
   GOOGLE_ADS_LOGIN_CUSTOMER_ID?: string;
+  GSC_SNAPSHOT_PROPERTIES?: string;
   DB?: D1Database;
 }
 
