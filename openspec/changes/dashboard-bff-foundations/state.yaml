@@ -8,13 +8,15 @@ session:
   reviewBudgetLines: 800
   strictTdd: true
   testCommand: pnpm test
+  chainStrategy: stacked-to-main
+  chainDecisionConfirmed: true
 
 phases:
   explore: done
   propose: done
   specs: done
   design: done
-  tasks: pending
+  tasks: done
   apply: pending
   verify: pending
   archive: pending

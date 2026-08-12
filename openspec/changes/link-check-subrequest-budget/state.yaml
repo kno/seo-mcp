@@ -12,8 +12,8 @@ session:
 phases:
   explore: done
   propose: done
-  specs: pending
-  design: pending
+  specs: done
+  design: done
   tasks: pending
   apply: pending
   verify: pending
