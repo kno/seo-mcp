@@ -54,6 +54,30 @@ Without this the dashboard consumes untyped, unvalidated JSON: a field rename on
 
 The server also registers `search_console_query` (commit `9e570a3`). It is **deferred** from Phase −1 and Phase 0 into Phase 5: it depends on an external authenticated source (a Google refresh token held as a Worker secret), so its caching and staleness semantics differ from the crawl tools. Its auth is Google's, not MCP-client auth.
 
+### Output-schema coverage checklist — 17 tools still uncovered
+
+PR1 on `feat/bff-result-schemas` declared `outputSchema` for the 5 original tools (`health`, `crawl_page`, `crawl_site`, `check_links`, `analyze_pagespeed`) via `src/schemas/*`. `main` has since shipped **17 more tools** that do NOT yet declare an `outputSchema`. After rebasing `feat/bff-result-schemas` onto current `main`, extend the same `src/schemas/` pattern to these. Each nested payload type below is **already exported** from its module, so the schema (and the BFF client type) can derive from one source.
+
+- [ ] `search_console_query` → `GscQueryResult` (`src/google/search-console.ts`; nested `GscRow`)
+- [ ] `find_striking_distance_keywords` → `{ siteUrl, startDate, endDate, dimensions, criteria, rowCount, rows: GscRow[] }` (`src/google/opportunities.ts`)
+- [ ] `find_low_ctr_opportunities` → same shape (`src/google/opportunities.ts`)
+- [ ] `get_keyword_metrics` → `{ customerId, count, keywords: KeywordMetric[] }` (`src/google/ads.ts`)
+- [ ] `discover_keywords` → same shape (`src/google/ads.ts`)
+- [ ] `cluster_keywords` → `ClusterResult` (`src/seo/keywords.ts`; nested `KeywordCluster`, `ClassifiedKeyword`)
+- [ ] `find_keyword_cannibalization` → `{ siteUrl, startDate, endDate, count, groups: CannibalGroup[] }` (`src/seo/intelligence.ts`)
+- [ ] `find_seo_opportunities` → `{ siteUrl, startDate, endDate, count, opportunities: Opportunity[] }` (`src/seo/intelligence.ts`)
+- [ ] `analyze_domain` → `DomainReport` (`src/seo/domain-report.ts`)
+- [ ] `map_keywords_to_pages` → `{ siteUrl, startDate, endDate, count, pages: PageKeywords[] }` (`src/seo/keyword-pages.ts`)
+- [ ] `find_content_gaps` → `{ siteUrl, startDate, endDate, count, gaps: ContentGap[] }` (`src/seo/keyword-pages.ts`)
+- [ ] `snapshot_search_console` → `{ snapshotId, siteUrl, rowCount, capturedAt }` (`src/db/gsc-store.ts`)
+- [ ] `list_search_console_snapshots` → `{ siteUrl, count, snapshots: StoredSnapshot[] }` (`src/db/gsc-store.ts`)
+- [ ] `compare_search_console` → `{ siteUrl, baseSnapshotId, currentSnapshotId, diff: GscDiff }` (`src/seo/gsc-diff.ts`)
+- [ ] `snapshot_crawl` → `{ snapshotId, url, pageCount, capturedAt }` (`src/db/crawl-store.ts`)
+- [ ] `list_crawl_snapshots` → `{ url, count, snapshots: StoredCrawlSnapshot[] }` (`src/db/crawl-store.ts`)
+- [ ] `compare_crawls` → `{ url, baseSnapshotId, currentSnapshotId, diff: CrawlDiff }` (`src/seo/crawl-diff.ts`)
+
+Note: the top-level wrapper shapes are mostly inline object literals in `src/server.ts`; the nested types are the exported ones. Every `outputSchema` root must be an object (SDK constraint), which all of these satisfy. Tools that hit Google/D1 keep the same Phase-5 caching/staleness caveat as `search_console_query`.
+
 ## Principle: the dashboard tracks the tool set
 
 The dashboard exists to surface everything the MCP produces, so **every tool the server registers gets a view, and a new tool's view lands as part of adding it** — not as a later catch-up. This roadmap has already been caught out twice by tools landing mid-planning (`check_links`, then `search_console_query`).
