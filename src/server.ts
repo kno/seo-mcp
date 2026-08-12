@@ -15,6 +15,7 @@ import {
   findKeywordCannibalization,
   findSeoOpportunities,
 } from "./seo/intelligence";
+import { analyzeDomain } from "./seo/domain-report";
 import { clusterKeywords } from "./seo/keywords";
 import { diffGscRows } from "./seo/gsc-diff";
 import {
@@ -532,6 +533,63 @@ export function buildServer(env: Env): McpServer {
           currentSnapshotId: currentId,
           diff,
         });
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "analyze_domain",
+    {
+      description:
+        "Crawl a site and merge on-page issues, crawl policy, internal link graph, and (optionally) Search Console opportunities into one domain report.",
+      inputSchema: z.object({
+        url: z.url(),
+        limit: z.number().int().min(1).max(20).optional(),
+        concurrency: z.number().int().min(1).max(4).optional(),
+        gscProperty: z
+          .string()
+          .min(1)
+          .optional()
+          .describe(
+            "Search Console property (e.g. sc-domain:example.com) to include prioritized opportunities",
+          ),
+        startDate: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+        endDate: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .optional(),
+        opportunityLimit: z.number().int().min(1).max(100).optional(),
+      }),
+    },
+    async ({
+      url,
+      limit,
+      concurrency,
+      gscProperty,
+      startDate,
+      endDate,
+      opportunityLimit,
+    }) => {
+      try {
+        return jsonResult(
+          await analyzeDomain(
+            {
+              url,
+              limit,
+              concurrency,
+              gscProperty,
+              startDate,
+              endDate,
+              opportunityLimit,
+            },
+            env,
+          ),
+        );
       } catch (e) {
         return errorResult(e);
       }
