@@ -102,3 +102,25 @@ notes: |
   GSC output schema belongs here or folds back into dashboard-bff-foundations; charting mechanism.
   A "Proposal question round" section in proposal.md carries the five product questions and the
   assumptions taken in their absence.
+
+  RECONCILED (third pass, spec-only, split across two parallel worker files): main shipped
+  compare_search_console/snapshot_search_console/list_search_console_snapshots (commit "feat: add
+  D1-backed Search Console snapshots and content-decay comparison") and
+  snapshot_crawl/list_crawl_snapshots/compare_crawls (commit "feat: add D1-backed crawl history
+  snapshots and comparison"), plus a scheduled GSC-only snapshot cron and per-request telemetry
+  (commit "feat: add scheduled GSC snapshot cron and per-request telemetry"). content-decay is now
+  reconciled as the third tool in gsc-insight-views (was PROVISIONAL); history-comparison-view is
+  fully rewritten from "PROVISIONAL AND BLOCKED" to RECONCILED, covering both the GSC-snapshot and
+  crawl-snapshot families as two independently shippable sub-capabilities.
+
+  Real defect confirmed by direct grep of src/db/gsc-store.ts and src/db/crawl-store.ts: no DELETE,
+  expiry, or age-based cleanup exists anywhere. ROADMAP.md's "rolling 90-day retention in D1"
+  decision has no corresponding implementation; list_*_snapshots' limit (1-50, default 20 when
+  omitted) bounds what is RETURNED, not what is RETAINED. Snapshots accumulate in D1 indefinitely.
+  Recorded as a needed server-side follow-up in history-comparison-view/spec.md, not tasked here.
+
+  Also confirmed by reading src/scheduled.ts and its test: the cron (runScheduledSnapshots) covers
+  only Search Console snapshots (one per GSC_SNAPSHOT_PROPERTIES entry); there is no equivalent
+  scheduled path for snapshot_crawl. test/telemetry.test.ts covers only per-request logging
+  (logRequestMetrics), unrelated to snapshot capture or retention. Crawl-snapshot capture is manual
+  only today.

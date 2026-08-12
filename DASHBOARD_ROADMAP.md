@@ -19,7 +19,7 @@ The near-term slice is specced under `openspec/changes/dashboard-bff-foundations
 - **BFF placement: a sibling Worker in this repo, wired to `seo-mcp` by a service binding.** Service bindings are in-process RPC, so the token never crosses the public network, and the two Workers keep separate release and failure domains.
 - **Platform.** Same stack as the server: Cloudflare Workers, TypeScript, pnpm, the MCP TypeScript SDK client. Reuse the server repo's prettier/vitest conventions.
 - **Contract.** The dashboard only consumes MCP tools. It never re-implements crawling and never issues writes — the MCP is read-only analysis.
-- **Auth dependency.** Until the server ships OAuth/per-client quotas there is exactly one shared token, held server-side only. _Dashboard access control is NOT gated by that work_ — see Phase 0. Per-client MCP credentials are Phase 6.
+- **Auth dependency.** Until the server ships OAuth/per-client quotas there is exactly one shared token, held server-side only. _Dashboard access control is NOT gated by that work_ — see Phase 0. Per-client MCP credentials are Phase 7 — see the pivot note above.
 
 ## Server constraints the dashboard must design around
 
@@ -127,23 +127,27 @@ Smaller than it looks: the installed `@modelcontextprotocol/server@2.0.0` accept
 
 ## Phase 5 — authenticated data sources
 
-`ROADMAP.md` resolved the deployment shape as **single-tenant**: one owner, their own sites, one Google account. Google access uses a stored refresh token held as a Worker secret, not a user OAuth flow — so these are no longer blocked on an authorization server. Specced in `openspec/changes/dashboard-insights/`.
+**All tools this phase needs are now shipped and reconciled** in `openspec/changes/dashboard-insights/`. Google access still uses one stored refresh token held as a Worker secret — see the multi-tenant pivot note above for what changes and what does not.
 
-- [ ] Search Console view: `search_console_query` (shipped), then `find_striking_distance_keywords`, `find_low_ctr_opportunities`, content-decay and period-over-period comparison.
-- [ ] Keyword research view: `get_keyword_metrics` first, then `discover_keywords` — volume, CPC, competition, intent, clustering.
-- [ ] SEO intelligence view: `analyze_domain`, `find_seo_opportunities`, keyword-to-page mapping, content gaps, cannibalizations, internal-linking recommendations, impact/effort prioritization.
+- [x] Search Console view tools shipped: `search_console_query`, `find_striking_distance_keywords`, `find_low_ctr_opportunities`, and `compare_search_console` (content-decay / period-over-period comparison, D1-backed). Dashboard view itself not yet built — specced in `search-console-view` and `gsc-insight-views`.
+- [x] Keyword research view tools shipped: `get_keyword_metrics`, `discover_keywords`, `cluster_keywords` (credential-free). No currency field exists anywhere in the tool output — the view needs an operator-configured currency label, not a per-response one. Dashboard view not yet built — specced in `keyword-research-view`.
+- [x] SEO intelligence view tools shipped: `analyze_domain`, `find_seo_opportunities`, `find_keyword_cannibalization`, `map_keywords_to_pages`, `find_content_gaps`. **Internal-linking recommendations remain genuinely unbuilt** — verified, no tool derives a recommendation from the crawl's link graph. Dashboard view not yet built — specced in `seo-intelligence-view`.
 
-## Phase 6 — history and comparison (gated by server persistence)
+## Phase 6 — history and comparison
 
-- [ ] Persist snapshots and render period-over-period diffs and trend charts.
-- [ ] Storage decision is resolved (**D1** for metrics and history, rolling 90-day retention; R2 only if full archival is later wanted). Still BLOCKED on the server actually implementing history and exposing it.
+**Unblocked and reconciled.** D1 is bound in root `wrangler.jsonc`; both the GSC-snapshot family (`snapshot_search_console`/`list_search_console_snapshots`/`compare_search_console`) and the crawl-snapshot family (`snapshot_crawl`/`list_crawl_snapshots`/`compare_crawls`) are shipped. Dashboard view not yet built — specced in `history-comparison-view`.
 
-## Phase 7 — multi-tenant (only if the deployment shape changes)
+- [x] Snapshot capture, listing, and comparison tools shipped for both Search Console and crawl data.
+- [ ] **Verified defect, not yet fixed**: no retention enforcement exists anywhere in `src/db/*.ts` — snapshots accumulate indefinitely despite `ROADMAP.md`'s "rolling 90-day retention" decision. The view must present history as unbounded, not as a rolling window, until a dedicated server-side change adds real cleanup.
+- [ ] Only Search Console snapshots have a scheduled capture path (`src/scheduled.ts`). Crawl snapshots are always triggered manually — no cron exists for them.
 
-`ROADMAP.md` resolved to keep the shared bearer token, with per-client tokens only if a second consumer appears. This phase is therefore **conditional, not scheduled**.
+## Phase 7 — multi-tenant auth (the direction, not scheduled)
 
-- [ ] Per-client MCP credentials and per-client quota display.
-- Note: dashboard _access_ auth is Phase 0 and was never blocked by this. What this phase adds is distinct MCP credentials per user, which single-tenant does not need.
+`ROADMAP.md`'s "Deployment decisions" section (commit `1a55f51`) supersedes the earlier single-tenant resolution: the server is pivoting to **multi-tenant, per-user OAuth**, and this work is now explicitly "IN SCOPE (no longer deferred)". It is a large server-side change (authorization server, per-user Google credentials, per-client quotas, revocation) being designed separately — not something this dashboard track implements.
+
+- [ ] Per-client MCP credentials and per-client quota display — blocked on that server-side change landing.
+- **What is NOT blocked**: `ROADMAP.md` is explicit that "existing GSC/Ads/persistence code keeps working under the MVP stored-token model until the multi-tenant auth change lands" — Phases 0 and 5/6 proceed against the shared-token model now. `dashboard-bff-foundations`' `GateStrategy` interface (implemented, PR2) already keeps the auth mechanism swappable, satisfying the pivot note's explicit request to design the BFF so replacing the shared token is not a rewrite.
+- Note: dashboard _access_ auth (who may open the dashboard) is Phase 0 and was never blocked by this. What this phase adds is distinct MCP credentials per user, and per-user Google data isolation.
 
 ## Pending decisions
 

@@ -292,14 +292,20 @@ back while the BFF lives.
       `mcp-result-contract`, route in `dashboard-bff`, plus a new requirement covering platform-subrequest
       failures. It landed in commit `614d21e` during this chain, which is why the first spec pass missed it —
       a concurrency artifact, not a spec-authoring error.
-- [x] **Three authenticated tools have landed since this design was first written**, all explicitly DEFERRED
-      from this change and now routed by `dashboard-insights` instead: `search_console_query` (commit
-      `9e570a3`, with Google single-tenant OAuth in `e5fa342`), plus `find_striking_distance_keywords` and
-      `find_low_ctr_opportunities` (commit `a5b4f22`). The server registers **eight** tools today. All three
-      deferred tools depend on an external authenticated data source (a Google refresh token), which raises
-      secret-handling, per-property authorization and cacheability questions this change does not answer.
-      Their OAuth is **Google's**, not MCP-client OAuth, so the Phase 6/7 gating in `DASHBOARD_ROADMAP.md` is
-      unaffected. The five tools this change actually scopes — `health`, `crawl_page`, `crawl_site`,
+- [x] **Seventeen authenticated/synthesis tools have landed since this design was first written**, all
+      explicitly DEFERRED from this change and now routed by `dashboard-insights` instead:
+      `search_console_query` (commit `9e570a3`, with Google single-tenant OAuth in `e5fa342`);
+      `find_striking_distance_keywords`, `find_low_ctr_opportunities` (commit `a5b4f22`);
+      `get_keyword_metrics`, `discover_keywords` (commit `1044d82`); `cluster_keywords` (commit `ef5b0d2`,
+      credential-free); `find_keyword_cannibalization`, `find_seo_opportunities` (commit `b24d66d`);
+      `analyze_domain` (commit `e8fe45f`); `map_keywords_to_pages`, `find_content_gaps` (commit `1b82926`);
+      `snapshot_search_console`, `list_search_console_snapshots`, `compare_search_console` (commit `8d3640a`,
+      D1-backed); `snapshot_crawl`, `list_crawl_snapshots`, `compare_crawls` (commit `28d8066`, D1-backed).
+      The server registers **22** tools today. This design deliberately did not track every one as it landed
+      — `dashboard-insights` owns full reconciliation for all of them. Their OAuth (where applicable) is
+      **Google's**, not MCP-client OAuth, so the Phase 6/7 gating in `DASHBOARD_ROADMAP.md` is unaffected;
+      the crawl-history and synthesis tools need no OAuth at all. The five tools this change actually scopes
+      — `health`, `crawl_page`, `crawl_site`,
       `check_links`, `analyze_pagespeed` — are unchanged.
 - [ ] **Server-side defect to raise separately (not this change):** `LIMITS.linkCheckSubrequestBudget: 60`
       exceeds the Free-plan ceiling of 50 that `README.md:109` says the budgets stay below, and `check_links`
