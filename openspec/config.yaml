@@ -1,0 +1,48 @@
+schema: spec-driven
+
+context: |
+  Project: seo-mcp
+  Tech stack: Cloudflare Worker, TypeScript (ESM), pnpm@10.25.0, Node >=22.
+  MCP server: `@modelcontextprotocol/server` v2, Streamable HTTP endpoint at `/mcp` (src/index.ts).
+  Architecture: Worker entry (src/index.ts) -> MCP server (src/server.ts) -> feature modules
+    (src/crawl, src/http, src/pagespeed, src/security, src/seo) with shared config in src/config.ts.
+  Testing: vitest with @cloudflare/vitest-pool-workers.
+    - vitest.config.ts: unit project (test/**/*.test.ts, excludes test/integration/**).
+    - vitest.integration.config.ts: Miniflare/Workers pool integration project (test/integration/**/*.test.ts).
+    - Test files mirror module names in test/, integration tests live in test/integration/.
+  Style: prettier, config-less defaults, .prettierignore excludes node_modules/dist/coverage/.wrangler/.codegraph/.atl.
+  Deployment: wrangler (wrangler.jsonc), `pnpm dev` for local dev, `pnpm deploy` to publish.
+  Type checking: `tsc --noEmit` via `pnpm typecheck`.
+
+rules:
+  proposal:
+    - Include rollback plan for risky changes (e.g. revert to previous deployed wrangler version).
+    - Call out any change touching src/http, src/security, or request-facing MCP tool surfaces as higher risk.
+  specs:
+    - Use Given/When/Then for scenarios.
+    - Use RFC 2119 keywords (MUST, SHALL, SHOULD, MAY).
+    - Note Cloudflare Worker constraints explicitly (CPU/memory limits, no persistent in-memory state across requests).
+  design:
+    - Include sequence diagrams for complex flows (e.g. crawl -> fetch -> HTMLRewriter extraction -> response).
+    - Document architecture decisions with rationale, especially binding/config choices in wrangler.jsonc.
+  tasks:
+    - Group by phase, use hierarchical numbering.
+    - Keep tasks completable in one session.
+    - Pair every behavior-changing task with its unit test (and integration test when it touches HTTP/MCP surface).
+  apply:
+    guidelines:
+      - Follow existing code patterns in src/{crawl,http,pagespeed,security,seo}.
+      - Write behavior-first tests before implementation (Strict TDD: RED-GREEN-REFACTOR).
+      - Format all changed files with prettier defaults before finishing (pnpm format:check must pass).
+      - "Keep Workers code bounded and deterministic: no unbounded `await response.text()`, no floating promises, no module-level mutable request state, use `ctx.waitUntil()` for background work, extends (not implements) on platform base classes."
+      - "Never hardcode secrets or embed them in client-reachable code or wrangler.jsonc; use `wrangler secret put` or `.dev.vars` for local-only values."
+      - Never hand-write the `Env` interface; regenerate bindings with `wrangler types` after config changes.
+    tdd: true
+    test_command: "pnpm test"
+  verify:
+    test_command: "pnpm test"
+    build_command: "pnpm typecheck"
+    coverage_threshold: 0
+  archive:
+    - Warn before merging destructive deltas.
+    - Confirm wrangler.jsonc bindings and compatibility_date changes are captured in the merged spec.
