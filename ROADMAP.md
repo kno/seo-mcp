@@ -54,8 +54,8 @@ The first release proves a bounded, Workers-native SEO MCP before adding authent
 
 - [x] `analyze_domain` (unified crawl + GSC + link-graph report)
 - [x] `find_seo_opportunities`
-- [ ] Keyword-to-page mapping
-- [~] Content gaps, cannibalizations, and internal-linking recommendations (cannibalization via `find_keyword_cannibalization`; gaps + internal-linking pending)
+- [x] Keyword-to-page mapping (`map_keywords_to_pages`)
+- [x] Content gaps, cannibalizations, and internal-linking recommendations (`find_content_gaps`, `find_keyword_cannibalization`; internal linking surfaced via the crawl link graph — orphan/most-linked pages)
 - [x] Impact/effort prioritization
 
 ### Persistence and operation
