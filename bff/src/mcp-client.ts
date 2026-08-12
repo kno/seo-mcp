@@ -29,12 +29,24 @@
  * - The `AbortSignal.timeout(TOOL_TIMEOUT_MS[tool])` race aborting before
  *   the upstream call completes -> bff_timeout, distinct from
  *   upstream_unavailable (upstream 503).
+ *
+ * Every upstream call — regardless of outcome — is recorded via
+ * `usage.ts`'s `recordUpstreamCall()` (the BFF's own observed call volume,
+ * see `bff/src/usage.ts`) and logged as one structured `bff.upstream` line
+ * (`{"event":"bff.upstream","tool","keyHash","status"}`). This is NOT the
+ * Durable Object escalation decision itself — that DO is explicitly
+ * deferred by `design.md` — it is only the log line a future DO consumer
+ * would read to compute the 1% 429s / 5% duplicate-key-per-10s thresholds
+ * from the log stream. `keyHash` is `dependencies.keyHash`, the SAME
+ * content-hash `cache.ts#cacheKey()` value the router already computed for
+ * this call — never a hash derived independently here.
  */
 
 import type * as z from "zod/v4";
 import type { BffErrorCode } from "./errors";
 import { redactSecrets } from "./errors";
 import { withTimeout, type ToolName } from "./timeout";
+import { recordUpstreamCall } from "./usage";
 
 export interface McpClientDependencies {
   seoMcp: Fetcher;
@@ -42,6 +54,31 @@ export interface McpClientDependencies {
   token: string;
   timeoutMs: number;
   validateUpstreamResults?: boolean;
+  /**
+   * The content-hash cache key for this call (`cache.ts#cacheKey()`'s
+   * return value), reused verbatim as the structured log line's
+   * `keyHash` — never independently re-derived here.
+   */
+  keyHash?: string;
+}
+
+/** Emits one structured `bff.upstream` log line per upstream call — the
+ * shape a future Durable Object escalation consumer would read from the
+ * log stream to compute the 429/duplicate-key thresholds. `status` is
+ * `"ok"` on success, otherwise the `BffErrorCode` the call resolved to. */
+function logUpstreamEvent(
+  toolName: ToolName,
+  keyHash: string | undefined,
+  status: "ok" | BffErrorCode,
+): void {
+  console.log(
+    JSON.stringify({
+      event: "bff.upstream",
+      tool: toolName,
+      keyHash,
+      status,
+    }),
+  );
 }
 
 export type McpClientResult<T> =
@@ -83,9 +120,27 @@ function isJsonRpcReply(value: unknown): value is JsonRpcReply {
 /**
  * Sends a single JSON-RPC `tools/call` request over `dependencies.seoMcp`,
  * validates and normalizes the reply, and returns a typed result — never
- * throwing on an upstream failure.
+ * throwing on an upstream failure. Every call is counted in `usage.ts`'s
+ * accounting and logged as one structured `bff.upstream` line, regardless
+ * of outcome (see this module's doc comment).
  */
 export async function callTool<T>(
+  toolName: ToolName,
+  args: Record<string, unknown>,
+  schema: z.ZodType<T>,
+  dependencies: McpClientDependencies,
+): Promise<McpClientResult<T>> {
+  recordUpstreamCall();
+  const result = await performCall(toolName, args, schema, dependencies);
+  logUpstreamEvent(
+    toolName,
+    dependencies.keyHash,
+    result.ok ? "ok" : result.code,
+  );
+  return result;
+}
+
+async function performCall<T>(
   toolName: ToolName,
   args: Record<string, unknown>,
   schema: z.ZodType<T>,

@@ -74,10 +74,10 @@ Chain strategy: pending
 
 ## Phase 5: Usage/Headroom Source & Observability — PR5
 
-- [ ] 5.1 RED: `bff/test/usage.test.ts` — reports own observed call volume and window, marked as an estimate, never an authoritative remaining count; cached responses carry `resultAge`.
-- [ ] 5.2 GREEN: `bff/src/usage.ts` and a read-only route exposing the accounting; wire `resultAge` into `BffOk`.
-- [ ] 5.3 GREEN: structured `{"event":"bff.upstream","tool","keyHash","status"}` logging in `mcp-client.ts` for the DO-trigger thresholds (1% 429s / 5% duplicate-key calls per 10s over 24h).
-- [ ] 5.4 Verify full suite: `pnpm test`, `pnpm typecheck`, `pnpm format:check`; confirm no drift in `wrangler.jsonc`, `src/http/*`, `src/security/*`.
+- [x] 5.1 RED: `bff/test/usage.test.ts` — reports own observed call volume and window, marked as an estimate, never an authoritative remaining count; cached responses carry `resultAge`.
+- [x] 5.2 GREEN: `bff/src/usage.ts` and a read-only route exposing the accounting; wire `resultAge` into `BffOk`.
+- [x] 5.3 GREEN: structured `{"event":"bff.upstream","tool","keyHash","status"}` logging in `mcp-client.ts` for the DO-trigger thresholds (1% 429s / 5% duplicate-key calls per 10s over 24h).
+- [x] 5.4 Verify full suite: `pnpm test`, `pnpm typecheck`, `pnpm format:check`; confirm no drift in `wrangler.jsonc`, `src/http/*`, `src/security/*`.
 
 ## Key Learnings
 

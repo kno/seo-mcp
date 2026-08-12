@@ -33,6 +33,7 @@ import {
   shouldBypassCacheRead,
 } from "./cache";
 import { withSingleFlight } from "./single-flight";
+import { getUsageSnapshot } from "./usage";
 import type { BffOk } from "./errors";
 import { healthSchema } from "../../src/schemas/health";
 import { pageAnalysisSchema } from "../../src/schemas/page";
@@ -95,6 +96,15 @@ async function dispatch<TInput, TResult>(
   args: TInput,
   schema: z.ZodType<TResult>,
 ): Promise<Response> {
+  // Computed unconditionally, even for the non-cacheable (bypass) branch:
+  // this is the SAME content-hash `cacheKey()` used for KV lookups, reused
+  // as `keyHash` for the structured `bff.upstream` log line so a future
+  // consumer can correlate log lines with cache keys without re-deriving
+  // anything. Hashing an apiKey-bearing input does not leak the secret
+  // itself (it is a one-way digest), even though that hash is never used
+  // to read or write the cache for this route.
+  const key = await cacheKey(toolName, args);
+
   const callUpstream = () =>
     callTool(toolName, args as Record<string, unknown>, schema, {
       seoMcp: env.SEO_MCP,
@@ -102,6 +112,7 @@ async function dispatch<TInput, TResult>(
       token: env.MCP_AUTH_TOKEN,
       timeoutMs: TOOL_TIMEOUT_MS[toolName],
       validateUpstreamResults: validateUpstreamResultsFlag(env),
+      keyHash: key,
     });
 
   const inputs = args as Record<string, unknown>;
@@ -114,7 +125,6 @@ async function dispatch<TInput, TResult>(
     return toolResponse(result, "bypass", 0);
   }
 
-  const key = await cacheKey(toolName, args);
   let cacheStatus: BffOk<TResult>["cacheStatus"] = "miss";
 
   if (!shouldBypassCacheRead(request, url)) {
@@ -158,6 +168,10 @@ export async function handleRequest(
 
   if (request.method !== "GET") {
     return new Response("Not found", { status: 404 });
+  }
+
+  if (url.pathname === "/api/usage") {
+    return Response.json(getUsageSnapshot());
   }
 
   if (url.pathname === "/api/tools/health") {
