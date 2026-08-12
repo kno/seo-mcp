@@ -41,8 +41,10 @@ notes: |
   Explore was skipped: DASHBOARD_ROADMAP.md plus the verified constraints table and the
   dashboard-bff-foundations exploration/design already carry the evidence a proposal needs.
 
-  Blocked-by: all five dashboard-bff-foundations capabilities must land before any view work
-  starts (published types, per-tool routes, access gate, error envelope, cache metadata).
+  DEPENDENCY ARCHIVED: dashboard-bff-foundations is now complete and archived at
+  openspec/changes/archive/2026-08-12-dashboard-bff-foundations/. All five capabilities
+  (published types, per-tool routes, access gate, error envelope, cache metadata) are now
+  merged into openspec/specs/ and available for this change to build upon.
 
   Recommendations awaiting confirmation: React SPA served as BFF static assets; hand-rolled SVG
   charts; no polling or auto-refresh anywhere; crawl_site UI defaults limit 5 / concurrency 2.

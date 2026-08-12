@@ -17,9 +17,9 @@ phases:
   specs: done
   design: done
   tasks: done
-  apply: pending
-  verify: pending
-  archive: pending
+  apply: done
+  verify: done
+  archive: done
 
 notes: |
   Exploration verified all ten orchestrator claims against source with file:line evidence.

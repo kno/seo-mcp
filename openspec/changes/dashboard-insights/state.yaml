@@ -43,6 +43,10 @@ capabilities:
     - result-export
 
 notes: |
+  DEPENDENCY ARCHIVED: dashboard-bff-foundations is now complete and archived at
+  openspec/changes/archive/2026-08-12-dashboard-bff-foundations/. All capabilities are merged
+  into openspec/specs/ and available for this change to build upon.
+
   RECONCILED (second pass): the worktree branch was rebased twice more onto main mid-tasks-phase.
   find_striking_distance_keywords, find_low_ctr_opportunities (commit a5b4f22), get_keyword_metrics,
   discover_keywords (commit 1044d82) and cluster_keywords (commit ef5b0d2, credential-free, never in
