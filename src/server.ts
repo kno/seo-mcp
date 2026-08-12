@@ -11,6 +11,7 @@ import {
   findLowCtrOpportunities,
 } from "./google/opportunities";
 import { getKeywordMetrics, discoverKeywords } from "./google/ads";
+import { clusterKeywords } from "./seo/keywords";
 
 const jsonResult = (value: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }],
@@ -322,6 +323,24 @@ export function buildServer(env: Env): McpServer {
             env,
           ),
         );
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "cluster_keywords",
+    {
+      description:
+        "Group keywords into clusters by shared term and label each with a heuristic search intent (transactional/commercial/informational/local). Pure text analysis; pairs with discover_keywords.",
+      inputSchema: z.object({
+        keywords: z.array(z.string().min(1)).min(1).max(500),
+      }),
+    },
+    async ({ keywords }) => {
+      try {
+        return jsonResult(clusterKeywords(keywords));
       } catch (e) {
         return errorResult(e);
       }

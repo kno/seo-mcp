@@ -34,4 +34,5 @@ export const LIMITS = {
   maxKeywords: 100,
   maxKeywordIdeas: 200,
   adsTimeoutMs: 20_000,
+  maxClusterKeywords: 500,
 } as const;
