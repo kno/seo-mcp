@@ -13,6 +13,7 @@ export class HtmlExtractionState implements PageSignals {
   h2: string[] = [];
   h3: string[] = [];
   links: string[] = [];
+  internalLinkTargets: string[] = [];
   internalLinks = 0;
   externalLinks = 0;
   imageCount = 0;
@@ -28,6 +29,7 @@ export class HtmlExtractionState implements PageSignals {
   private jsonLdBlocks: string[] = [];
   private currentJsonLd = -1;
   private suppressDepth = 0;
+  private internalTargetSet = new Set<string>();
 
   onBaseUrl(url: URL): void {
     this.baseUrl = url;
@@ -87,9 +89,19 @@ export class HtmlExtractionState implements PageSignals {
     if (resolved.protocol === "http:" || resolved.protocol === "https:") {
       if (
         resolved.hostname.toLowerCase() === this.baseUrl.hostname.toLowerCase()
-      )
+      ) {
         this.internalLinks++;
-      else this.externalLinks++;
+        const target = new URL(resolved.toString());
+        target.hash = "";
+        const key = target.toString();
+        if (
+          this.internalTargetSet.size < 100 &&
+          !this.internalTargetSet.has(key)
+        ) {
+          this.internalTargetSet.add(key);
+          this.internalLinkTargets.push(key);
+        }
+      } else this.externalLinks++;
     }
     if (this.links.length < 50)
       this.links.push(resolved.toString().slice(0, 1_024));
@@ -249,6 +261,7 @@ export class HtmlExtractionState implements PageSignals {
       h2: [...this.h2],
       h3: [...this.h3],
       links: [...this.links],
+      internalLinkTargets: [...this.internalLinkTargets],
       internalLinks: this.internalLinks,
       externalLinks: this.externalLinks,
       imageCount: this.imageCount,

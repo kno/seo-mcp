@@ -36,6 +36,12 @@ export interface CrawlPolicy {
   disallowedSkipped: { count: number; sample: string[] };
 }
 
+export interface LinkGraphSummary {
+  crawledPages: number;
+  orphanPages: { count: number; sample: string[] };
+  topLinkedPages: Array<{ url: string; inbound: number }>;
+}
+
 export interface SiteCrawlResult {
   site: string;
   sitemap: string;
@@ -51,15 +57,82 @@ export interface SiteCrawlResult {
   pages: Array<{ url: string; result?: SitePageAnalysis; error?: string }>;
   issueCounts: Record<string, number>;
   summary: DomainSummary;
+  linkGraph: LinkGraphSummary;
 }
 
-export type SitePageAnalysis = Omit<PageAnalysis, "links"> & {
+export type SitePageAnalysis = Omit<
+  PageAnalysis,
+  "links" | "internalLinkTargets"
+> & {
   linkCount: number;
 };
 
 function compactPage(result: PageAnalysis): SitePageAnalysis {
-  const { links, ...signals } = result;
+  const { links, internalLinkTargets, ...signals } = result;
+  void internalLinkTargets;
   return { ...signals, linkCount: links.length };
+}
+
+export function summarizeLinkGraph(
+  pages: Array<{ url: string; internalLinkTargets?: string[] }>,
+): LinkGraphSummary {
+  const crawled: Array<{ url: string; normalized: string; targets: string[] }> =
+    [];
+  const crawledSet = new Set<string>();
+  const normalize = (value: string): string | undefined => {
+    try {
+      return normalizePublicUrl(value).toString();
+    } catch {
+      return undefined;
+    }
+  };
+
+  for (const page of pages) {
+    if (!page.internalLinkTargets) continue;
+    const normalized = normalize(page.url);
+    if (normalized === undefined) continue;
+    crawled.push({
+      url: page.url,
+      normalized,
+      targets: page.internalLinkTargets,
+    });
+    crawledSet.add(normalized);
+  }
+
+  const inbound = new Map<string, number>();
+  for (const page of crawled) {
+    for (const target of page.targets) {
+      const normalizedTarget = normalize(target);
+      if (normalizedTarget === undefined) continue;
+      if (!crawledSet.has(normalizedTarget)) continue;
+      if (normalizedTarget === page.normalized) continue;
+      inbound.set(normalizedTarget, (inbound.get(normalizedTarget) ?? 0) + 1);
+    }
+  }
+
+  const orphanSample: string[] = [];
+  let orphanCount = 0;
+  const topEntries: Array<{ url: string; inbound: number }> = [];
+  for (const page of crawled) {
+    const count = inbound.get(page.normalized) ?? 0;
+    if (count === 0) {
+      orphanCount++;
+      if (orphanSample.length < 25) orphanSample.push(page.url);
+    } else {
+      topEntries.push({ url: page.url, inbound: count });
+    }
+  }
+
+  topEntries.sort((a, b) => {
+    if (b.inbound !== a.inbound) return b.inbound - a.inbound;
+    return a.url < b.url ? -1 : a.url > b.url ? 1 : 0;
+  });
+
+  return {
+    crawledPages: crawled.length,
+    orphanPages: { count: orphanCount, sample: orphanSample },
+    topLinkedPages: topEntries.slice(0, 10),
+  };
 }
 
 export async function mapConcurrent<T, R>(
@@ -230,8 +303,12 @@ export async function crawlSite(
 
   const pages = await mapConcurrent(allowedUrls, concurrency, async (url) => {
     try {
-      const result = await crawlPage(url, budget.fetcher, byteBudget);
-      return { url, result: compactPage(result) };
+      const full = await crawlPage(url, budget.fetcher, byteBudget);
+      return {
+        url,
+        result: compactPage(full),
+        targets: full.internalLinkTargets,
+      };
     } catch (error) {
       return {
         url,
@@ -239,20 +316,35 @@ export async function crawlSite(
       };
     }
   });
+  const linkGraph = summarizeLinkGraph(
+    pages.map((page) => ({
+      url: page.url,
+      internalLinkTargets: "targets" in page ? page.targets : undefined,
+    })),
+  );
+  const outputPages = pages.map((page) => {
+    if ("targets" in page) {
+      const { targets, ...rest } = page;
+      void targets;
+      return rest;
+    }
+    return page;
+  });
   const result = {
     site: siteUrl,
     sitemap: discovered.sitemap,
     sitemapFound: discovered.sitemapFound,
     crawlPolicy,
     requested: limit,
-    crawled: pages.filter((page) => page.result).length,
-    failed: pages.filter((page) => page.error).length,
+    crawled: outputPages.filter((page) => page.result).length,
+    failed: outputPages.filter((page) => page.error).length,
     documentsRead: discovered.documentsRead,
     subrequests: budget.used(),
     bytesRead: byteBudget.used(),
-    issueCounts: aggregateIssueCounts(pages),
-    summary: summarizeDomain(pages),
-    pages,
+    issueCounts: aggregateIssueCounts(outputPages),
+    summary: summarizeDomain(outputPages),
+    linkGraph,
+    pages: outputPages,
   };
   const outputBytes = measureBoundedOutput(result);
   return { ...result, outputBytes };

@@ -8,6 +8,7 @@ const page = (overrides: Partial<PageSignals> = {}): PageSignals => ({
   h2: [],
   h3: [],
   links: [],
+  internalLinkTargets: [],
   internalLinks: 0,
   externalLinks: 0,
   imageCount: 0,

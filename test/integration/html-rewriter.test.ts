@@ -66,6 +66,12 @@ describe("extractHtml (real HTMLRewriter)", () => {
       result.links.some((l) => l.toLowerCase().startsWith("mailto:")),
     ).toBe(false);
 
+    // Internal link targets: relative internal link resolved to absolute,
+    // external host excluded.
+    expect(result.internalLinkTargets).toEqual([
+      "https://example.com/internal-relative",
+    ]);
+
     // Open Graph
     expect(result.openGraph["og:title"]).toBe("OG Title Value");
     expect(result.openGraph["og:image"]).toBe("https://example.com/og.png");

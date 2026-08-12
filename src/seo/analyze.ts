@@ -8,6 +8,7 @@ export interface PageSignals {
   h2: string[];
   h3: string[];
   links: string[];
+  internalLinkTargets: string[];
   internalLinks: number;
   externalLinks: number;
   imageCount: number;

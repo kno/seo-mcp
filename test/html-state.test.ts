@@ -74,6 +74,7 @@ describe("HtmlExtractionState", () => {
         "imageCount",
         "imagesMissingAlt",
         "indexable",
+        "internalLinkTargets",
         "internalLinks",
         "jsonLd",
         "lang",
@@ -139,6 +140,39 @@ describe("HtmlExtractionState", () => {
     expect(result.links).toEqual(["/about"]);
     expect(result.internalLinks).toBe(0);
     expect(result.externalLinks).toBe(0);
+    expect(result.internalLinkTargets).toEqual([]);
+  });
+
+  it("collects absolute internal link targets, strips fragments, dedupes", () => {
+    const state = new HtmlExtractionState();
+    state.onBaseUrl(new URL("https://example.com/blog/"));
+    state.onLink(element({ href: "/about" }));
+    state.onLink(element({ href: "post" }));
+    state.onLink(element({ href: "/about#top" }));
+    state.onLink(element({ href: "https://EXAMPLE.com/contact" }));
+    state.onLink(element({ href: "https://other.com/page" }));
+    state.onLink(element({ href: "mailto:hi@example.com" }));
+
+    const result = state.finish();
+    expect(result.internalLinkTargets).toEqual([
+      "https://example.com/about",
+      "https://example.com/blog/post",
+      "https://example.com/contact",
+    ]);
+    expect(
+      result.internalLinkTargets.every((target) =>
+        target.startsWith("https://example.com/"),
+      ),
+    ).toBe(true);
+  });
+
+  it("bounds internal link targets at 100 entries", () => {
+    const state = new HtmlExtractionState();
+    state.onBaseUrl(new URL("https://example.com/"));
+    for (let index = 0; index < 250; index++)
+      state.onLink(element({ href: `/page-${index}` }));
+    const result = state.finish();
+    expect(result.internalLinkTargets).toHaveLength(100);
   });
 
   it("captures Open Graph properties and bounds them", () => {

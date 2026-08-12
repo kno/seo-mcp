@@ -5,6 +5,7 @@ import {
   mapConcurrent,
   measureBoundedOutput,
   summarizeDomain,
+  summarizeLinkGraph,
 } from "../src/crawl/site";
 import { createFetchBudget } from "../src/http/fetch";
 import { discoverSitemapUrls, parseSitemap } from "../src/crawl/sitemap";
@@ -519,5 +520,181 @@ describe("summarizeDomain", () => {
     expect(summary.nonIndexable.count).toBe(0);
     expect(summary.imagesMissingAlt).toEqual({ pages: 0, images: 0 });
     expect(summary.duplicateTitles).toEqual([]);
+  });
+});
+
+describe("summarizeLinkGraph", () => {
+  it("counts inbound internal links and flags orphans", () => {
+    const graph = summarizeLinkGraph([
+      {
+        url: "https://example.com/a",
+        internalLinkTargets: ["https://example.com/b", "https://example.com/c"],
+      },
+      { url: "https://example.com/b", internalLinkTargets: [] },
+      {
+        url: "https://example.com/c",
+        internalLinkTargets: ["https://example.com/b"],
+      },
+    ]);
+    expect(graph.crawledPages).toBe(3);
+    // a has 0 inbound → orphan
+    expect(graph.orphanPages.count).toBe(1);
+    expect(graph.orphanPages.sample).toEqual(["https://example.com/a"]);
+    // b has 2 inbound (from a and c), c has 1 inbound (from a)
+    expect(graph.topLinkedPages).toEqual([
+      { url: "https://example.com/b", inbound: 2 },
+      { url: "https://example.com/c", inbound: 1 },
+    ]);
+  });
+
+  it("ignores self-links", () => {
+    const graph = summarizeLinkGraph([
+      {
+        url: "https://example.com/a",
+        internalLinkTargets: ["https://example.com/a"],
+      },
+    ]);
+    expect(graph.orphanPages.count).toBe(1);
+    expect(graph.topLinkedPages).toEqual([]);
+  });
+
+  it("ignores targets pointing to non-crawled urls", () => {
+    const graph = summarizeLinkGraph([
+      {
+        url: "https://example.com/a",
+        internalLinkTargets: ["https://example.com/missing"],
+      },
+    ]);
+    expect(graph.orphanPages.count).toBe(1);
+    expect(graph.topLinkedPages).toEqual([]);
+  });
+
+  it("normalizes trailing-slash and fragment variants when matching", () => {
+    const graph = summarizeLinkGraph([
+      {
+        url: "https://example.com",
+        internalLinkTargets: ["https://example.com/b#section"],
+      },
+      {
+        url: "https://example.com/b",
+        internalLinkTargets: ["https://example.com/"],
+      },
+    ]);
+    // root (with/without trailing slash) and fragment variants match
+    expect(graph.orphanPages.count).toBe(0);
+    expect(graph.topLinkedPages).toEqual([
+      { url: "https://example.com", inbound: 1 },
+      { url: "https://example.com/b", inbound: 1 },
+    ]);
+  });
+
+  it("orders topLinkedPages by inbound desc then url asc, filters inbound>0, caps 10", () => {
+    const targets = (n: number): string[] =>
+      Array.from({ length: n }, (_, i) => `https://example.com/hub`).slice(
+        0,
+        n,
+      );
+    // build 15 sources all linking to a set of hub pages with varying inbound
+    const pages: Array<{ url: string; internalLinkTargets: string[] }> = [];
+    // 12 hub pages, hub-i receives (12 - i) inbound links
+    for (let i = 0; i < 12; i++)
+      pages.push({
+        url: `https://example.com/hub-${i}`,
+        internalLinkTargets: [],
+      });
+    // sources
+    for (let s = 0; s < 12; s++) {
+      const t: string[] = [];
+      for (let i = 0; i <= s; i++) t.push(`https://example.com/hub-${i}`);
+      pages.push({
+        url: `https://example.com/src-${s}`,
+        internalLinkTargets: t,
+      });
+    }
+    void targets;
+    const graph = summarizeLinkGraph(pages);
+    // hub-0 linked by all 12 sources, hub-11 linked by 1 source
+    expect(graph.topLinkedPages).toHaveLength(10);
+    expect(graph.topLinkedPages[0]).toEqual({
+      url: "https://example.com/hub-0",
+      inbound: 12,
+    });
+    expect(graph.topLinkedPages.every((entry) => entry.inbound > 0)).toBe(true);
+    // verify inbound is non-increasing
+    for (let i = 1; i < graph.topLinkedPages.length; i++)
+      expect(graph.topLinkedPages[i - 1].inbound).toBeGreaterThanOrEqual(
+        graph.topLinkedPages[i].inbound,
+      );
+  });
+
+  it("excludes pages without targets (errored) from the crawled set", () => {
+    const graph = summarizeLinkGraph([
+      {
+        url: "https://example.com/a",
+        internalLinkTargets: ["https://example.com/b"],
+      },
+      // errored page: no internalLinkTargets → not crawled
+      { url: "https://example.com/b" },
+    ]);
+    expect(graph.crawledPages).toBe(1);
+    // b is not in the crawled set, so a's link to b does not count
+    expect(graph.topLinkedPages).toEqual([]);
+    expect(graph.orphanPages.sample).toEqual(["https://example.com/a"]);
+  });
+
+  it("caps the orphan sample at 25", () => {
+    const pages = Array.from({ length: 30 }, (_, i) => ({
+      url: `https://example.com/${i}`,
+      internalLinkTargets: [] as string[],
+    }));
+    const graph = summarizeLinkGraph(pages);
+    expect(graph.orphanPages.count).toBe(30);
+    expect(graph.orphanPages.sample).toHaveLength(25);
+  });
+});
+
+describe("crawlSite link graph wiring", () => {
+  it("emits linkGraph and never leaks per-page targets", async () => {
+    class PassthroughHtmlRewriter {
+      on(): this {
+        return this;
+      }
+      transform(response: Response): Response {
+        return response;
+      }
+    }
+    vi.stubGlobal("HTMLRewriter", PassthroughHtmlRewriter);
+    const sitemapXml = `<urlset><url><loc>https://example.com/a</loc></url><url><loc>https://example.com/b</loc></url></urlset>`;
+    const pageHtml: Record<string, string> = {
+      "/a": `<html lang="en"><head><title>Page A Title Here</title></head><body><h1>A</h1><a href="/b">to b</a></body></html>`,
+      "/b": `<html lang="en"><head><title>Page B Title Here</title></head><body><h1>B</h1></body></html>`,
+    };
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/robots.txt")
+        return new Response("Not found", { status: 404 });
+      if (url.pathname === "/sitemap.xml")
+        return new Response(sitemapXml, {
+          headers: { "content-type": "application/xml" },
+        });
+      return new Response(pageHtml[url.pathname] ?? "<html></html>", {
+        headers: { "content-type": "text/html" },
+      });
+    });
+
+    try {
+      const result = await crawlSite("https://example.com", 10, 4, fetcher);
+      // linkGraph is assembled from the per-page targets and reported.
+      expect(result.linkGraph).toBeDefined();
+      expect(result.linkGraph.crawledPages).toBe(2);
+      expect(result.linkGraph.orphanPages.sample).toEqual([
+        "https://example.com/a",
+        "https://example.com/b",
+      ]);
+      // targets must not appear on any output page
+      for (const page of result.pages) expect("targets" in page).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
