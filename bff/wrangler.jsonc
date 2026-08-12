@@ -9,6 +9,15 @@
       "service": "seo-mcp",
     },
   ],
+  "kv_namespaces": [
+    {
+      "binding": "RESULT_CACHE",
+      // Placeholder — replace with the real namespace id before a production
+      // deploy (`wrangler kv namespace create RESULT_CACHE`). Local dev and
+      // tests bind through Miniflare, which does not need a real id.
+      "id": "REPLACE_WITH_RESULT_CACHE_KV_ID",
+    },
+  ],
   "vars": {
     "GATE_STRATEGY": "shared-secret-cookie",
     "MCP_ORIGIN": "https://seo-mcp.internal",

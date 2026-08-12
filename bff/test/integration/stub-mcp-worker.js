@@ -68,6 +68,12 @@ const TOOL_RESULTS = {
     errors: 0,
     results: [],
   },
+  analyze_pagespeed: {
+    url: "https://example.com",
+    strategy: "mobile",
+    labMetrics: {},
+    opportunities: [],
+  },
 };
 
 export default {

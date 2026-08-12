@@ -10,6 +10,13 @@
  * bounds, same defaults) before any dispatch to `callTool`. Inputs arrive
  * as query string parameters on a `GET` request, coerced to the right
  * primitive type where needed (`limit`, `concurrency` arrive as strings).
+ *
+ * Every route (except `analyze_pagespeed` with an explicit `apiKey`, see
+ * `isCacheable`) is cached in `env.RESULT_CACHE` and deduplicated via
+ * `single-flight.ts` before ever reaching `callTool`. Cache reads/writes
+ * are wrapped by `cache.ts` itself so a missing/throwing KV binding never
+ * fails the request — it degrades to a direct upstream call and reports
+ * `cacheStatus: "unavailable"`.
  */
 
 import * as z from "zod/v4";
@@ -17,6 +24,16 @@ import { authenticate, createSession } from "./gate";
 import { bffErrorResponse } from "./errors";
 import { callTool, type McpClientResult } from "./mcp-client";
 import { TOOL_TIMEOUT_MS, type ToolName } from "./timeout";
+import {
+  CACHE_TTL_SECONDS,
+  cacheKey,
+  getCached,
+  isCacheable,
+  putCached,
+  shouldBypassCacheRead,
+} from "./cache";
+import { withSingleFlight } from "./single-flight";
+import type { BffOk } from "./errors";
 import { healthSchema } from "../../src/schemas/health";
 import { pageAnalysisSchema } from "../../src/schemas/page";
 import { siteCrawlResultSchema } from "../../src/schemas/site";
@@ -57,34 +74,72 @@ function validateUpstreamResultsFlag(env: Env): boolean {
   return String(env.VALIDATE_UPSTREAM_RESULTS) !== "false";
 }
 
-function toolResponse<T>(result: McpClientResult<T>): Response {
+function toolResponse<T>(
+  result: McpClientResult<T>,
+  cacheStatus: BffOk<T>["cacheStatus"],
+  resultAge: number,
+): Response {
   if (!result.ok) return bffErrorResponse(result.code, result.retryAfter);
   return Response.json({
     data: result.data,
-    cacheStatus: "bypass",
-    resultAge: 0,
+    cacheStatus,
+    resultAge,
   });
 }
 
 async function dispatch<TInput, TResult>(
+  request: Request,
+  url: URL,
   env: Env,
   toolName: ToolName,
   args: TInput,
   schema: z.ZodType<TResult>,
 ): Promise<Response> {
-  const result = await callTool(
-    toolName,
-    args as Record<string, unknown>,
-    schema,
-    {
+  const callUpstream = () =>
+    callTool(toolName, args as Record<string, unknown>, schema, {
       seoMcp: env.SEO_MCP,
       mcpOrigin: env.MCP_ORIGIN,
       token: env.MCP_AUTH_TOKEN,
       timeoutMs: TOOL_TIMEOUT_MS[toolName],
       validateUpstreamResults: validateUpstreamResultsFlag(env),
-    },
-  );
-  return toolResponse(result);
+    });
+
+  const inputs = args as Record<string, unknown>;
+  if (!isCacheable(toolName, inputs)) {
+    // Secret input (e.g. an explicit analyze_pagespeed apiKey) — never
+    // read from or written to the cache, and never single-flighted under
+    // a key that excludes the secret (that would leak one caller's
+    // result to another with a different apiKey).
+    const result = await callUpstream();
+    return toolResponse(result, "bypass", 0);
+  }
+
+  const key = await cacheKey(toolName, args);
+  let cacheStatus: BffOk<TResult>["cacheStatus"] = "miss";
+
+  if (!shouldBypassCacheRead(request, url)) {
+    const cached = await getCached<TResult>(env.RESULT_CACHE, key);
+    if (cached.status === "hit") {
+      return toolResponse(
+        { ok: true, data: cached.data },
+        "hit",
+        cached.resultAge,
+      );
+    }
+    cacheStatus = cached.status;
+  }
+
+  const result = await withSingleFlight(key, callUpstream);
+  if (result.ok) {
+    await putCached(
+      env.RESULT_CACHE,
+      key,
+      toolName,
+      result.data,
+      CACHE_TTL_SECONDS[toolName],
+    );
+  }
+  return toolResponse(result, cacheStatus, 0);
 }
 
 export async function handleRequest(
@@ -106,31 +161,54 @@ export async function handleRequest(
   }
 
   if (url.pathname === "/api/tools/health") {
-    return dispatch(env, "health", {}, healthSchema);
+    return dispatch(request, url, env, "health", {}, healthSchema);
   }
 
   if (url.pathname === "/api/tools/crawl_page") {
     const parsed = parseQuery(url, crawlPageInputSchema);
     if (!parsed.ok) return bffErrorResponse("invalid_input");
-    return dispatch(env, "crawl_page", parsed.data, pageAnalysisSchema);
+    return dispatch(
+      request,
+      url,
+      env,
+      "crawl_page",
+      parsed.data,
+      pageAnalysisSchema,
+    );
   }
 
   if (url.pathname === "/api/tools/crawl_site") {
     const parsed = parseQuery(url, crawlSiteInputSchema);
     if (!parsed.ok) return bffErrorResponse("invalid_input");
-    return dispatch(env, "crawl_site", parsed.data, siteCrawlResultSchema);
+    return dispatch(
+      request,
+      url,
+      env,
+      "crawl_site",
+      parsed.data,
+      siteCrawlResultSchema,
+    );
   }
 
   if (url.pathname === "/api/tools/check_links") {
     const parsed = parseQuery(url, checkLinksInputSchema);
     if (!parsed.ok) return bffErrorResponse("invalid_input");
-    return dispatch(env, "check_links", parsed.data, linkCheckResultSchema);
+    return dispatch(
+      request,
+      url,
+      env,
+      "check_links",
+      parsed.data,
+      linkCheckResultSchema,
+    );
   }
 
   if (url.pathname === "/api/tools/analyze_pagespeed") {
     const parsed = parseQuery(url, analyzePagespeedInputSchema);
     if (!parsed.ok) return bffErrorResponse("invalid_input");
     return dispatch(
+      request,
+      url,
       env,
       "analyze_pagespeed",
       parsed.data,

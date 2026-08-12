@@ -63,14 +63,14 @@ Chain strategy: pending
 
 ## Phase 4: Result Cache & Single-Flight (`bff-result-cache`) — PR4
 
-- [ ] 4.1 Add `kv_namespaces` binding to `bff/wrangler.jsonc`; regenerate `Env` via `wrangler types -c bff/wrangler.jsonc`.
-- [ ] 4.2 RED: `bff/test/cache.test.ts` — cache key `v1:{tool}:{sha256(canonicalJson(...))}`; `analyze_pagespeed` with `apiKey` never cached; TTL clamp `[60, 86400]`; expired entry is a miss.
-- [ ] 4.3 GREEN: `bff/src/cache.ts` — get/put, key normalization, TTL clamping, `?refresh=1`/`no-cache` bypass (still writes).
-- [ ] 4.4 RED: `bff/test/cache.test.ts` — KV binding absent or throwing yields `cacheStatus: "unavailable"` and a direct upstream call, never fail-closed.
-- [ ] 4.5 GREEN: wrap cache reads/writes with try/catch fallback in `bff/src/router.ts`.
-- [ ] 4.6 RED: `bff/test/single-flight.test.ts` — leader/follower coalescing with a fake client; entries deleted in `finally`; cross-isolate case documented as best-effort (no assertion of coalescing).
-- [ ] 4.7 GREEN: `bff/src/single-flight.ts` — module-level `Map<string, Promise<Result>>` keyed by content hash only.
-- [ ] 4.8 Integration RED+GREEN: `bff/test/integration/cache.test.ts` — real KV read/write/TTL under `isolatedStorage`; repeated identical request served without a second upstream call.
+- [x] 4.1 Add `kv_namespaces` binding to `bff/wrangler.jsonc`; regenerate `Env` via `wrangler types -c bff/wrangler.jsonc`.
+- [x] 4.2 RED: `bff/test/cache.test.ts` — cache key `v1:{tool}:{sha256(canonicalJson(...))}`; `analyze_pagespeed` with `apiKey` never cached; TTL clamp `[60, 86400]`; expired entry is a miss.
+- [x] 4.3 GREEN: `bff/src/cache.ts` — get/put, key normalization, TTL clamping, `?refresh=1`/`no-cache` bypass (still writes).
+- [x] 4.4 RED: `bff/test/cache.test.ts` — KV binding absent or throwing yields `cacheStatus: "unavailable"` and a direct upstream call, never fail-closed.
+- [x] 4.5 GREEN: wrap cache reads/writes with try/catch fallback in `bff/src/router.ts`.
+- [x] 4.6 RED: `bff/test/single-flight.test.ts` — leader/follower coalescing with a fake client; entries deleted in `finally`; cross-isolate case documented as best-effort (no assertion of coalescing).
+- [x] 4.7 GREEN: `bff/src/single-flight.ts` — module-level `Map<string, Promise<Result>>` keyed by content hash only.
+- [x] 4.8 Integration RED+GREEN: `bff/test/integration/cache.test.ts` — real KV read/write/TTL under `isolatedStorage`; repeated identical request served without a second upstream call.
 
 ## Phase 5: Usage/Headroom Source & Observability — PR5
 
