@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { crawlPage } from "../../src/crawl/page";
 import { extractHtml } from "../../src/seo/html";
 
 const encoder = new TextEncoder();
@@ -126,5 +127,24 @@ describe("extractHtml (real HTMLRewriter)", () => {
     const result = await extractHtml(bytes(normal), BASE_URL, 200);
     expect(result.indexable).toBe(true);
     expect(result.issues.some((i) => i.code === "noindex")).toBe(false);
+  });
+});
+
+describe("crawlPage (real HTMLRewriter)", () => {
+  it("propagates fetchTimeMs as a non-negative number", async () => {
+    const minimalHtml = `<!doctype html>
+<html lang="en"><head>
+  <title>Timing Test Page</title>
+  <meta name="description" content="Testing fetchTimeMs propagation." />
+</head><body><h1>Timing</h1><p>one two three</p></body></html>`;
+    const fetcher = vi.fn<typeof fetch>(
+      async () =>
+        new Response(minimalHtml, {
+          headers: { "content-type": "text/html; charset=utf-8" },
+        }),
+    );
+    const result = await crawlPage("https://example.com/timing", fetcher);
+    expect(typeof result.fetchTimeMs).toBe("number");
+    expect(result.fetchTimeMs).toBeGreaterThanOrEqual(0);
   });
 });

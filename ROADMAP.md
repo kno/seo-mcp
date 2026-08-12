@@ -26,7 +26,7 @@ The first release proves a bounded, Workers-native SEO MCP before adding authent
 ### Complete on-page analysis
 
 - [x] Canonical, robots, H2/H3, internal/external links, JSON-LD, Open Graph, word count, and indexability
-- [ ] Per-page response timings (fetch-layer instrumentation)
+- [x] Per-page response timings (fetch-layer instrumentation) — `fetchTimeMs`
 - [x] Domain summaries: duplicates, missing/multiple H1s, thin content, non-indexable pages, and images without alt text
 
 ### More useful crawling

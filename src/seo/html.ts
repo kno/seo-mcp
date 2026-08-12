@@ -283,6 +283,7 @@ export interface PageAnalysis extends PageSignals {
   status: number;
   bytesRead: number;
   issues: ReturnType<typeof detectSeoIssues>;
+  fetchTimeMs?: number;
 }
 
 export async function extractHtml(

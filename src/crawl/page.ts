@@ -18,5 +18,10 @@ export async function crawlPage(
       `Expected HTML but received ${response.contentType || "an unknown content type"}`,
     );
   }
-  return extractHtml(response.bytes, response.url, response.status);
+  const analysis = await extractHtml(
+    response.bytes,
+    response.url,
+    response.status,
+  );
+  return { ...analysis, fetchTimeMs: response.elapsedMs };
 }

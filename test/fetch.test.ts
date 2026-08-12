@@ -76,4 +76,42 @@ describe("fetchBounded", () => {
       }),
     ).rejects.toThrow("not allowed");
   });
+
+  it("reports elapsedMs for a simple 200 response using injected clock", async () => {
+    const times = [1000, 1042];
+    let callCount = 0;
+    const now = () => times[callCount++] ?? times[times.length - 1];
+    const result = await fetchBounded("https://example.com", {
+      maxBytes: 100,
+      accept: "text/plain",
+      fetcher: async () =>
+        new Response("hello", { headers: { "content-type": "text/plain" } }),
+      now,
+    });
+    expect(result.elapsedMs).toBe(42);
+  });
+
+  it("measures elapsedMs across a redirect chain using injected clock", async () => {
+    // Clock: start=1000, read after both hops resolves=1100 → 100 ms total
+    const times = [1000, 1100];
+    let callCount = 0;
+    const now = () => times[callCount++] ?? times[times.length - 1];
+    const redirect = responseWithStream(["ignored"], {
+      status: 302,
+      headers: { location: "https://example.com/final" },
+    });
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(redirect.response)
+      .mockResolvedValueOnce(
+        new Response("ok", { headers: { "content-type": "text/plain" } }),
+      );
+    const result = await fetchBounded("https://example.com/start", {
+      maxBytes: 50,
+      accept: "text/plain",
+      fetcher,
+      now,
+    });
+    expect(result.elapsedMs).toBe(100);
+  });
 });

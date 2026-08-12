@@ -7,6 +7,8 @@ export interface BoundedResponse {
   contentType: string;
   headers: Headers;
   bytes: Uint8Array;
+  // Wall-clock milliseconds covering the full retrieval: redirects + body read.
+  elapsedMs: number;
 }
 
 export interface FetchBudget {
@@ -114,16 +116,19 @@ export async function fetchBounded(
     timeoutMs?: number;
     fetcher?: typeof fetch;
     byteBudget?: ResponseByteBudget;
+    now?: () => number;
   },
 ): Promise<BoundedResponse> {
   let url = normalizePublicUrl(input.toString());
   const fetcher = options.fetcher ?? fetch;
+  const now = options.now ?? Date.now;
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort("Fetch timed out"),
     options.timeoutMs ?? LIMITS.fetchTimeoutMs,
   );
 
+  const start = now();
   try {
     for (let redirects = 0; redirects <= LIMITS.maxRedirects; redirects++) {
       const response = await fetcher(url, {
@@ -147,16 +152,18 @@ export async function fetchBounded(
         continue;
       }
 
+      const bytes = await readBounded(
+        response,
+        options.maxBytes,
+        options.byteBudget,
+      );
       return {
         url,
         status: response.status,
         contentType: response.headers.get("content-type") ?? "",
         headers: response.headers,
-        bytes: await readBounded(
-          response,
-          options.maxBytes,
-          options.byteBudget,
-        ),
+        bytes,
+        elapsedMs: now() - start,
       };
     }
     throw new Error("Too many redirects");
