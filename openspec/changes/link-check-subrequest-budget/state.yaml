@@ -1,0 +1,51 @@
+schema: spec-driven
+change: link-check-subrequest-budget
+artifactStore: openspec
+
+session:
+  executionMode: auto
+  deliveryStrategy: ask-on-risk
+  reviewBudgetLines: 800
+  strictTdd: true
+  testCommand: pnpm test
+
+phases:
+  explore: done
+  propose: done
+  specs: pending
+  design: pending
+  tasks: pending
+  apply: pending
+  verify: pending
+  archive: pending
+
+notes: |
+  Proposal settled the numbers: FREE_PLAN_SUBREQUEST_CEILING: 50 (new named constant),
+  linkCheckSubrequestBudget 60 -> 48, maxLinkChecks 50 -> 40, per-probe redirect
+  following unchanged. Reach reduced 20% (50 -> 40 links per call), accepted knowingly.
+
+  Correction to exploration: its option (b) "keep 50 links, drop per-probe redirect
+  following" is arithmetically impossible. Even at 1 subrequest per probe the page fetch
+  can consume maxRedirects + 1 = 4, so 4 + 50 = 54 > 50, and the floor 1 + 50 = 51 > 50.
+  Any compliant fix must lower maxLinkChecks below 46. A hybrid is the only option.
+
+  Blast radius is deliberately tiny: src/crawl/links.ts already reads every value from
+  LIMITS, so the behavioural change is src/config.ts alone. No src/http or src/security
+  edits. createFetchBudget's hardcoded `maximum = 48` default (src/http/fetch.ts:41) is
+  explicitly NOT touched -- 5 callers including crawl_site, higher risk per project rule.
+
+  Verified compatible with dashboard-bff-foundations: its check_links 55 s timeout was
+  derived as 50 probes x 6 s / concurrency 6; at 40 probes the bound falls to ~40 s, so
+  55 s stays valid. Its design.md:295 defers this exact defect to a separate change.
+
+  Documentation scope includes README.md:109 (budget prose), the Tools table (check_links
+  is absent entirely), and README.md:126 which still claims the MVP excludes a
+  broken-link checker.
+
+  Three open decisions recorded for the human rather than assumed (auto mode blocked
+  asking): maxLinkChecks 40 vs 44; whether to alias the fetch.ts 48 default; whether a
+  later change adds a truncation signal to the result shape.
+
+  Write boundary respected: only proposal.md and state.yaml in this folder were written.
+  No git-mutating command, no formatter, no test run. The other actor's in-flight
+  per-page-timing changes were left untouched.
