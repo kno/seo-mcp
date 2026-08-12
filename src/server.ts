@@ -22,12 +22,19 @@ import {
 import { analyzeDomain } from "./seo/domain-report";
 import { clusterKeywords } from "./seo/keywords";
 import { diffGscRows } from "./seo/gsc-diff";
+import { diffCrawls } from "./seo/crawl-diff";
 import {
   storeGscSnapshot,
   listSnapshots,
   getSnapshotRows,
   twoMostRecent,
 } from "./db/gsc-store";
+import {
+  storeCrawlSnapshot,
+  listCrawlSnapshots,
+  getCrawlSnapshotPages,
+  twoMostRecentCrawls,
+} from "./db/crawl-store";
 
 const jsonResult = (value: unknown) => ({
   content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }],
@@ -595,6 +602,104 @@ export function buildServer(env: Env): McpServer {
         const diff = diffGscRows(baseRows, currentRows);
         return jsonResult({
           siteUrl,
+          baseSnapshotId: baseId,
+          currentSnapshotId: currentId,
+          diff,
+        });
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "snapshot_crawl",
+    {
+      description:
+        "Crawl a site and store the result as a snapshot in D1 for later crawl-over-crawl comparison and issue-regression detection.",
+      inputSchema: z.object({
+        url: z.url(),
+        limit: z.number().int().min(1).max(20).optional(),
+        concurrency: z.number().int().min(1).max(4).optional(),
+        label: z.string().min(1).optional(),
+      }),
+    },
+    async ({ url, limit, concurrency, label }) => {
+      if (!env.DB)
+        return errorResult(new Error("D1 storage is not configured"));
+      try {
+        const site = await crawlSite(url, limit, concurrency);
+        const capturedAt = new Date().toISOString();
+        const { snapshotId, pageCount } = await storeCrawlSnapshot(env.DB, {
+          url,
+          capturedAt,
+          label,
+          site,
+        });
+        return jsonResult({ snapshotId, url, pageCount, capturedAt });
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "list_crawl_snapshots",
+    {
+      description: "List stored crawl snapshots for a site, most recent first.",
+      inputSchema: z.object({
+        url: z.url(),
+        limit: z.number().int().min(1).max(50).optional(),
+      }),
+    },
+    async ({ url, limit }) => {
+      if (!env.DB)
+        return errorResult(new Error("D1 storage is not configured"));
+      try {
+        const snapshots = await listCrawlSnapshots(env.DB, url, limit);
+        return jsonResult({ url, count: snapshots.length, snapshots });
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "compare_crawls",
+    {
+      description:
+        "Compare two stored crawl snapshots (defaulting to the two most recent) to surface new/removed pages and new/resolved on-page issues.",
+      inputSchema: z.object({
+        url: z.url(),
+        baseSnapshotId: z.number().int().positive().optional(),
+        currentSnapshotId: z.number().int().positive().optional(),
+      }),
+    },
+    async ({ url, baseSnapshotId, currentSnapshotId }) => {
+      if (!env.DB)
+        return errorResult(new Error("D1 storage is not configured"));
+      try {
+        let baseId: number;
+        let currentId: number;
+        if (baseSnapshotId != null && currentSnapshotId != null) {
+          baseId = baseSnapshotId;
+          currentId = currentSnapshotId;
+        } else {
+          const pair = await twoMostRecentCrawls(env.DB, url);
+          if (!pair)
+            return errorResult(
+              new Error("Need at least two crawl snapshots to compare"),
+            );
+          baseId = pair.base.id;
+          currentId = pair.current.id;
+        }
+        const [basePages, currentPages] = await Promise.all([
+          getCrawlSnapshotPages(env.DB, baseId),
+          getCrawlSnapshotPages(env.DB, currentId),
+        ]);
+        const diff = diffCrawls(basePages, currentPages);
+        return jsonResult({
+          url,
           baseSnapshotId: baseId,
           currentSnapshotId: currentId,
           diff,

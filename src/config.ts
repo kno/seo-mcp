@@ -41,4 +41,6 @@ export const LIMITS = {
   maxDiffRows: 100,
   maxKeywordPages: 100,
   maxContentGaps: 100,
+  maxCrawlSnapshotPages: 100,
+  maxCrawlDiffRows: 100,
 } as const;
