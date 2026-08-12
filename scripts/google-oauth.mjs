@@ -14,6 +14,7 @@ import { spawn } from "node:child_process";
 const SCOPES = [
   "https://www.googleapis.com/auth/webmasters.readonly",
   "https://www.googleapis.com/auth/adwords",
+  "https://www.googleapis.com/auth/business.manage",
 ];
 const PORT = 5858;
 const REDIRECT = `http://localhost:${PORT}`;
@@ -112,7 +113,7 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(
-    "Open this URL to authorize (scopes: Search Console read-only + Google Ads):\n\n" +
+    "Open this URL to authorize (scopes: Search Console + Google Ads + Business Profile):\n\n" +
       authUrl.toString() +
       "\n",
   );
