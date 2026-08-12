@@ -11,7 +11,10 @@ import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 
-const SCOPES = ["https://www.googleapis.com/auth/webmasters.readonly"];
+const SCOPES = [
+  "https://www.googleapis.com/auth/webmasters.readonly",
+  "https://www.googleapis.com/auth/adwords",
+];
 const PORT = 5858;
 const REDIRECT = `http://localhost:${PORT}`;
 
@@ -109,7 +112,7 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(
-    "Open this URL to authorize (scope: Search Console read-only):\n\n" +
+    "Open this URL to authorize (scopes: Search Console read-only + Google Ads):\n\n" +
       authUrl.toString() +
       "\n",
   );
