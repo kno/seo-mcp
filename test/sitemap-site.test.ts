@@ -71,11 +71,13 @@ describe("sitemap and site aggregation", () => {
     vi.stubGlobal("HTMLRewriter", PassthroughHtmlRewriter);
     const fetcher = vi.fn<typeof fetch>(async (input) => {
       const url = new URL(input.toString());
-      return url.pathname === "/sitemap.xml"
-        ? new Response("Not found", { status: 404 })
-        : new Response("<html></html>", {
-            headers: { "content-type": "text/html" },
-          });
+      if (url.pathname === "/sitemap.xml")
+        return new Response("Not found", { status: 404 });
+      if (url.pathname === "/robots.txt")
+        return new Response("Not found", { status: 404 });
+      return new Response("<html></html>", {
+        headers: { "content-type": "text/html" },
+      });
     });
 
     try {
@@ -86,9 +88,131 @@ describe("sitemap and site aggregation", () => {
         fetcher,
       );
       expect(result.sitemapFound).toBe(false);
-      expect(result.subrequests).toBe(2);
+      // sitemap probe (404) + robots probe (404) + one page fetch.
+      expect(result.subrequests).toBe(3);
       expect(result.crawled).toBe(1);
-      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(fetcher).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("skips sitemap urls disallowed by robots and records them in the crawl policy", async () => {
+    class PassthroughHtmlRewriter {
+      on(): this {
+        return this;
+      }
+      transform(response: Response): Response {
+        return response;
+      }
+    }
+    vi.stubGlobal("HTMLRewriter", PassthroughHtmlRewriter);
+    const sitemapXml = `<urlset><url><loc>https://example.com/public</loc></url><url><loc>https://example.com/private/secret</loc></url></urlset>`;
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/robots.txt")
+        return new Response("User-agent: *\nDisallow: /private", {
+          headers: { "content-type": "text/plain" },
+        });
+      if (url.pathname === "/sitemap.xml")
+        return new Response(sitemapXml, {
+          headers: { "content-type": "application/xml" },
+        });
+      return new Response("<html></html>", {
+        headers: { "content-type": "text/html" },
+      });
+    });
+
+    try {
+      const result = await crawlSite("https://example.com", 10, 4, fetcher);
+      expect(result.crawlPolicy.robotsFound).toBe(true);
+      expect(result.crawlPolicy.robotsUrl).toBe(
+        "https://example.com/robots.txt",
+      );
+      expect(result.crawlPolicy.userAgent).toBe("seo-mcp");
+      expect(result.crawlPolicy.disallowedSkipped.count).toBe(1);
+      expect(result.crawlPolicy.disallowedSkipped.sample).toEqual([
+        "https://example.com/private/secret",
+      ]);
+      expect(result.pages.map((page) => page.url)).toEqual([
+        "https://example.com/public",
+      ]);
+      expect(result.crawled).toBe(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("crawls all urls and reports robotsFound false when robots.txt is missing", async () => {
+    class PassthroughHtmlRewriter {
+      on(): this {
+        return this;
+      }
+      transform(response: Response): Response {
+        return response;
+      }
+    }
+    vi.stubGlobal("HTMLRewriter", PassthroughHtmlRewriter);
+    const sitemapXml = `<urlset><url><loc>https://example.com/a</loc></url><url><loc>https://example.com/b</loc></url></urlset>`;
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/robots.txt")
+        return new Response("Not found", { status: 404 });
+      if (url.pathname === "/sitemap.xml")
+        return new Response(sitemapXml, {
+          headers: { "content-type": "application/xml" },
+        });
+      return new Response("<html></html>", {
+        headers: { "content-type": "text/html" },
+      });
+    });
+
+    try {
+      const result = await crawlSite("https://example.com", 10, 4, fetcher);
+      expect(result.crawlPolicy.robotsFound).toBe(false);
+      expect(result.crawlPolicy.disallowedSkipped.count).toBe(0);
+      expect(result.pages.map((page) => page.url)).toEqual([
+        "https://example.com/a",
+        "https://example.com/b",
+      ]);
+      expect(result.crawled).toBe(2);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("surfaces sitemaps declared in robots.txt", async () => {
+    class PassthroughHtmlRewriter {
+      on(): this {
+        return this;
+      }
+      transform(response: Response): Response {
+        return response;
+      }
+    }
+    vi.stubGlobal("HTMLRewriter", PassthroughHtmlRewriter);
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(input.toString());
+      if (url.pathname === "/robots.txt")
+        return new Response(
+          "User-agent: *\nDisallow:\nSitemap: https://example.com/news.xml",
+          { headers: { "content-type": "text/plain" } },
+        );
+      if (url.pathname === "/sitemap.xml")
+        return new Response(
+          "<urlset><url><loc>https://example.com/a</loc></url></urlset>",
+          { headers: { "content-type": "application/xml" } },
+        );
+      return new Response("<html></html>", {
+        headers: { "content-type": "text/html" },
+      });
+    });
+
+    try {
+      const result = await crawlSite("https://example.com", 10, 4, fetcher);
+      expect(result.crawlPolicy.sitemapsDeclared).toEqual([
+        "https://example.com/news.xml",
+      ]);
     } finally {
       vi.unstubAllGlobals();
     }

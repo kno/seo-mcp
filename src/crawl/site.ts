@@ -1,7 +1,9 @@
 import { LIMITS } from "../config";
 import { createFetchBudget, createResponseByteBudget } from "../http/fetch";
 import { crawlPage } from "./page";
+import { fetchRobots, isPathAllowed, ROBOTS_USER_AGENT } from "./robots";
 import { discoverSitemapUrls } from "./sitemap";
+import { normalizePublicUrl } from "../security/url-policy";
 import type { PageAnalysis } from "../seo/html";
 
 export interface DomainCategory {
@@ -26,10 +28,19 @@ export interface DomainSummary {
   imagesMissingAlt: { pages: number; images: number };
 }
 
+export interface CrawlPolicy {
+  robotsUrl: string;
+  robotsFound: boolean;
+  userAgent: string;
+  sitemapsDeclared: string[];
+  disallowedSkipped: { count: number; sample: string[] };
+}
+
 export interface SiteCrawlResult {
   site: string;
   sitemap: string;
   sitemapFound: boolean;
+  crawlPolicy: CrawlPolicy;
   requested: number;
   crawled: number;
   failed: number;
@@ -195,25 +206,44 @@ export async function crawlSite(
     budget.fetcher,
     byteBudget,
   );
-  const pages = await mapConcurrent(
-    discovered.urls,
-    concurrency,
-    async (url) => {
-      try {
-        const result = await crawlPage(url, budget.fetcher, byteBudget);
-        return { url, result: compactPage(result) };
-      } catch (error) {
-        return {
-          url,
-          error: error instanceof Error ? error.message : "Unknown crawl error",
-        };
-      }
+
+  const site = normalizePublicUrl(siteUrl);
+  const robots = await fetchRobots(site, budget.fetcher, byteBudget);
+  const allowedUrls: string[] = [];
+  const disallowedUrls: string[] = [];
+  for (const url of discovered.urls) {
+    const parsed = new URL(url);
+    const requestPath = `${parsed.pathname}${parsed.search}`;
+    if (isPathAllowed(robots.rules, requestPath)) allowedUrls.push(url);
+    else disallowedUrls.push(url);
+  }
+  const crawlPolicy: CrawlPolicy = {
+    robotsUrl: robots.url,
+    robotsFound: robots.found,
+    userAgent: ROBOTS_USER_AGENT,
+    sitemapsDeclared: robots.rules.sitemaps.slice(0, 20),
+    disallowedSkipped: {
+      count: disallowedUrls.length,
+      sample: disallowedUrls.slice(0, 25),
     },
-  );
+  };
+
+  const pages = await mapConcurrent(allowedUrls, concurrency, async (url) => {
+    try {
+      const result = await crawlPage(url, budget.fetcher, byteBudget);
+      return { url, result: compactPage(result) };
+    } catch (error) {
+      return {
+        url,
+        error: error instanceof Error ? error.message : "Unknown crawl error",
+      };
+    }
+  });
   const result = {
     site: siteUrl,
     sitemap: discovered.sitemap,
     sitemapFound: discovered.sitemapFound,
+    crawlPolicy,
     requested: limit,
     crawled: pages.filter((page) => page.result).length,
     failed: pages.filter((page) => page.error).length,
