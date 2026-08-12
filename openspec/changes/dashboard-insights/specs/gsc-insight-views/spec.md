@@ -1,23 +1,31 @@
 # Delta for GSC Insight Views
 
-## PROVISIONAL — reconciliation required before shipping
+## Reconciliation status
 
-This spec covers three unbuilt tools: `find_striking_distance_keywords`, `find_low_ctr_opportunities`,
-and a content-decay / period-over-period comparison tool (name not yet assigned in `ROADMAP.md`). None
-of the three has an implementation, a registered MCP tool, or a published output schema. Every
-requirement below is written as an intent and a behavioral invariant that MUST hold regardless of the
-eventual result shape — it does NOT name a response field, JSON key, metric name, or score scale, because
-none of those are known yet.
+Two of the three tools this spec covers now exist and are RECONCILED against their real shape, read from
+`src/google/opportunities.ts` and `src/server.ts` (commit `a5b4f22`):
 
-Per the `authenticated-source-contract` capability's reconciliation gate: this spec MUST be reconciled
-against each tool's real output schema, one tool at a time, before that tool's part of this view ships.
-A requirement below MAY be satisfied for one of the three tools while the other two remain blocked; this
-capability is not an all-or-nothing gate.
+- `find_striking_distance_keywords` — inputs `siteUrl`, `startDate`, `endDate` (both `YYYY-MM-DD`), optional
+  `minPosition`/`maxPosition` (1–100, server defaults 11/20), optional `minImpressions` (int ≥0, default 1),
+  optional `limit` (1–250, default 25).
+- `find_low_ctr_opportunities` — inputs `siteUrl`, `startDate`, `endDate`, optional `maxPosition` (1–100,
+  default 10), optional `minImpressions` (int ≥0, default 10), optional `maxCtr` (0–1, default 0.02),
+  optional `limit` (1–250, default 25).
+- Both return the same `OpportunityResult` shape: `{ siteUrl, startDate, endDate, dimensions, criteria:
+Record<string, number>, rowCount, rows: GscRow[] }` (`src/google/opportunities.ts:60-66,150-156,183-190`).
+  `rowCount` is always `rows.length` after filtering and truncation — there is no separate
+  total-matching-count field.
+- **Neither tool accepts a comparison or baseline period.** Both operate on one date range only.
+
+The third tool — content-decay / period-over-period comparison — remains **PROVISIONAL**: unbuilt, no
+registered tool, no output schema. Its requirements below stay behavioral invariants only, per the
+`authenticated-source-contract` reconciliation gate, and MUST be reconciled before it ships. This
+capability is not an all-or-nothing gate: the two grounded tools may ship while the third stays blocked.
 
 All three tools derive from the same resolved first data slice — Google Search Console `query + page` by
-date (`ROADMAP.md`, "Resolved decisions" section) — so they share a property, a date range, and Google's
-own reporting delay. The reporting-lag/as-of display and the credential/quota rules live in
-`authenticated-source-contract` and are not restated here.
+date (`ROADMAP.md`, "Resolved decisions" section) — so they share a property, a date range (where
+applicable), and Google's own reporting delay. The reporting-lag/as-of display and the credential/quota
+rules live in `authenticated-source-contract` and are not restated here.
 
 ## ADDED Requirements
 
@@ -40,21 +48,48 @@ selected.
 - WHEN a user attempts to submit a request to any of the three insight tools
 - THEN the view MUST prevent submission and MUST NOT send a request lacking a property
 
+### Requirement: Applied Criteria Are Shown Alongside Results
+
+Both grounded tools echo the effective thresholds used to produce the result in `criteria` (e.g. the
+position range, minimum impressions, or maximum CTR applied, including server-side defaults when the user
+did not override them). The view MUST display these effective criteria alongside the result, so a user
+cannot mistake a threshold the server defaulted for one they chose, and cannot misread a narrow result as
+"few opportunities exist" when it was actually "few opportunities matched this threshold".
+
+#### Scenario: Server-applied defaults are visible, not hidden
+
+- GIVEN a user submits a striking-distance request without overriding `minImpressions`
+- WHEN the view renders the result
+- THEN it MUST display the `minImpressions` value the server actually applied, from `criteria`, not only
+  the value the user explicitly typed
+
 ### Requirement: Ranked Opportunity Sets Label Their Own Bound
 
-Both `find_striking_distance_keywords` and `find_low_ctr_opportunities` are expected, per `ROADMAP.md`, to
-return ranked opportunity sets. Whatever bounding mechanism the real tool applies (a row limit, a result
-cap, or none), the view MUST distinguish "this is the complete opportunity set" from "this set was capped
-by a limit" once the real shape reveals which case applies, and MUST NOT silently render a capped set as
-if it were exhaustive.
+Both `find_striking_distance_keywords` and `find_low_ctr_opportunities` return `rowCount` equal to
+`rows.length` after filtering and truncation, with no separate total-matching-count field
+(`src/google/opportunities.ts:132,187`). The view MUST treat `rowCount === criteria.limit` as a signal that
+more matching opportunities may exist beyond what was returned, using the `dashboard-shell` bound-versus-
+empty state contract, and MUST NOT present that case as the complete result.
+
+There is a second, independent truncation layer the view MUST also account for: both tools pull GSC rows
+up to `LIMITS.maxGscRows` (250) BEFORE filtering (`src/google/opportunities.ts:113-119,164-170`), so
+opportunities beyond that raw pull are invisible to the filter regardless of `limit`. The view MUST NOT
+claim exhaustiveness for either tool's result under any circumstance, since this deeper truncation cannot
+be detected from the response at all.
 
 #### Scenario: A capped opportunity set is not presented as complete
 
-- GIVEN the reconciled tool shape reveals that the returned opportunity set was truncated by a server-side
-  bound
+- GIVEN a result whose `rowCount` equals its own `criteria.limit`
 - WHEN the view renders that set
-- THEN it MUST show a bound-reached indication naming the limit, per the `dashboard-shell` bound-versus-
-  empty state contract, and MUST NOT present the truncated set as the complete result
+- THEN it MUST show a bound-reached indication naming the limit, and MUST NOT present the set as the
+  complete result
+
+#### Scenario: The view never claims exhaustiveness
+
+- GIVEN any successful result from either tool, regardless of `rowCount`
+- WHEN the view renders it
+- THEN it MUST NOT state or imply that the result is a complete enumeration of all matching opportunities,
+  because the underlying Search Console pull is itself bounded before filtering
 
 #### Scenario: Zero opportunities is distinct from an unfetched state
 

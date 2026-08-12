@@ -292,12 +292,15 @@ back while the BFF lives.
       `mcp-result-contract`, route in `dashboard-bff`, plus a new requirement covering platform-subrequest
       failures. It landed in commit `614d21e` during this chain, which is why the first spec pass missed it —
       a concurrency artifact, not a spec-authoring error.
-- [ ] **A sixth tool landed after this design was written.** `search_console_query` arrived in commit `9e570a3`
-      (with Google single-tenant OAuth in `e5fa342`), so the server now registers six tools. It is explicitly
-      DEFERRED from this change: it depends on an external authenticated data source, which raises
-      secret-handling, per-property authorization and cacheability questions this design does not answer. Note
-      that its OAuth is **Google's**, not MCP-client OAuth, so the Phase 6 gating in `DASHBOARD_ROADMAP.md`
-      is unaffected. Needs its own change.
+- [x] **Three authenticated tools have landed since this design was first written**, all explicitly DEFERRED
+      from this change and now routed by `dashboard-insights` instead: `search_console_query` (commit
+      `9e570a3`, with Google single-tenant OAuth in `e5fa342`), plus `find_striking_distance_keywords` and
+      `find_low_ctr_opportunities` (commit `a5b4f22`). The server registers **eight** tools today. All three
+      deferred tools depend on an external authenticated data source (a Google refresh token), which raises
+      secret-handling, per-property authorization and cacheability questions this change does not answer.
+      Their OAuth is **Google's**, not MCP-client OAuth, so the Phase 6/7 gating in `DASHBOARD_ROADMAP.md` is
+      unaffected. The five tools this change actually scopes — `health`, `crawl_page`, `crawl_site`,
+      `check_links`, `analyze_pagespeed` — are unchanged.
 - [ ] **Server-side defect to raise separately (not this change):** `LIMITS.linkCheckSubrequestBudget: 60`
       exceeds the Free-plan ceiling of 50 that `README.md:109` says the budgets stay below, and `check_links`
       is undocumented in `README.md`. Needs its own change against `ROADMAP.md`.

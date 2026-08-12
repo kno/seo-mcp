@@ -24,7 +24,7 @@ The BFF MUST expose one JSON-returning route per MCP tool (`health`, `crawl_page
 
 When a new tool is added to `seo-mcp`, the BFF route set MUST be extended in the same change, so the route set never silently lags the tool set.
 
-`search_console_query` is DEFERRED from this change and MUST NOT be routed by it. Unlike the five tools above it depends on an external authenticated data source (a Google refresh token), which raises secret-handling, per-property authorization, and cacheability questions this change does not answer. Its route requires its own change.
+`search_console_query`, `find_striking_distance_keywords`, and `find_low_ctr_opportunities` are DEFERRED from this change and MUST NOT be routed by it. Unlike the five tools above, all three depend on an external authenticated data source (a Google refresh token), which raises secret-handling, per-property authorization, and cacheability questions this change does not answer. Their routes belong to `dashboard-insights`. Any further Google-authenticated tool added to `seo-mcp` is deferred by this same rule without needing a fresh amendment.
 
 #### Scenario: Route validates its own inputs before calling the MCP
 
