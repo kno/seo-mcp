@@ -38,6 +38,23 @@ When a new tool is added to `seo-mcp`, the BFF route set MUST be extended in the
 - WHEN the underlying MCP tool call succeeds
 - THEN the route MUST return a JSON body containing the validated `PageSpeedResult` structured content
 
+### Requirement: Read-Only Usage and Headroom Source
+
+The BFF MUST expose a read-only view of its own recent upstream call volume, sufficient for a client to show how close the shared rate-limit bucket is to its limit and how old a served result is. This MUST be derived from the BFF's own call accounting, because the Workers rate-limit binding reports only success or failure and never a remaining count (`src/http/auth.ts:104-107`). The BFF MUST NOT present derived headroom as an authoritative upstream figure, since the bucket is shared with every other MCP consumer and the BFF cannot observe their traffic.
+
+#### Scenario: Headroom is reported as an estimate
+
+- GIVEN the BFF has made a number of upstream calls in the current window
+- WHEN a client requests usage information
+- THEN the BFF MUST return its own observed call volume and the window it covers
+- AND MUST mark the figure as an estimate of the shared bucket rather than an exact remaining count
+
+#### Scenario: Served result carries its age
+
+- GIVEN a request is satisfied from the result cache
+- WHEN the BFF returns the response
+- THEN the response MUST carry the age of the cached result so a client can show staleness
+
 ### Requirement: Bounded Handling of Long-Running Tools
 
 The BFF MUST apply an explicit timeout to any tool invocation, set above the tool's documented worst-case latency (e.g. `crawl_site`'s order-of-magnitude ~40s bound), and MUST return a normalized error rather than hang indefinitely or exceed the Worker's CPU/wall-clock limits if the upstream call does not complete in time.
