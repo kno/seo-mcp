@@ -41,3 +41,21 @@ export {
   keywordClusterSchema,
   clusterResultSchema,
 } from "../schemas/keywords";
+export {
+  opportunityTypeSchema,
+  opportunitySchema,
+  cannibalPageSchema,
+  cannibalGroupSchema,
+  findKeywordCannibalizationResultSchema,
+  findSeoOpportunitiesResultSchema,
+  pageQuerySchema,
+  pageKeywordsSchema,
+  mapKeywordsToPagesResultSchema,
+  contentGapSchema,
+  findContentGapsResultSchema,
+} from "../schemas/intelligence";
+export {
+  domainReportCrawlSchema,
+  domainSearchSchema,
+  domainReportSchema,
+} from "../schemas/domain-report";

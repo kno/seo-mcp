@@ -59,22 +59,29 @@ import {
   keywordMetricsResultSchema,
   clusterResultSchema,
 } from "./schemas/keywords";
+import {
+  findKeywordCannibalizationResultSchema,
+  findSeoOpportunitiesResultSchema,
+  mapKeywordsToPagesResultSchema,
+  findContentGapsResultSchema,
+} from "./schemas/intelligence";
+import { domainReportSchema } from "./schemas/domain-report";
 
 /**
  * Builds the `structuredContent` payload for a tool response.
  *
  * Two call shapes:
- * - `jsonResult(schema, value)` — the five tools scoped by
- *   `mcp-result-contract` in this change. `schema.parse` validates `value`
- *   against the tool's own declared `outputSchema` before it is returned; a
- *   thrown `ZodError` is caught by the same try/catch each tool handler
- *   already uses for `errorResult`, so a result violating its own schema
- *   surfaces as a normal tool failure rather than invalid `structuredContent`.
+ * - `jsonResult(schema, value)` — every tool with a published `outputSchema`
+ *   (the `mcp-result-contract` reconciliation gate). `schema.parse` validates
+ *   `value` against the tool's own declared `outputSchema` before it is
+ *   returned; a thrown `ZodError` is caught by the same try/catch each tool
+ *   handler already uses for `errorResult`, so a result violating its own
+ *   schema surfaces as a normal tool failure rather than invalid
+ *   `structuredContent`.
  * - `jsonResult(value)` — legacy single-argument form kept for the
- *   Google/Ads tools that do not yet declare an `outputSchema`
- *   (`find_striking_distance_keywords`, `find_low_ctr_opportunities`,
- *   `get_keyword_metrics`, `discover_keywords`, `cluster_keywords`); out of
- *   scope for this change.
+ *   remaining tools that do not yet declare an `outputSchema`
+ *   (`snapshot_crawl`, `list_crawl_snapshots`, `compare_crawls`, all six
+ *   `business_*` tools); out of scope for this change.
  */
 function jsonResult<T extends Record<string, unknown>>(
   schema: z.ZodType<T>,
@@ -374,10 +381,12 @@ export function buildServer(env: Env): McpServer {
         minImpressions: z.number().int().min(0).optional(),
         limit: z.number().int().min(1).max(50).optional(),
       }),
+      outputSchema: findKeywordCannibalizationResultSchema,
     },
     async ({ siteUrl, startDate, endDate, minImpressions, limit }) => {
       try {
         return jsonResult(
+          findKeywordCannibalizationResultSchema,
           await findKeywordCannibalization(
             { siteUrl, startDate, endDate, minImpressions, limit },
             env,
@@ -400,10 +409,12 @@ export function buildServer(env: Env): McpServer {
         endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         limit: z.number().int().min(1).max(100).optional(),
       }),
+      outputSchema: findSeoOpportunitiesResultSchema,
     },
     async ({ siteUrl, startDate, endDate, limit }) => {
       try {
         return jsonResult(
+          findSeoOpportunitiesResultSchema,
           await findSeoOpportunities(
             { siteUrl, startDate, endDate, limit },
             env,
@@ -427,10 +438,12 @@ export function buildServer(env: Env): McpServer {
         limit: z.number().int().min(1).max(100).optional(),
         topQueriesPerPage: z.number().int().min(1).max(50).optional(),
       }),
+      outputSchema: mapKeywordsToPagesResultSchema,
     },
     async ({ siteUrl, startDate, endDate, limit, topQueriesPerPage }) => {
       try {
         return jsonResult(
+          mapKeywordsToPagesResultSchema,
           await mapKeywordsToPagesForSite(
             { siteUrl, startDate, endDate, limit, topQueriesPerPage },
             env,
@@ -455,6 +468,7 @@ export function buildServer(env: Env): McpServer {
         minImpressions: z.number().int().min(0).optional(),
         limit: z.number().int().min(1).max(100).optional(),
       }),
+      outputSchema: findContentGapsResultSchema,
     },
     async ({
       siteUrl,
@@ -466,6 +480,7 @@ export function buildServer(env: Env): McpServer {
     }) => {
       try {
         return jsonResult(
+          findContentGapsResultSchema,
           await findContentGapsForSite(
             { siteUrl, startDate, endDate, minPosition, minImpressions, limit },
             env,
@@ -826,6 +841,7 @@ export function buildServer(env: Env): McpServer {
           .optional(),
         opportunityLimit: z.number().int().min(1).max(100).optional(),
       }),
+      outputSchema: domainReportSchema,
     },
     async ({
       url,
@@ -838,6 +854,7 @@ export function buildServer(env: Env): McpServer {
     }) => {
       try {
         return jsonResult(
+          domainReportSchema,
           await analyzeDomain(
             {
               url,

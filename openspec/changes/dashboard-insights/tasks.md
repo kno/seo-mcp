@@ -173,21 +173,21 @@ Record<string, number>`; rejects a payload exceeding `limit`
 
 ## Phase 9: Intelligence + domain-report schemas (PR9) — `seo-intelligence-view`, `mcp-result-contract`
 
-- [ ] 9.1 RED `test/schemas/intelligence.test.ts`: `Opportunity` (`type` enum of three, nullable `page`,
+- [x] 9.1 RED `test/schemas/intelligence.test.ts`: `Opportunity` (`type` enum of three, nullable `page`,
       nullable `currentPosition`, `impact`/`effort`/`priorityScore` unbounded), `CannibalGroup`/`CannibalPage`
-- [ ] 9.2 RED `PageKeywords`/`PageQuery` and `ContentGap`; each wrapper is
+- [x] 9.2 RED `PageKeywords`/`PageQuery` and `ContentGap`; each wrapper is
       `{ siteUrl, startDate, endDate, count, <array> }` with **no `criteria` field** — assert its absence so
       a later tool-side addition is a visible schema change
-- [ ] 9.3 GREEN `src/schemas/intelligence.ts` + `z.infer` aliases in `src/seo/intelligence.ts`,
+- [x] 9.3 GREEN `src/schemas/intelligence.ts` + `z.infer` aliases in `src/seo/intelligence.ts`,
       `src/seo/keyword-pages.ts`
-- [ ] 9.4 RED `test/schemas/domain-report.test.ts`: `DomainReport` with `crawl` reusing
+- [x] 9.4 RED `test/schemas/domain-report.test.ts`: `DomainReport` with `crawl` reusing
       `siteCrawlResultSchema`'s `summary`/`crawlPolicy`/`linkGraph`; `search` and `gscError` both optional and
       **never both present**
-- [ ] 9.5 GREEN `src/schemas/domain-report.ts` + alias in `src/seo/domain-report.ts`
-- [ ] 9.6 GREEN `src/server.ts`: `outputSchema` on `find_keyword_cannibalization` (348-373),
+- [x] 9.5 GREEN `src/schemas/domain-report.ts` + alias in `src/seo/domain-report.ts`
+- [x] 9.6 GREEN `src/server.ts`: `outputSchema` on `find_keyword_cannibalization` (348-373),
       `find_seo_opportunities` (375-399), `map_keywords_to_pages` (401-426), `find_content_gaps` (428-461),
       `analyze_domain` (774-829); publish types
-- [ ] 9.7 PROOF `test/integration/` round-trip for all five registrations
+- [x] 9.7 PROOF `test/integration/` round-trip for all five registrations
 
 ## Phase 10: `seo-intelligence-view` UI (PR10) — `seo-intelligence-view`
 

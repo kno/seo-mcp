@@ -1,43 +1,30 @@
+import type * as z from "zod/v4";
 import { LIMITS, type Env } from "../config";
 import { searchConsoleQuery, type GscRow } from "../google/search-console";
 import {
   strikingDistanceKeywords,
   lowCtrOpportunities,
 } from "../google/opportunities";
+import {
+  cannibalGroupSchema,
+  cannibalPageSchema,
+  findKeywordCannibalizationResultSchema,
+  findSeoOpportunitiesResultSchema,
+  opportunitySchema,
+  opportunityTypeSchema,
+} from "../schemas/intelligence";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export interface CannibalPage {
-  page: string;
-  clicks: number;
-  impressions: number;
-  position: number;
-}
+export type CannibalPage = z.infer<typeof cannibalPageSchema>;
 
-export interface CannibalGroup {
-  query: string;
-  pageCount: number;
-  totalImpressions: number;
-  totalClicks: number;
-  pages: CannibalPage[];
-}
+export type CannibalGroup = z.infer<typeof cannibalGroupSchema>;
 
-export type OpportunityType =
-  "low_ctr" | "striking_distance" | "cannibalization";
+export type OpportunityType = z.infer<typeof opportunityTypeSchema>;
 
-export interface Opportunity {
-  type: OpportunityType;
-  query: string;
-  page: string | null;
-  impressions: number;
-  currentPosition: number | null;
-  impact: number;
-  effort: number;
-  priorityScore: number;
-  recommendation: string;
-}
+export type Opportunity = z.infer<typeof opportunitySchema>;
 
 // ---------------------------------------------------------------------------
 // Pure synthesis helpers
@@ -183,13 +170,7 @@ export async function findKeywordCannibalization(
   env: Env,
   fetcher?: typeof fetch,
   now?: () => number,
-): Promise<{
-  siteUrl: string;
-  startDate: string;
-  endDate: string;
-  count: number;
-  groups: CannibalGroup[];
-}> {
+): Promise<z.infer<typeof findKeywordCannibalizationResultSchema>> {
   const result = await searchConsoleQuery(
     {
       siteUrl: params.siteUrl,
@@ -229,13 +210,7 @@ export async function findSeoOpportunities(
   env: Env,
   fetcher?: typeof fetch,
   now?: () => number,
-): Promise<{
-  siteUrl: string;
-  startDate: string;
-  endDate: string;
-  count: number;
-  opportunities: Opportunity[];
-}> {
+): Promise<z.infer<typeof findSeoOpportunitiesResultSchema>> {
   const result = await searchConsoleQuery(
     {
       siteUrl: params.siteUrl,

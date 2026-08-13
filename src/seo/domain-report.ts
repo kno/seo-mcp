@@ -1,29 +1,16 @@
+import type * as z from "zod/v4";
 import type { Env } from "../config";
 import { crawlSite } from "../crawl/site";
 import type { SiteCrawlResult } from "../crawl/site";
 import { findSeoOpportunities } from "./intelligence";
-import type { Opportunity } from "./intelligence";
+import {
+  domainReportSchema,
+  domainSearchSchema,
+} from "../schemas/domain-report";
 
-export interface DomainSearch {
-  startDate: string;
-  endDate: string;
-  opportunities: Opportunity[];
-}
+export type DomainSearch = z.infer<typeof domainSearchSchema>;
 
-export interface DomainReport {
-  url: string;
-  crawl: {
-    sitemapFound: boolean;
-    crawled: number;
-    failed: number;
-    issueCounts: Record<string, number>;
-    summary: SiteCrawlResult["summary"];
-    crawlPolicy: SiteCrawlResult["crawlPolicy"];
-    linkGraph: SiteCrawlResult["linkGraph"];
-  };
-  search?: DomainSearch;
-  gscError?: string;
-}
+export type DomainReport = z.infer<typeof domainReportSchema>;
 
 export function buildDomainReport(
   url: string,

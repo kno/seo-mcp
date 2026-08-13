@@ -4,7 +4,9 @@
  * `analyze_pagespeed`, `search_console_query`, `find_striking_distance_keywords`,
  * `find_low_ctr_opportunities`, `snapshot_search_console`,
  * `list_search_console_snapshots`, `compare_search_console`,
- * `get_keyword_metrics`, `discover_keywords`, `cluster_keywords`). Type-only
+ * `get_keyword_metrics`, `discover_keywords`, `cluster_keywords`,
+ * `find_keyword_cannibalization`, `find_seo_opportunities`,
+ * `map_keywords_to_pages`, `find_content_gaps`, `analyze_domain`). Type-only
  * re-exports: under `verbatimModuleSyntax`
  * this module erases entirely, so importing it (e.g. from the BFF or the
  * dashboard) pulls in zero Worker runtime code from `src/http`,
@@ -50,3 +52,18 @@ export type {
   KeywordCluster,
   ClusterResult,
 } from "../seo/keywords";
+export type {
+  OpportunityType,
+  Opportunity,
+  CannibalPage,
+  CannibalGroup,
+} from "../seo/intelligence";
+export type { PageQuery, PageKeywords, ContentGap } from "../seo/keyword-pages";
+// `DomainReport`/`DomainSearch` are published from the schema module rather
+// than `src/seo/domain-report.ts`: that module's `analyzeDomain` transitively
+// imports `src/crawl/site.ts` (robots/sitemap fetch, response-byte budget),
+// which is heavier Worker runtime surface than a DOM-only consumer needs to
+// pull in just for the type. `DomainReport` there is already
+// `z.infer<typeof domainReportSchema>` — the exact same type — so this
+// re-export is identical, not a duplicate.
+export type { DomainSearch, DomainReport } from "../schemas/domain-report";

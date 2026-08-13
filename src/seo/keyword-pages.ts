@@ -1,32 +1,23 @@
+import type * as z from "zod/v4";
 import { LIMITS, type Env } from "../config";
 import { searchConsoleQuery, type GscRow } from "../google/search-console";
+import {
+  contentGapSchema,
+  findContentGapsResultSchema,
+  mapKeywordsToPagesResultSchema,
+  pageKeywordsSchema,
+  pageQuerySchema,
+} from "../schemas/intelligence";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export interface PageQuery {
-  query: string;
-  clicks: number;
-  impressions: number;
-  position: number;
-}
+export type PageQuery = z.infer<typeof pageQuerySchema>;
 
-export interface PageKeywords {
-  page: string;
-  queryCount: number;
-  totalClicks: number;
-  totalImpressions: number;
-  topQueries: PageQuery[];
-}
+export type PageKeywords = z.infer<typeof pageKeywordsSchema>;
 
-export interface ContentGap {
-  query: string;
-  page: string;
-  impressions: number;
-  clicks: number;
-  position: number;
-}
+export type ContentGap = z.infer<typeof contentGapSchema>;
 
 // ---------------------------------------------------------------------------
 // Pure synthesis helpers
@@ -134,13 +125,7 @@ export async function mapKeywordsToPagesForSite(
   env: Env,
   fetcher?: typeof fetch,
   now?: () => number,
-): Promise<{
-  siteUrl: string;
-  startDate: string;
-  endDate: string;
-  count: number;
-  pages: PageKeywords[];
-}> {
+): Promise<z.infer<typeof mapKeywordsToPagesResultSchema>> {
   const result = await searchConsoleQuery(
     {
       siteUrl: params.siteUrl,
@@ -182,13 +167,7 @@ export async function findContentGapsForSite(
   env: Env,
   fetcher?: typeof fetch,
   now?: () => number,
-): Promise<{
-  siteUrl: string;
-  startDate: string;
-  endDate: string;
-  count: number;
-  gaps: ContentGap[];
-}> {
+): Promise<z.infer<typeof findContentGapsResultSchema>> {
   const result = await searchConsoleQuery(
     {
       siteUrl: params.siteUrl,
