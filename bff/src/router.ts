@@ -75,6 +75,7 @@ import {
   recordUpstreamAttempt,
   type QuotaEstimate,
 } from "./authenticated/quota-ledger";
+import type { EffectiveCriteria } from "./authenticated/criteria";
 
 const crawlPageInputSchema = z.object({
   url: z.url().describe("Public HTTP or HTTPS page URL"),
@@ -174,6 +175,58 @@ const compareSearchConsoleInputSchema = z.object({
   siteUrl: z.string().min(1),
   baseSnapshotId: z.coerce.number().int().positive().optional(),
   currentSnapshotId: z.coerce.number().int().positive().optional(),
+});
+
+// Mirrors `src/server.ts`'s `find_seo_opportunities` inputSchema exactly
+// (`seo-intelligence-view`, PR10).
+const findSeoOpportunitiesInputSchema = z.object({
+  siteUrl: z.string().min(1),
+  startDate: dateOnlySchema,
+  endDate: dateOnlySchema,
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+// Mirrors `src/server.ts`'s `find_keyword_cannibalization` inputSchema
+// exactly.
+const findKeywordCannibalizationInputSchema = z.object({
+  siteUrl: z.string().min(1),
+  startDate: dateOnlySchema,
+  endDate: dateOnlySchema,
+  minImpressions: z.coerce.number().int().min(0).optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+});
+
+// Mirrors `src/server.ts`'s `map_keywords_to_pages` inputSchema exactly.
+const mapKeywordsToPagesInputSchema = z.object({
+  siteUrl: z.string().min(1),
+  startDate: dateOnlySchema,
+  endDate: dateOnlySchema,
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  topQueriesPerPage: z.coerce.number().int().min(1).max(50).optional(),
+});
+
+// Mirrors `src/server.ts`'s `find_content_gaps` inputSchema exactly.
+const findContentGapsInputSchema = z.object({
+  siteUrl: z.string().min(1),
+  startDate: dateOnlySchema,
+  endDate: dateOnlySchema,
+  minPosition: z.coerce.number().min(1).max(100).optional(),
+  minImpressions: z.coerce.number().int().min(0).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+// Mirrors `src/server.ts`'s `analyze_domain` inputSchema exactly.
+// `startDate`/`endDate`/`gscProperty`/`opportunityLimit` are all optional —
+// GSC enrichment only runs when `gscProperty`+both dates are given
+// (`src/seo/domain-report.ts#analyzeDomain`).
+const analyzeDomainInputSchema = z.object({
+  url: z.url(),
+  limit: z.coerce.number().int().min(1).max(20).optional(),
+  concurrency: z.coerce.number().int().min(1).max(4).optional(),
+  gscProperty: z.string().min(1).optional(),
+  startDate: dateOnlySchema.optional(),
+  endDate: dateOnlySchema.optional(),
+  opportunityLimit: z.coerce.number().int().min(1).max(100).optional(),
 });
 
 // A GET route carries no repeated-key array support here (same constraint
@@ -378,6 +431,14 @@ async function dispatch<TInput, TResult>(
  *   This is a BFF-ENVELOPE field sourced from config, never read from the
  *   tool's own payload — `KeywordMetric` carries no currency field at all
  *   (verified: `src/google/ads.ts:9-16`).
+ * - `criteria`, present ONLY for a `seo-intelligence-view` route with an
+ *   `effectiveCriteria` resolver (`authenticated/registry.ts`, PR10) — the
+ *   BFF-echoed EFFECTIVE (post-default-resolution) request criteria, `basis:
+ *   "request"`, distinct from `OpportunityResult.criteria` which the TOOL
+ *   itself echoes (design.md's "two mechanisms behind the same UI
+ *   requirement"). Present on every successful response for these five
+ *   tools, hit or miss, so a request that omitted a limit still gets a
+ *   correct bound label (task 10.2, threat row h).
  */
 function authenticatedToolResponse<T>(
   result: McpClientResult<T>,
@@ -386,6 +447,7 @@ function authenticatedToolResponse<T>(
   sourceFreshness: ReturnType<typeof deriveSourceFreshness>,
   quota: QuotaEstimate,
   currencyLabel?: string,
+  criteria?: EffectiveCriteria,
 ): Response {
   if (!result.ok) return bffErrorResponse(result.code, result.retryAfter);
   return Response.json({
@@ -395,6 +457,7 @@ function authenticatedToolResponse<T>(
     sourceFreshness,
     quota,
     ...(currencyLabel !== undefined ? { currencyLabel } : {}),
+    ...(criteria !== undefined ? { criteria } : {}),
   });
 }
 
@@ -478,6 +541,11 @@ async function dispatchAuthenticated(
   const readQuotaEstimate = () =>
     getQuotaEstimate(env.RESULT_CACHE, route.source, budget);
 
+  // `seo-intelligence-view` (PR10) only — see `authenticatedToolResponse`'s
+  // doc comment. Computed once from the validated request args, reused on
+  // every response branch below (cache hit and fresh fetch alike).
+  const criteria = route.effectiveCriteria?.(args);
+
   const classifyFailureText = route.callsGoogleUpstream
     ? classifyUpstreamFailure
     : classifyStorageFailure;
@@ -529,16 +597,30 @@ async function dispatchAuthenticated(
         sourceFreshness,
         await readQuotaEstimate(),
         currencyLabel,
+        criteria,
       );
     }
   }
 
-  const result = await withSingleFlight(key, trackedCallUpstream);
+  const upstreamResult = await withSingleFlight(key, trackedCallUpstream);
+
+  // `analyze_domain` only (PR10): classifies and discards a nested
+  // `gscError` on an otherwise-successful result BEFORE it is cached or
+  // returned — see `authenticated/domain-report.ts`'s doc comment. Every
+  // other route has no `transformSuccess`, so `result`/`forceOpenTtl` are
+  // exactly `upstreamResult`/`false`, unchanged behavior.
+  let result = upstreamResult;
+  let forceOpenTtl = false;
+  if (upstreamResult.ok && route.transformSuccess) {
+    const transformed = route.transformSuccess(upstreamResult.data);
+    result = { ok: true, data: transformed.data };
+    forceOpenTtl = transformed.forceOpenTtl;
+  }
+
   if (result.ok) {
-    const rangeState = authRangeState(
-      route.freshnessDate(args, result.data),
-      lagDays,
-    );
+    const rangeState = forceOpenTtl
+      ? "open"
+      : authRangeState(route.freshnessDate(args, result.data), lagDays);
     await putCached(
       env.RESULT_CACHE,
       key,
@@ -565,6 +647,7 @@ async function dispatchAuthenticated(
     sourceFreshness,
     await readQuotaEstimate(),
     currencyLabel,
+    criteria,
   );
 }
 
@@ -774,6 +857,71 @@ export async function handleRequest(
       env,
       ctx,
       "discover_keywords",
+      parsed.data as Record<string, unknown>,
+    );
+  }
+
+  if (url.pathname === "/api/tools/find_seo_opportunities") {
+    const parsed = parseQuery(url, findSeoOpportunitiesInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatchAuthenticated(
+      request,
+      url,
+      env,
+      ctx,
+      "find_seo_opportunities",
+      parsed.data as Record<string, unknown>,
+    );
+  }
+
+  if (url.pathname === "/api/tools/find_keyword_cannibalization") {
+    const parsed = parseQuery(url, findKeywordCannibalizationInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatchAuthenticated(
+      request,
+      url,
+      env,
+      ctx,
+      "find_keyword_cannibalization",
+      parsed.data as Record<string, unknown>,
+    );
+  }
+
+  if (url.pathname === "/api/tools/map_keywords_to_pages") {
+    const parsed = parseQuery(url, mapKeywordsToPagesInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatchAuthenticated(
+      request,
+      url,
+      env,
+      ctx,
+      "map_keywords_to_pages",
+      parsed.data as Record<string, unknown>,
+    );
+  }
+
+  if (url.pathname === "/api/tools/find_content_gaps") {
+    const parsed = parseQuery(url, findContentGapsInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatchAuthenticated(
+      request,
+      url,
+      env,
+      ctx,
+      "find_content_gaps",
+      parsed.data as Record<string, unknown>,
+    );
+  }
+
+  if (url.pathname === "/api/tools/analyze_domain") {
+    const parsed = parseQuery(url, analyzeDomainInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatchAuthenticated(
+      request,
+      url,
+      env,
+      ctx,
+      "analyze_domain",
       parsed.data as Record<string, unknown>,
     );
   }

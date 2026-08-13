@@ -44,6 +44,25 @@
  *   timeout budget. 10s is generous for pure in-memory text analysis over
  *   at most 500 keywords; there is no network call in its path to bound
  *   against.
+ *
+ * `seo-intelligence-view` (PR10) adds five more tools, all authenticated
+ * and routed through `dispatchAuthenticated()` — like every other
+ * authenticated tool, `authenticated/registry.ts`'s own per-route
+ * `timeoutMs` is what actually governs; these entries exist only for this
+ * `Record`'s exhaustiveness:
+ * - `find_seo_opportunities` / `find_keyword_cannibalization` /
+ *   `map_keywords_to_pages` / `find_content_gaps`: each makes ONE live
+ *   Search Console call with the same `gscTimeoutMs` (15s) +
+ *   `googleTokenTimeoutMs` (10s) budget as `search_console_query`, so they
+ *   get the same 27s margin.
+ * - `analyze_domain`: composes a FULL site crawl (`crawlSite`, up to
+ *   `LIMITS.maxCrawlPages` 20 pages at `LIMITS.maxConcurrency` 4 —
+ *   worst-case ~40s of page fetches at `fetchTimeoutMs` 8s each, plus
+ *   sitemap/robots discovery) AND an optional GSC enrichment call (the
+ *   same 15s + 10s budget as the other four). 90s leaves generous margin
+ *   over that combined worst case (`src/seo/domain-report.ts#analyzeDomain`
+ *   awaits `crawlSite` then, only if `gscProperty`+dates are given,
+ *   `findSeoOpportunities` — never in parallel, so the two budgets add).
  */
 
 export type ToolName =
@@ -60,7 +79,12 @@ export type ToolName =
   | "compare_search_console"
   | "get_keyword_metrics"
   | "discover_keywords"
-  | "cluster_keywords";
+  | "cluster_keywords"
+  | "find_seo_opportunities"
+  | "find_keyword_cannibalization"
+  | "map_keywords_to_pages"
+  | "find_content_gaps"
+  | "analyze_domain";
 
 export const TOOL_TIMEOUT_MS: Record<ToolName, number> = {
   health: 5000,
@@ -77,6 +101,11 @@ export const TOOL_TIMEOUT_MS: Record<ToolName, number> = {
   get_keyword_metrics: 32_000,
   discover_keywords: 32_000,
   cluster_keywords: 10_000,
+  find_seo_opportunities: 27_000,
+  find_keyword_cannibalization: 27_000,
+  map_keywords_to_pages: 27_000,
+  find_content_gaps: 27_000,
+  analyze_domain: 90_000,
 };
 
 export type TimeoutResult<T> =

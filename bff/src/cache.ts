@@ -104,6 +104,15 @@ export const CACHE_TTL_SECONDS: Record<ToolName, number> = {
   get_keyword_metrics: 21600,
   discover_keywords: 21600,
   cluster_keywords: 3600,
+  // `seo-intelligence-view` (PR10): all five authenticated, routed through
+  // `dispatchAuthenticated()`, which never reads this table for any of
+  // them — present only for this `Record<ToolName, number>`'s
+  // exhaustiveness, same as every other authenticated tool above.
+  find_seo_opportunities: 21600,
+  find_keyword_cannibalization: 21600,
+  map_keywords_to_pages: 21600,
+  find_content_gaps: 21600,
+  analyze_domain: 21600,
 };
 
 export function clampTtlSeconds(seconds: number): number {

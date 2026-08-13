@@ -17,6 +17,7 @@ import { HeadingsPanel } from "../organisms/HeadingsPanel";
 import { OpenGraphPanel } from "../organisms/OpenGraphPanel";
 import { JsonLdPanel } from "../organisms/JsonLdPanel";
 import { IssuesList } from "../organisms/IssuesList";
+import { takePendingDrillDown } from "../app/navigation";
 
 /**
  * Container for `site-crawl-view`. Follows `PageReportContainer`'s and
@@ -42,6 +43,9 @@ export function SiteCrawlContainer() {
   const [result, setResult] = useState<SiteCrawlResult | null>(null);
   const [drillDown, setDrillDown] = useState<SitePageAnalysis | null>(null);
   const [inFlight, setInFlight] = useState(false);
+  // `seo-intelligence-view`'s (PR10) drill-down (task 10.11) — consumed
+  // exactly once, at mount; see `CrawlFormProps.initialUrl`'s doc comment.
+  const [initialUrl] = useState(() => takePendingDrillDown("site-crawl") ?? "");
   const controllerRef = useRef<AbortController | null>(null);
   const requestIdRef = useRef(0);
 
@@ -107,7 +111,11 @@ export function SiteCrawlContainer() {
 
   return (
     <div className="view-stack">
-      <CrawlForm onSubmit={handleSubmit} disabled={inFlight} />
+      <CrawlForm
+        onSubmit={handleSubmit}
+        disabled={inFlight}
+        initialUrl={initialUrl}
+      />
 
       {state && (
         <StateRegion label="Site crawl" state={state}>

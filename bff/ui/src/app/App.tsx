@@ -5,6 +5,7 @@ import { PageSpeedContainer } from "../containers/PageSpeedContainer";
 import { SearchConsoleContainer } from "../containers/SearchConsoleContainer";
 import { GscInsightsContainer } from "../containers/GscInsightsContainer";
 import { KeywordResearchContainer } from "../containers/KeywordResearchContainer";
+import { SeoIntelligenceContainer } from "../containers/SeoIntelligenceContainer";
 import { LoginContainer } from "../containers/LoginContainer";
 
 /**
@@ -62,6 +63,13 @@ const NAV_ITEMS = [
     description:
       "Google Ads Keyword Planner volume, competition and bid data for a keyword list; discover related keyword ideas from seeds or a URL; cluster any keyword list by shared term and intent — clustering needs no Ads call or quota.",
     View: KeywordResearchContainer,
+  },
+  {
+    href: "#seo-intelligence",
+    label: "SEO Intelligence",
+    description:
+      "Prioritized SEO opportunities, keyword cannibalization, page-to-query mapping, content gaps, and a merged domain report (crawl + optional Search Console enrichment) for one site.",
+    View: SeoIntelligenceContainer,
   },
 ] as const;
 

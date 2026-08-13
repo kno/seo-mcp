@@ -540,6 +540,71 @@ export function collectDiffBounds(diff: {
  * bound (single-page/single-analysis results, no sample-capped fields), so
  * they always return `[]`.
  */
+/**
+ * `seo-intelligence-view`'s (PR10) generic count-bound derivation, task
+ * 10.2. Unlike `describeGscRows` (a fixed config constant) and unlike
+ * `describeOpportunityBound` (the TOOL's own echoed `criteria.limit`), the
+ * limit here is the BFF's own resolved `effectiveCriteria` — critically,
+ * this makes a correct bound label possible even for a request that
+ * OMITTED the limit entirely and relied on the tool's default (threat row
+ * h): the tool itself reports no limit at all, so only the BFF (which
+ * resolved the effective value) can know it. Never "complete" below the
+ * limit, for the same reason `describeOpportunityBound` never is: every one
+ * of these five tools synthesizes over a hardcoded, unrecorded 250-row raw
+ * GSC pull (`GSC_PULL_CAVEAT`, `authenticated/criteria.ts`) that this
+ * count-bound cannot see through.
+ */
+export function describeSeoIntelligenceBound(
+  count: number,
+  effectiveLimit: number,
+  limitName: string,
+): Cardinality {
+  if (count === 0) return { state: "none" };
+  if (count === effectiveLimit) {
+    return {
+      state: "bounded",
+      bound: {
+        kind: "sample_cap",
+        scope: "count",
+        limitName,
+        limitValue: effectiveLimit,
+        shown: count,
+      },
+    };
+  }
+  return { state: "unknown" };
+}
+
+/**
+ * `seo-intelligence-view`'s `CannibalGroup.pages` bound (task 10.6): each
+ * group's own `pageCount` is the TRUE count of cannibalizing pages, while
+ * `pages` is independently capped (`MAX_PAGES_PER_GROUP`, 10,
+ * `src/seo/intelligence.ts`) — `pages.length < pageCount` means the
+ * rendered subset is NOT the complete list for that group, the same
+ * "explicit count vs. capped sample" shape `describeCategory` already
+ * establishes for `site-crawl-view`'s duplicate groups.
+ */
+export function describeCannibalGroupPagesBound(
+  group: { readonly pageCount: number; readonly pages: readonly unknown[] },
+  scope: string,
+): Cardinality {
+  if (group.pages.length === 0) return { state: "none" };
+  if (group.pages.length < group.pageCount) {
+    return {
+      state: "bounded",
+      bound: {
+        kind: "sample_cap",
+        scope,
+        limitName: "CannibalGroup.pages",
+        limitValue: group.pages.length,
+        shown: group.pages.length,
+        total: group.pageCount,
+      },
+    };
+  }
+  return { state: "complete", total: group.pageCount };
+}
+
 export function collectBounds(
   tool:
     | "crawl_page"

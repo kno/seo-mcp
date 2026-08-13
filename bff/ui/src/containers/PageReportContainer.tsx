@@ -10,6 +10,7 @@ import { OpenGraphPanel } from "../organisms/OpenGraphPanel";
 import { JsonLdPanel } from "../organisms/JsonLdPanel";
 import { IssuesList } from "../organisms/IssuesList";
 import { BrokenLinksContainer } from "./BrokenLinksContainer";
+import { takePendingDrillDown } from "../app/navigation";
 
 /**
  * Container for `page-report-view`. Owns the `crawl_page` request lifecycle
@@ -30,11 +31,20 @@ import { BrokenLinksContainer } from "./BrokenLinksContainer";
  * `BrokenLinksContainer` renders once a URL has been submitted, keyed on
  * that URL so a new submission starts it fresh rather than reusing stale
  * state from a previous target.
+ *
+ * `seo-intelligence-view`'s (PR10) drill-down (task 10.11) pre-fills the URL
+ * field via `takePendingDrillDown("page-report")`, consumed exactly once by
+ * this `useState` initializer — a synchronous mount-time value, never an
+ * effect, so arriving here via a drill-down link still performs no fetch on
+ * mount; the user still submits the form themselves.
  */
 export function PageReportContainer() {
   const [state, setState] = useState<RegionState | null>(null);
   const [analysis, setAnalysis] = useState<PageAnalysis | null>(null);
   const [pageUrl, setPageUrl] = useState<string | null>(null);
+  const [initialUrl] = useState(
+    () => takePendingDrillDown("page-report") ?? "",
+  );
   const controllerRef = useRef<AbortController | null>(null);
   const requestIdRef = useRef(0);
 
@@ -89,6 +99,7 @@ export function PageReportContainer() {
               name="url"
               type="url"
               placeholder="https://example.com/page"
+              defaultValue={initialUrl}
               required
             />
           </div>

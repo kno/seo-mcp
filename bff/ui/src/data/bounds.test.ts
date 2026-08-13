@@ -4,6 +4,7 @@ import {
   collectBounds,
   collectDiffBounds,
   collectOpportunityBounds,
+  describeCannibalGroupPagesBound,
   describeCappedList,
   describeCategory,
   describeDiffBucket,
@@ -11,6 +12,7 @@ import {
   describeOpportunityBound,
   describeOutputBytes,
   describeProbeSet,
+  describeSeoIntelligenceBound,
   isBounded,
 } from "./bounds";
 import type { LinkCheckResult, SiteCrawlResult } from "../../../../src/types";
@@ -534,5 +536,76 @@ describe("describeDiffBucket / collectDiffBounds", () => {
     expect(result.gained.state).toBe("bounded");
     expect(result.improved.state).toBe("complete");
     expect(result.lost.state).toBe("none");
+  });
+});
+
+/**
+ * `seo-intelligence-view` (PR10) task 10.2 — the bound label must be
+ * correct even for a request that OMITTED the limit entirely (threat row
+ * h): the BFF resolves the effective value from its own default table, not
+ * from anything the tool itself reports.
+ */
+describe("describeSeoIntelligenceBound", () => {
+  it("is bounded when count equals the effective (server-default) limit", () => {
+    expect(describeSeoIntelligenceBound(10, 10, "limit")).toEqual({
+      state: "bounded",
+      bound: {
+        kind: "sample_cap",
+        scope: "count",
+        limitName: "limit",
+        limitValue: 10,
+        shown: 10,
+      },
+    });
+  });
+
+  it("is unknown (never complete) below the limit — the raw GSC pull cap is undetectable", () => {
+    expect(describeSeoIntelligenceBound(3, 10, "limit").state).toBe("unknown");
+  });
+
+  it("is none for a zero count", () => {
+    expect(describeSeoIntelligenceBound(0, 10, "limit")).toEqual({
+      state: "none",
+    });
+  });
+});
+
+/**
+ * `seo-intelligence-view` task 10.6 — `CannibalGroup.pages` is capped
+ * independently of the group's own `pageCount`.
+ */
+describe("describeCannibalGroupPagesBound", () => {
+  it("is bounded when pages.length < pageCount", () => {
+    expect(
+      describeCannibalGroupPagesBound(
+        { pageCount: 5, pages: [{}, {}] },
+        "groups[0].pages",
+      ),
+    ).toEqual({
+      state: "bounded",
+      bound: {
+        kind: "sample_cap",
+        scope: "groups[0].pages",
+        limitName: "CannibalGroup.pages",
+        limitValue: 2,
+        shown: 2,
+        total: 5,
+      },
+    });
+  });
+
+  it("is complete when pages.length === pageCount", () => {
+    expect(
+      describeCannibalGroupPagesBound(
+        { pageCount: 2, pages: [{}, {}] },
+        "groups[0].pages",
+      ),
+    ).toEqual({ state: "complete", total: 2 });
+  });
+
+  it("is none for an empty pages list", () => {
+    expect(
+      describeCannibalGroupPagesBound({ pageCount: 0, pages: [] }, "x"),
+    ).toEqual({ state: "none" });
   });
 });

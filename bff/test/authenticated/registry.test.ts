@@ -109,11 +109,11 @@ describe("authenticated tool registry — gsc-insight-views (PR6)", () => {
     }
   });
 
-  it("registers exactly six search-console-backed tools (search_console_query + the five gsc-insight-views tools)", () => {
+  it("registers exactly eleven search-console-backed tools (search_console_query + the five gsc-insight-views tools + the five seo-intelligence-view tools, PR10)", () => {
     const searchConsoleTools = Object.values(AUTHENTICATED_REGISTRY).filter(
       (route) => route.source === "search-console",
     );
-    expect(searchConsoleTools).toHaveLength(6);
+    expect(searchConsoleTools).toHaveLength(11);
   });
 });
 
@@ -150,7 +150,55 @@ describe("authenticated tool registry — keyword-research-view (PR8)", () => {
     expect(getAuthenticatedRoute("cluster_keywords")).toBeUndefined();
   });
 
-  it("registers exactly eight tools total after PR8 (six GSC-backed + two google-ads-backed)", () => {
-    expect(Object.keys(AUTHENTICATED_REGISTRY)).toHaveLength(8);
+  it("registers exactly thirteen tools total after PR10 (eleven GSC-backed + two google-ads-backed)", () => {
+    expect(Object.keys(AUTHENTICATED_REGISTRY)).toHaveLength(13);
+  });
+});
+
+/**
+ * `seo-intelligence-view` (PR10) — task 10.12. All five under
+ * `"search-console"`, `callsGoogleUpstream: true`, each with an
+ * `effectiveCriteria` resolver; `analyze_domain` additionally gets a
+ * `transformSuccess` hook (task 10.10).
+ */
+describe("authenticated tool registry — seo-intelligence-view (PR10)", () => {
+  it.each([
+    "find_seo_opportunities",
+    "find_keyword_cannibalization",
+    "map_keywords_to_pages",
+    "find_content_gaps",
+    "analyze_domain",
+  ] as const)(
+    "registers %s under search-console with a real Google call",
+    (name) => {
+      expect(isAuthenticatedTool(name)).toBe(true);
+      const route = getAuthenticatedRoute(name);
+      expect(route?.source).toBe("search-console");
+      expect(route?.callsGoogleUpstream).toBe(true);
+      expect(route?.effectiveCriteria).toBeDefined();
+    },
+  );
+
+  it("gives analyze_domain a transformSuccess hook (classify-and-discard, task 10.10) — no other route has one", () => {
+    expect(
+      getAuthenticatedRoute("analyze_domain")?.transformSuccess,
+    ).toBeDefined();
+    for (const name of [
+      "find_seo_opportunities",
+      "find_keyword_cannibalization",
+      "map_keywords_to_pages",
+      "find_content_gaps",
+    ]) {
+      expect(getAuthenticatedRoute(name)?.transformSuccess).toBeUndefined();
+    }
+  });
+
+  it("gives analyze_domain the largest timeout budget in the registry (composed crawl + GSC enrichment)", () => {
+    const domainTimeout =
+      getAuthenticatedRoute("analyze_domain")?.timeoutMs ?? 0;
+    for (const [name, route] of Object.entries(AUTHENTICATED_REGISTRY)) {
+      if (name === "analyze_domain") continue;
+      expect(domainTimeout).toBeGreaterThan(route.timeoutMs);
+    }
   });
 });

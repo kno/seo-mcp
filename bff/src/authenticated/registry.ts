@@ -70,8 +70,35 @@
  * `authenticated/freshness.ts`'s doc comment for why `adsRollingWindowFreshnessDate`
  * resolves today's date with `lagDays: 0` rather than reusing
  * `fromRequestEndDate` or inventing a fake reporting lag.
+ *
+ * `seo-intelligence-view` (PR10) adds five more rows, all under
+ * `"search-console"`, all `callsGoogleUpstream: true` — `analyze_domain`
+ * conditionally calls Search Console (only when `gscProperty`+dates are
+ * given; a crawl-only call spends no Google quota), but is still marked
+ * `true` here per this registry's per-TOOL (not per-request-branch)
+ * classification, matching every other route's grain; see
+ * `apply-progress`'s note on the resulting quota-ledger over-count for a
+ * crawl-only `analyze_domain` call.
+ *
+ * `find_seo_opportunities`/`find_keyword_cannibalization`/
+ * `map_keywords_to_pages`/`find_content_gaps`/`analyze_domain` each get an
+ * `effectiveCriteria` resolver (`authenticated/criteria.ts`) — none of the
+ * five echoes a `criteria` field itself, unlike the two `OpportunityResult`
+ * tools above (design.md, "Decision: effective request criteria are echoed
+ * by the BFF, because five tools echo none").
+ *
+ * `analyze_domain` additionally gets a `transformSuccess` hook
+ * (`authenticated/domain-report.ts#classifyDomainReportGscError`) —
+ * `dispatchAuthenticated()` runs it on every successful result before
+ * caching or responding, classifying and discarding a nested `gscError`
+ * that would otherwise ride a 200-OK success envelope past the classifier
+ * every other authenticated failure path intercepts (design.md's "Decision:
+ * `analyze_domain`'s `gscError` is classified like a failure, though it
+ * arrives as a success"; threat row g).
  */
 import * as publishedSchemas from "../../../src/types/schemas";
+import { resolveEffectiveCriteria, type EffectiveCriteria } from "./criteria";
+import { classifyDomainReportGscError } from "./domain-report";
 
 export type { AuthenticatedSource } from "./freshness";
 import type { AuthenticatedSource } from "./freshness";
@@ -99,6 +126,18 @@ export interface AuthenticatedRouteDefinition {
    * this module's doc comment for why a rolling-window metric has no real
    * reporting-lag figure to state. */
   lagDays?: number;
+  /** `seo-intelligence-view` (PR10) only. Resolves the BFF-echoed effective
+   * criteria object (`basis: "request"`) from the validated request args —
+   * see `authenticated/criteria.ts`'s doc comment. Omitted for every route
+   * that predates PR10, unchanged behavior. */
+  effectiveCriteria?: (args: Record<string, unknown>) => EffectiveCriteria;
+  /** `analyze_domain` only (PR10). Runs on every SUCCESSFUL upstream result
+   * immediately after the real call resolves, before caching or
+   * responding — see `authenticated/domain-report.ts`'s doc comment. */
+  transformSuccess?: (data: unknown) => {
+    readonly data: unknown;
+    readonly forceOpenTtl: boolean;
+  };
 }
 
 function todayIsoDate(): string {
@@ -212,6 +251,58 @@ export const AUTHENTICATED_REGISTRY = {
     callsGoogleUpstream: true,
     freshnessDate: adsRollingWindowFreshnessDate,
     lagDays: 0,
+  },
+  // `seo-intelligence-view` (PR10). All five under "search-console" — see
+  // this module's doc comment for `analyze_domain`'s
+  // conditional-Google-call caveat and the `transformSuccess` hook.
+  find_seo_opportunities: {
+    source: "search-console",
+    schema: publishedSchemas.findSeoOpportunitiesResultSchema,
+    timeoutMs: 27_000,
+    callsGoogleUpstream: true,
+    freshnessDate: fromRequestEndDate,
+    effectiveCriteria: (args) =>
+      resolveEffectiveCriteria("find_seo_opportunities", args),
+  },
+  find_keyword_cannibalization: {
+    source: "search-console",
+    schema: publishedSchemas.findKeywordCannibalizationResultSchema,
+    timeoutMs: 27_000,
+    callsGoogleUpstream: true,
+    freshnessDate: fromRequestEndDate,
+    effectiveCriteria: (args) =>
+      resolveEffectiveCriteria("find_keyword_cannibalization", args),
+  },
+  map_keywords_to_pages: {
+    source: "search-console",
+    schema: publishedSchemas.mapKeywordsToPagesResultSchema,
+    timeoutMs: 27_000,
+    callsGoogleUpstream: true,
+    freshnessDate: fromRequestEndDate,
+    effectiveCriteria: (args) =>
+      resolveEffectiveCriteria("map_keywords_to_pages", args),
+  },
+  find_content_gaps: {
+    source: "search-console",
+    schema: publishedSchemas.findContentGapsResultSchema,
+    timeoutMs: 27_000,
+    callsGoogleUpstream: true,
+    freshnessDate: fromRequestEndDate,
+    effectiveCriteria: (args) =>
+      resolveEffectiveCriteria("find_content_gaps", args),
+  },
+  analyze_domain: {
+    source: "search-console",
+    schema: publishedSchemas.domainReportSchema,
+    // Above the combined worst-case crawl (~40s) + GSC enrichment
+    // (15s + 10s) budget with generous margin — see `timeout.ts`'s doc
+    // comment.
+    timeoutMs: 90_000,
+    callsGoogleUpstream: true,
+    freshnessDate: fromRequestEndDate,
+    effectiveCriteria: (args) =>
+      resolveEffectiveCriteria("analyze_domain", args),
+    transformSuccess: classifyDomainReportGscError,
   },
 } satisfies Record<string, AuthenticatedRouteDefinition>;
 

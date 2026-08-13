@@ -44,6 +44,11 @@ export interface CrawlFormProps {
   ) => void;
   /** True while a crawl request is in flight — disables re-submission. */
   readonly disabled: boolean;
+  /** `seo-intelligence-view`'s (PR10) drill-down (task 10.11) pre-fill —
+   * consumed once as this component's own `url` state initializer, never
+   * re-applied on a later re-render, matching the mount-time-only
+   * discipline `PageReportContainer`'s `initialUrl` prop establishes. */
+  readonly initialUrl?: string;
 }
 
 function isAtMaximum(limit: number, concurrency: number): boolean {
@@ -52,8 +57,8 @@ function isAtMaximum(limit: number, concurrency: number): boolean {
   );
 }
 
-export function CrawlForm({ onSubmit, disabled }: CrawlFormProps) {
-  const [url, setUrl] = useState("");
+export function CrawlForm({ onSubmit, disabled, initialUrl }: CrawlFormProps) {
+  const [url, setUrl] = useState(() => initialUrl ?? "");
   const [limit, setLimit] = useState(5);
   const [concurrency, setConcurrency] = useState(2);
   const [validationError, setValidationError] = useState<string | null>(null);

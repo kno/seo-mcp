@@ -18,7 +18,16 @@ describe("TOOL_TIMEOUT_MS", () => {
       get_keyword_metrics: 32000,
       discover_keywords: 32000,
       cluster_keywords: 10000,
+      find_seo_opportunities: 27000,
+      find_keyword_cannibalization: 27000,
+      map_keywords_to_pages: 27000,
+      find_content_gaps: 27000,
+      analyze_domain: 90000,
     });
+  });
+
+  it("gives analyze_domain a timeout above its combined worst-case crawl + GSC enrichment budget", () => {
+    expect(TOOL_TIMEOUT_MS.analyze_domain).toBeGreaterThan(15_000 + 10_000);
   });
 
   it("gives search_console_query a timeout above gscTimeoutMs + googleTokenTimeoutMs (15s + 10s), per design.md", () => {

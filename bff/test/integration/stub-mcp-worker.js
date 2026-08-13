@@ -276,6 +276,106 @@ const TOOL_RESULTS = {
       },
     ],
   },
+  find_seo_opportunities: {
+    siteUrl: "https://example.com",
+    startDate: "2026-07-01",
+    endDate: "2026-07-28",
+    count: 1,
+    opportunities: [
+      {
+        type: "low_ctr",
+        query: "seo mcp",
+        page: "/",
+        impressions: 500,
+        currentPosition: 4.2,
+        impact: 500,
+        effort: 1,
+        priorityScore: 500,
+        recommendation: "Rewrite title/meta description to improve CTR.",
+      },
+    ],
+  },
+  find_keyword_cannibalization: {
+    siteUrl: "https://example.com",
+    startDate: "2026-07-01",
+    endDate: "2026-07-28",
+    count: 1,
+    groups: [
+      {
+        query: "seo mcp",
+        pageCount: 2,
+        totalImpressions: 300,
+        totalClicks: 20,
+        pages: [
+          { page: "/a", clicks: 12, impressions: 200, position: 5.1 },
+          { page: "/b", clicks: 8, impressions: 100, position: 8.4 },
+        ],
+      },
+    ],
+  },
+  map_keywords_to_pages: {
+    siteUrl: "https://example.com",
+    startDate: "2026-07-01",
+    endDate: "2026-07-28",
+    count: 1,
+    pages: [
+      {
+        page: "/",
+        queryCount: 1,
+        totalClicks: 10,
+        totalImpressions: 100,
+        topQueries: [
+          { query: "seo mcp", clicks: 10, impressions: 100, position: 5.2 },
+        ],
+      },
+    ],
+  },
+  find_content_gaps: {
+    siteUrl: "https://example.com",
+    startDate: "2026-07-01",
+    endDate: "2026-07-28",
+    count: 1,
+    gaps: [
+      {
+        query: "seo mcp gap",
+        page: "/gap",
+        impressions: 50,
+        clicks: 0,
+        position: 25,
+      },
+    ],
+  },
+  analyze_domain: {
+    url: "https://example.com",
+    crawl: {
+      sitemapFound: true,
+      crawled: 1,
+      failed: 0,
+      issueCounts: {},
+      summary: {
+        pagesAnalyzed: 1,
+        duplicateTitles: [],
+        duplicateDescriptions: [],
+        missingH1: { count: 0, sample: [] },
+        multipleH1: { count: 0, sample: [] },
+        thinContent: { count: 0, sample: [] },
+        nonIndexable: { count: 0, sample: [] },
+        imagesMissingAlt: { pages: 0, images: 0 },
+      },
+      crawlPolicy: {
+        robotsUrl: "https://example.com/robots.txt",
+        robotsFound: true,
+        userAgent: "seo-mcp",
+        sitemapsDeclared: [],
+        disallowedSkipped: { count: 0, sample: [] },
+      },
+      linkGraph: {
+        crawledPages: 1,
+        orphanPages: { count: 0, sample: [] },
+        topLinkedPages: [],
+      },
+    },
+  },
 };
 
 const DECOY_CREDENTIAL = "DECOY_REFRESH_TOKEN_xyz789";
@@ -292,6 +392,18 @@ const GSC_ERROR_TEXTS = {
 const ADS_ERROR_TEXTS = {
   "simulate-ads-not-configured": "Google Ads developer token is not configured",
 };
+
+/**
+ * `seo-intelligence-view` (task 10.9, threat row g): `analyze_domain` is
+ * the ONE authenticated tool where an upstream Google failure rides an
+ * otherwise-SUCCESSFUL `structuredContent` payload instead of an `isError`
+ * result — `gscError` is a raw `Error.message` on a 200-OK `DomainReport`
+ * (`src/seo/domain-report.ts#analyzeDomain`). This trigger, read from the
+ * `gscProperty` argument, simulates exactly that shape so the decoy-sweep
+ * has a real success-payload leak path to assert against, not only an
+ * `isError` one.
+ */
+const DOMAIN_ENRICHMENT_FAILURE_TRIGGER = "simulate-domain-enrichment-failure";
 
 export default {
   async fetch(request) {
@@ -312,6 +424,25 @@ export default {
       ...(body?.params?.arguments?.seedKeywords ?? []),
       body?.params?.arguments?.seedUrl ?? "",
     ].join(" ");
+
+    const argGscProperty = body?.params?.arguments?.gscProperty ?? "";
+    if (
+      toolName === "analyze_domain" &&
+      argGscProperty.includes(DOMAIN_ENRICHMENT_FAILURE_TRIGGER)
+    ) {
+      const baseReport = TOOL_RESULTS.analyze_domain;
+      return Response.json({
+        jsonrpc: "2.0",
+        id: "stub",
+        result: {
+          content: [{ type: "text", text: "ok" }],
+          structuredContent: {
+            ...baseReport,
+            gscError: `OAuth token exchange failed: invalid_grant ${DECOY_CREDENTIAL}`,
+          },
+        },
+      });
+    }
 
     for (const [trigger, text] of Object.entries(GSC_ERROR_TEXTS)) {
       if (argSiteUrl.includes(trigger)) {

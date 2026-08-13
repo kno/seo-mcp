@@ -191,33 +191,33 @@ Record<string, number>`; rejects a payload exceeding `limit`
 
 ## Phase 10: `seo-intelligence-view` UI (PR10) — `seo-intelligence-view`
 
-- [ ] 10.1 RED BFF echoes **effective** request criteria (omitted inputs resolved against the documented
+- [x] 10.1 RED BFF echoes **effective** request criteria (omitted inputs resolved against the documented
       default table: limit 10/50/100/100, `minPosition` 21, `minImpressions` 10, `topQueriesPerPage` 10) with
       `basis: "request"`, textually distinct from a tool-reported `criteria`
-- [ ] 10.2 RED bound label at `count === effectiveLimit` for a request that **omitted** the limit; no label
+- [x] 10.2 RED bound label at `count === effectiveLimit` for a request that **omitted** the limit; no label
       below it (threat row h)
-- [ ] 10.3 RED the "derived from at most 250 Search Console rows" caveat renders unconditionally for all
+- [x] 10.3 RED the "derived from at most 250 Search Console rows" caveat renders unconditionally for all
       five tools — never inferred from a field, because none exists
-- [ ] 10.4 RED every opportunity renders `type` **and** `recommendation`; different `type` values are visibly
+- [x] 10.4 RED every opportunity renders `type` **and** `recommendation`; different `type` values are visibly
       distinct; no "unexplained recommendation" fallback exists
-- [ ] 10.5 RED `impact`, `effort` and `priorityScore` all render together, including when sorted by
+- [x] 10.5 RED `impact`, `effort` and `priorityScore` all render together, including when sorted by
       `priorityScore`; `effort` is not presented as fine-grained or on an invented 0-100 scale
-- [ ] 10.6 RED every `CannibalGroup.pages` entry renders URL + clicks + impressions + position; when
+- [x] 10.6 RED every `CannibalGroup.pages` entry renders URL + clicks + impressions + position; when
       `pages.length < pageCount` the subset is labelled as bounded
-- [ ] 10.7 RED the generic `striking_distance` "internal links" string is **not** presented as link-graph
+- [x] 10.7 RED the generic `striking_distance` "internal links" string is **not** presented as link-graph
       aware; no relationship to `linkGraph`/`orphanPages`/`topLinkedPages` is fabricated
-- [ ] 10.8 RED `analyze_domain`'s three enrichment states render distinctly: not requested / `search`
+- [x] 10.8 RED `analyze_domain`'s three enrichment states render distinctly: not requested / `search`
       present / classified enrichment failure — (a) never renders like (c)
-- [ ] 10.9 RED nested `gscError` is classified and its raw text discarded: a decoy credential in the
+- [x] 10.9 RED nested `gscError` is classified and its raw text discarded: a decoy credential in the
       enrichment failure message appears in no response body, cache value, export or log line, and the
       envelope carries a code instead of the original string (threat row g)
-- [ ] 10.10 GREEN `bff/src/authenticated/criteria.ts` (effective-criteria resolver) + `gscError`
+- [x] 10.10 GREEN `bff/src/authenticated/criteria.ts` (effective-criteria resolver) + `gscError`
       classification in the `analyze_domain` route; enrichment-failed reports cached at the `open` TTL
-- [ ] 10.11 RED/GREEN drill-down: page-referencing findings open `page-report-view`; `analyze_domain`'s
+- [x] 10.11 RED/GREEN drill-down: page-referencing findings open `page-report-view`; `analyze_domain`'s
       `crawl` opens `site-crawl-view`; a `cannibalization` opportunity (`page: null`) offers **no** page
       drill-down
-- [ ] 10.12 GREEN `bff/ui/seo-intelligence/*` reusing Phase 4 freshness and bound components
-- [ ] 10.13 PROOF a11y + keyboard pass; `pnpm test -- seo-intelligence`
+- [x] 10.12 GREEN `bff/ui/seo-intelligence/*` reusing Phase 4 freshness and bound components
+- [x] 10.13 PROOF a11y + keyboard pass; `pnpm test -- seo-intelligence`
 
 ## Phase 11: Crawl-snapshot schemas + `history-comparison-view` (PR11) — `history-comparison-view`
 
