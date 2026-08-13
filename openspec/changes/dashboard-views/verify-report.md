@@ -947,3 +947,245 @@ None CRITICAL. None WARNING for this PR's own scope.
   fetch URL containing the key. That description is now stale relative to the actual code and tests (which
   correctly implement and test the secure POST transport). Recommend updating or superseding that memory
   entry to avoid confusing a future reader who trusts the apply-progress record over the code.
+
+# Verify Report — dashboard-views, Phase 7 / PR7 (final)
+
+Scope: Phase 7 (tasks 7.1-7.2, commit `cb33252` on `feat/dashboard-views-build-wiring`) — the final phase of
+`dashboard-views`. Adds `result-export` (`export/json.ts`, `export/csv.ts` + `CSV_SHAPES`) and
+`quota-visibility` (`molecules/HeadroomIndicator.tsx`, `molecules/FreshnessBadge.tsx`,
+`containers/UsageContainer.tsx`) consuming the already-archived, already-verified `GET /api/usage` route
+from `dashboard-bff-foundations`. All 20 tasks across Phases 1-7 are now `[x]` — no phase remains `[ ]`.
+
+## Verdict: PASS
+
+## Command evidence (executed fresh, this session)
+
+- `pnpm test` -> 94 test files, 817 tests passed, 0 failed. Matches the apply session's own reported count.
+- `pnpm typecheck` -> `tsc --noEmit && tsc --noEmit -p bff/ui`, clean, exit 0.
+- `pnpm format:check` -> `prettier --check .`, clean — "All matched files use Prettier code style!".
+
+## Task completion
+
+`grep -c '\[x\]' tasks.md` -> 20. `grep -c '\[ \]' tasks.md` -> 0. All 20 tasks across Phases 1-7 are
+complete. No unchecked task anywhere in the file.
+
+## Security check 1 — no secret in export (maximum scrutiny)
+
+`grep -n "apiKey" bff/ui/src/export/json.ts bff/ui/src/export/csv.ts` -> zero matches (grep exit 1).
+
+Structural check on both export functions' signatures (not just a name-grep, per the assignment's own
+warning that a signature accepting raw request/form state would be a latent leak vector even with zero
+current references):
+
+- `buildJsonExport<T>(input: BuildJsonExportInput<T>)` — `BuildJsonExportInput` is `{ tool, result: T,
+cacheStatus, resultAge, bounds, omittedFields?, now? }`. `result` is typed `T`, always instantiated at the
+  call site with the tool's own published RESULT type (`PageAnalysis` / `SiteCrawlResult` /
+  `LinkCheckResult` / `PageSpeedResult`), never a request/form-input shape. No field in the input type
+  carries anything resembling request/form state.
+- `serializeCsv<T>(shape: CsvShape<T>, result: T, options: SerializeCsvOptions = {})` — `result` is likewise
+  typed `T` (the same four result types via `CSV_SHAPES`), `options` carries only `bounds?`. Neither function
+  accepts the original request/form object at all — there is no code path through which a secret an input
+  form once held (e.g. a PageSpeed `apiKey` value typed into `PageSpeedForm`) could reach either exporter,
+  because neither exporter's parameter list has a slot for it.
+
+`json.test.ts` and `csv.test.ts` both carry a "no secret material" describe block asserting the serialized
+output does not contain a distinctive PageSpeed API-key value nor `MCP_AUTH_TOKEN` — ran as part of the full
+suite, passing. **Verdict: no path found by which a secret could reach an export, at either the
+by-reference-data level or the function-signature level.**
+
+## Security check 2 — the `fetchUsage`-on-mount exception (verified it does not reopen no-polling)
+
+Read `bff/ui/src/no-polling.test.ts` in full. Its third structural check scans for a `useEffect(...)` block
+whose body contains the literal substring `requestTool(` (a regex matched against each block, then
+`block.includes("requestTool(")`) — it targets `requestTool(` specifically, not a broader pattern that
+happens to also exempt `fetchUsage` by accident. `fetchUsage` is a structurally distinct exported function in
+`data/client.ts` from `requestTool` (confirmed by reading both signatures) and never appears as a substring
+match for the banned token.
+
+Read `UsageContainer.tsx` in full:
+
+- (a) `useEffect(() => { void load(); return () => controllerRef.current?.abort(); }, [])` — empty dependency
+  array, fires once on mount, never on re-render (confirmed: no other prop/state feeds this effect).
+- (b) Grepped the file: zero occurrences of `setInterval`/`setTimeout`, and no other effect or listener in
+  the file — `load()` is invoked from exactly two places, the mount effect and the button's `onClick`.
+- (c) A manual "Refresh usage" button exists, satisfying the explicit-action case beyond the initial mount.
+
+This exception is narrowly scoped for two independent reasons, not just one: `fetchUsage` calls the distinct
+`GET /api/usage` route (never `/api/tools/*`, confirmed by reading `data/client.ts`'s `fetchUsage`
+implementation), and `/api/usage` spends no part of the shared 60-req/60s MCP rate-limit bucket (confirmed by
+reading `bff/src/usage.ts` and `bff/src/router.ts:223-225`, which serves this route via
+`Response.json(getUsageSnapshot())` before any `authenticate()`-gated tool dispatch or `SEO_MCP.fetch` call).
+Even if a future container copied this exact pattern against a real tool-calling function, the no-polling
+scanner's `requestTool(`-specific check would still catch it, because any real tool call must go through
+`requestTool` to reach `/api/tools/*` (confirmed: no other exported function in `data/client.ts` issues a
+tool-route fetch). **No exploitable loophole found: this exception cannot be used to bypass no-polling for
+an actual tool call, because doing so would require routing through `requestTool`, which remains banned
+inside `useEffect` regardless of this exception.**
+
+## Truncation/sample marker derivation — genuinely from real result shapes
+
+Re-read `SiteCrawlResult`/`LinkCheckResult`'s actual field definitions (`src/types/index.ts`,
+`src/crawl/site.ts`) against `collectSiteCrawlBounds`/`collectLinkCheckBounds`/`collectBounds` in
+`bff/ui/src/data/bounds.ts`. Every derivation traces to a real field and a real `LIMITS` constant imported
+from `../../../../src/config` (never a hardcoded literal): `outputBytes` vs. `LIMITS.maxSiteOutputBytes`,
+all four `DomainCategory` fields (`missingH1`/`multipleH1`/`thinContent`/`nonIndexable`), `disallowedSkipped`,
+`orphanPages`, each `DuplicateGroup.sample`, the four capped-list-with-no-total fields
+(`sitemapsDeclared`/`duplicateTitles`/`duplicateDescriptions`/`topLinkedPages`), and `check_links.checked`.
+`crawl_page`/`analyze_pagespeed` correctly return `[]` (no known bound on those single-record result shapes).
+
+Negative-case test confirmed present (not just the positive case): `bounds.test.ts` and both
+`json.test.ts`/`csv.test.ts` each carry an explicit "carries an empty bounds array (no fabricated marker) for
+a complete result" / "includes no bound comment line for a complete, unbounded result" test, distinct from
+the positive "carries the caller-supplied bounds for a truncated result" case. Ran both directions as part of
+the full suite — both pass.
+
+## CSV determinism — golden/stability, byte-identical, order not derived from key iteration
+
+`csv.test.ts`'s golden/stability describe block: `serializeCsv(CSV_SHAPES.crawl_page, PAGE_ANALYSIS)` called
+twice, asserted `toBe` (not `toEqual`) — byte-identical string equality. A second test repeats this for
+`crawl_site` and additionally asserts the header line itself is `toBe`-identical across both calls. A third
+test ("matches a recorded golden output for a known crawl_site fixture") asserts three specific lines
+(header row, an analyzed-page row via `toContain`, and a failed-page row via full `toBe`) against a literal
+recorded string — a genuine golden comparison, not a self-referential stability check alone.
+
+Column order is NOT derived from `Object.keys()` iteration order on a plain object: `CSV_SHAPES`'s four
+`CsvShape<T>.columns` arrays (`crawlPageShape`, `crawlSiteShape`, `checkLinksShape`, `analyzePagespeedShape`)
+are hand-authored, hardcoded `readonly string[]` literals — confirmed by direct source read — with `rows()`
+building each output row by explicit, positional `cell(result.<field>)` calls in the same fixed order as
+`columns`, never any object-key enumeration. Column order is therefore stable by construction, independent
+of insertion order or engine iteration behavior.
+
+## HeadroomIndicator — never authoritative (confirmed, unconditional)
+
+Read `HeadroomIndicator.tsx` in full: a single unconditional function body renders exactly one headline
+paragraph ("{callCount} calls observed in the last {windowElapsedSeconds}s of a {windowSeconds}s window
+(estimate)") and one details/summary block exposing the BFF's own `note` text. There is no prop, no state,
+and no conditional branch anywhere in the component — the word "(estimate)" and the details block are both
+unconditionally present in every render path, so neither is droppable by any prop/state combination. No
+field or text anywhere in the rendered output uses the word "remaining" (the only place "remaining" could
+legitimately appear — inside the BFF's own `note` string, explaining what the estimate is NOT — is
+server-authored text rendered verbatim, not a UI-authored claim). `HeadroomIndicator.test.tsx`'s
+headline-scoped assertion (via `.closest("p")`) checks the primary figure specifically for "estimate", never
+"remaining". **Confirmed: the headline label is unconditional and the component structurally cannot render
+the figure as an authoritative remaining-count, since `UsageSnapshot` itself (the real backend type,
+`bff/src/usage.ts`) carries no "remaining" field to render in the first place.**
+
+## Regression / scope check
+
+`git show --stat cb33252` (PR7's own commit, isolated): 17 files changed, 1745 insertions / 3 deletions, all
+under `bff/ui/src/{containers,data,export,molecules}/**` plus `openspec/changes/dashboard-views/tasks.md`
+(+4/-3, the task checkboxes). `git diff --stat 4a2642b..cb33252 -- src/http src/security wrangler.jsonc
+src/schemas src/types bff/wrangler.jsonc bff/src` returns no output — zero drift into any frozen file,
+confirming Phase 7 did NOT touch `bff/src/router.ts` again (Phase 6's security fix to that file, already
+closed with no residual path per the prior verify pass, remains untouched and unrevisited). No Google/Ads/D1
+path appears anywhere in the diff.
+
+## Holistic spec compliance — all 7 specs, all phases
+
+| Spec              | Reqs | Verdict | Evidence (phase/file)                                                                                                                                                                     |
+| ----------------- | ---- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| dashboard-shell   | 6    | PASS    | Phase 2 (PR2) — data/errors.ts, StateRegion.tsx, no-polling.test.ts, data/client.ts's UserIntent. Verified in the PR2 pass with three break-it-to-prove-it experiments.                   |
+| page-report-view  | 6    | PASS    | Phase 3 (PR3) — OnPageCard/HeadingsPanel/OpenGraphPanel/JsonLdPanel/IssuesList/PageReportContainer. Verified in the PR3 pass, all 13 issue codes + unknown + failure-not-empty confirmed. |
+| broken-links-view | 5    | PASS    | Phase 4 (PR4, two WARNINGs fixed in 9e11f6b) — BrokenLinksContainer/BrokenLinksPanel/ProbeRow. Both findings closed before Phase 5.                                                       |
+| site-crawl-view   | 7    | PASS    | Phase 5 (PR5) — CrawlForm/DomainSummaryPanel/CrawlPolicyPanel/LinkGraphPanel/BarChart/PerPageTable/SiteCrawlContainer. All 19 scenarios verified, clean PASS.                             |
+| pagespeed-view    | 6    | PASS    | Phase 6 (PR6) — PageSpeedForm/ScorePanel/LabMetricsPanel/FieldDataPanel/OpportunitiesTable/ScoreGauge, plus the mid-PR apiKey GET-to-POST security fix. No residual insecure path found.  |
+| result-export     | 5    | PASS    | Phase 7 (this pass) — export/json.ts, export/csv.ts + CSV_SHAPES, ExportMenu.tsx. All 5 requirements confirmed above.                                                                     |
+| quota-visibility  | 3    | PASS    | Phase 7 (this pass) — HeadroomIndicator.tsx, FreshnessBadge.tsx, UsageContainer.tsx consuming the archived GET /api/usage. All 3 requirements confirmed above.                            |
+
+All 7 specs, 38 requirements total, are satisfied by some phase's implementation with passing runtime
+evidence, verified fresh in this session (Phase 7's own claims) or cross-checked against the prior phase's
+own verify report (Phases 1-6, not re-litigated wholesale but not blindly trusted either — Phase 7's fresh
+pnpm test/typecheck/format:check run covers the entire current worktree state, all 94 test files, not just
+Phase 7's own new files, so a regression in an earlier phase's tests would have surfaced here too).
+
+## Carried-forward items — resolved status
+
+- PR1's missing /api/* 404 guard test (SUGGESTION, carried since Phase 1): incidentally resolved, not by
+  this phase but by re-inspection this pass. bff/test/router.test.ts's pre-existing "returns 404 for an
+  unknown tool route without calling SEO_MCP" test (present since before PR1 even added the assets binding)
+  issues GET /api/tools/does-not-exist, which — per router.ts's sequential if-chain — falls through every
+  named route and hits exactly the url.pathname.startsWith("/api/") guard at line 292-293, returning 404
+  before ever reaching env.ASSETS.fetch. This does NOT require the ASSETS binding to be set, contrary to the
+  PR1 verify report's stated reasoning ("fakeEnv()'s ASSETS is unset, so it cannot reach this branch" — that
+  reasoning was itself mistaken, since the guard returns before ASSETS is ever touched). Verified by direct
+  experiment this pass: temporarily disabled the guard and re-ran this exact test — it failed with
+  "TypeError: Cannot read properties of undefined (reading 'fetch')" at router.ts:303 (the ASSETS.fetch
+  fallthrough), exactly the failure mode expected if the guard were removed. Restored the file immediately;
+  git status --short confirmed clean, and the full pnpm test suite re-ran 817/817 passing afterward. The gap
+  identified in PR1 does not actually exist — the guard was always covered, and this report corrects that
+  prior finding rather than carrying it forward as still-open.
+- PR2's design.md route-contract (POST vs. real GET) and secret-transport (query string vs. "POST body
+  only") documentation staleness (WARNING, carried since Phase 2): still open. design.md was not edited in
+  Phase 7 (confirmed: not in cb33252's file list) and the underlying contradiction — the design document
+  illustrating a stale transport shape the real, frozen router does not use — remains uncorrected. This is a
+  documentation-only gap (no spec requirement names the HTTP method or the exact secret-transport document
+  wording), already superseded in practice by Phase 6's actual fix (the real transport IS POST with apiKey
+  in the JSON body, matching the spirit of design.md's stated intent even though the illustrated diagram is
+  stale). Recommend a documentation-only follow-up to correct design.md before archiving, or accept it as a
+  known, non-blocking documentation debt at archive time.
+
+## Issues
+
+None CRITICAL.
+
+None WARNING newly introduced by Phase 7's own implementation.
+
+WARNING (carried forward, unresolved, documentation-only, non-blocking): design.md's Error Presentation
+and Secret Handling sections still illustrate a stale POST /api/tools/{tool} generic contract and a
+"POST body only" secret-transport claim that do not match the real, frozen router (GET with query
+parameters for all routes except the one POST /api/tools/analyze_pagespeed exception). No spec requirement
+is affected; this is a design-document accuracy issue only.
+
+SUGGESTION: none new this pass. (The PR1 404-guard SUGGESTION is resolved, not merely carried — see above.)
+
+## Files inspected
+
+bff/ui/src/export/{json,csv}.ts and their .test.ts files, bff/ui/src/data/bounds.ts and bounds.test.ts,
+bff/ui/src/no-polling.test.ts, bff/ui/src/containers/UsageContainer.tsx and its test, bff/ui/src/molecules/
+HeadroomIndicator.tsx and its test, bff/src/router.ts (full re-read, plus a break-it-to-prove-it experiment
+on the /api/* guard, reverted), bff/test/router.test.ts, bff/src/usage.ts (read-only, confirming /api/usage
+bypasses the rate-limit-consuming tool-dispatch path), openspec/changes/dashboard-views/{tasks.md,
+specs/{result-export,quota-visibility}/spec.md}, plus the requirement counts for all 7 specs and the full
+verify-report.md history for Phases 1-6, and fresh pnpm test/pnpm typecheck/pnpm format:check execution.
+
+## Next recommended
+
+sdd-archive. This is the final phase; all 20 tasks are complete, all 38 requirements across the 7 specs are
+satisfied with passing runtime evidence (verified fresh this session for Phase 7, cross-checked against
+prior phases' own verify passes for Phases 1-6), and zero CRITICAL issues exist anywhere in the change. The
+only open item is one documentation-only WARNING (design.md staleness) that affects no spec requirement and
+does not block archiving.
+
+## Risks
+
+None blocking archive. One documentation-only WARNING remains open (design.md route-contract/secret-
+transport staleness, carried since Phase 2, unaffected by and not worsened by Phase 7) — recommend a small
+follow-up to correct design.md's illustrations to match the shipped, verified transport, but this does not
+block sdd-archive for dashboard-views.
+
+## Overall change verdict — dashboard-views (all 7 phases)
+
+| Phase                                             | PR  | Commit                     | Verdict                                                  |
+| ------------------------------------------------- | --- | -------------------------- | -------------------------------------------------------- |
+| 1 — Build Wiring                                  | PR1 | f752133                    | PASS WITH WARNINGS                                       |
+| 2 — Shell                                         | PR2 | da55a7d                    | PASS WITH WARNINGS                                       |
+| 3 — Page Report                                   | PR3 | af5952a                    | PASS                                                     |
+| 4 — Broken Links                                  | PR4 | 62ce3e6 (fixed in 9e11f6b) | PASS WITH WARNINGS (both findings closed before Phase 5) |
+| 5 — Site Crawl                                    | PR5 | a767464                    | PASS                                                     |
+| 6 — PageSpeed (+ apiKey GET-to-POST security fix) | PR6 | ef7ac10                    | PASS                                                     |
+| 7 — Export & Quota (final)                        | PR7 | cb33252                    | PASS                                                     |
+
+Full-change verdict: PASS WITH ONE OPEN DOCUMENTATION-ONLY WARNING — READY FOR ARCHIVE.
+
+All 20 tasks complete ([x]) across all 7 phases; 0 remain [ ]. All 38 requirements across the 7 specs
+(dashboard-shell, page-report-view, broken-links-view, site-crawl-view, pagespeed-view, result-export,
+quota-visibility) are satisfied with passing runtime evidence — verified fresh in this session (pnpm test
+817/817, pnpm typecheck clean, pnpm format:check clean, on the actual current worktree state, not trusted
+from prior reports alone). The security-sensitive claims of Phase 6 (apiKey transport) and Phase 7 (no
+secret in export, fetchUsage-on-mount exception) were both re-verified under maximum skepticism in their
+respective passes with real break-it/reproduce-it experiments, not just source inspection — no residual
+leak path or no-polling bypass was found in either case. The /api/* 404 guard gap flagged in Phase 1 is now
+confirmed resolved (the guard was always covered by a pre-existing test; the original finding was itself
+mistaken). One documentation-only WARNING remains open (design.md's stale route-contract/secret-transport
+illustrations, carried since Phase 2) — it affects no spec requirement and does not block archive. Recommend
+a small follow-up change to correct design.md before or shortly after archiving dashboard-views.
