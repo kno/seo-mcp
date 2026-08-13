@@ -18,7 +18,7 @@ phases:
   design: done
   tasks: done
   apply: done
-  verify: pending
+  verify: done
   archive: pending
 
 dependsOn:
