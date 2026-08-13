@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Bound, Cardinality } from "./bounds";
-import { isBounded } from "./bounds";
+import { describeProbeSet, isBounded } from "./bounds";
 
 describe("Cardinality discrimination", () => {
   it("distinguishes 'none' from 'bounded' via isBounded, not raw counts", () => {
@@ -44,5 +44,29 @@ describe("Cardinality discrimination", () => {
     } else {
       throw new Error("expected isBounded to narrow to the bounded branch");
     }
+  });
+});
+
+describe("describeProbeSet", () => {
+  it("returns 'none' when zero links were checked", () => {
+    expect(describeProbeSet(0, 50)).toEqual({ state: "none" });
+  });
+
+  it("returns 'bounded' naming the limit when checked equals the server's cap", () => {
+    const result = describeProbeSet(50, 50);
+    expect(result.state).toBe("bounded");
+    if (result.state === "bounded") {
+      expect(result.bound).toEqual({
+        kind: "probe_cap",
+        scope: "checked",
+        limitName: "maxLinkChecks",
+        limitValue: 50,
+        shown: 50,
+      });
+    }
+  });
+
+  it("returns 'complete' (never bounded) when checked is below the cap", () => {
+    expect(describeProbeSet(12, 50)).toEqual({ state: "complete", total: 12 });
   });
 });

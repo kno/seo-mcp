@@ -59,8 +59,8 @@ Chain strategy: stacked-to-main
 
 ## Phase 4: Broken Links (PR4)
 
-- [ ] 4.1 RED: no fetch on page-report load; exactly one fetch on explicit action; all 4 counts visible; broken-vs-error distinct; probe-cap-at-50 badge; platform failure ≠ empty success.
-- [ ] 4.2 GREEN: `BrokenLinksPanel`, `ProbeRow`, `BrokenLinksContainer` (button-only trigger, no auto-effect).
+- [x] 4.1 RED: no fetch on page-report load; exactly one fetch on explicit action; all 4 counts visible; broken-vs-error distinct; probe-cap-at-50 badge; platform failure ≠ empty success.
+- [x] 4.2 GREEN: `BrokenLinksPanel`, `ProbeRow`, `BrokenLinksContainer` (button-only trigger, no auto-effect).
 
 ## Phase 5: Site Crawl (PR5)
 

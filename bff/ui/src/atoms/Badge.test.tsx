@@ -26,4 +26,21 @@ describe("Badge", () => {
     expect(info.dataset.variant).toBe("info");
     expect(unmapped.dataset.variant).toBe("unmapped");
   });
+
+  it("renders visually distinct markers for the broken and error probe-state variants", () => {
+    render(
+      <>
+        <Badge variant="broken">404</Badge>
+        <Badge variant="error">Link probe timed out</Badge>
+      </>,
+    );
+
+    const broken = screen.getByTestId("badge-broken");
+    const error = screen.getByTestId("badge-error");
+
+    expect(broken.dataset.variant).toBe("broken");
+    expect(error.dataset.variant).toBe("error");
+    // Broken and error must not collapse into the same variant marker.
+    expect(broken.dataset.variant).not.toBe(error.dataset.variant);
+  });
 });

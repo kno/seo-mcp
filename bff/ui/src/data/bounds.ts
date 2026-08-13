@@ -41,3 +41,30 @@ export function isBounded(
 ): cardinality is { readonly state: "bounded"; readonly bound: Bound } {
   return cardinality.state === "bounded";
 }
+
+/**
+ * `broken-links-view`'s "probe-cap-at-50" derivation — the first real
+ * per-tool bound derivation to land, per `design.md`'s "Bound-Versus-Empty
+ * Mechanism" (`LinkCheckResult.checked` capped at `maxLinkChecks`, 50,
+ * `src/config.ts:24`). `checked === limit` yields `"bounded"` naming the
+ * limit explicitly, so the probe set can never present as exhaustive by
+ * omission; `checked === 0` yields `"none"`; anything below the limit is
+ * `"complete"`, so "no bound indicator below the bound" holds by
+ * construction rather than by a call-site comparison.
+ */
+export function describeProbeSet(checked: number, limit: number): Cardinality {
+  if (checked === 0) return { state: "none" };
+  if (checked === limit) {
+    return {
+      state: "bounded",
+      bound: {
+        kind: "probe_cap",
+        scope: "checked",
+        limitName: "maxLinkChecks",
+        limitValue: limit,
+        shown: checked,
+      },
+    };
+  }
+  return { state: "complete", total: checked };
+}
