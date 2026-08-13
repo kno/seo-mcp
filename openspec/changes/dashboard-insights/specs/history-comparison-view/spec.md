@@ -61,7 +61,7 @@ is recorded as a needed follow-up below rather than tasked in this change.
 
 ### Verified scheduling gap — the cron covers GSC snapshots only, not crawl snapshots
 
-`src/scheduled.ts`'s `runScheduledSnapshots` (exercised by `test/scheduled.test.ts`) captures
+`src/scheduled.ts`'s `runScheduledSnapshots` (exercised by `test/integration/scheduled.test.ts`) captures
 one `snapshot_search_console`-equivalent write per site listed in `GSC_SNAPSHOT_PROPERTIES`, on a scheduled
 trigger. It does not call anything in the crawl-snapshot family. There is no scheduled/cron path for
 `snapshot_crawl` at all — every crawl snapshot must be triggered manually by a user or an external caller.
