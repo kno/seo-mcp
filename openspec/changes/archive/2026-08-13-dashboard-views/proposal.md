@@ -139,16 +139,16 @@ Must land before any view work starts, all from `dashboard-bff-foundations`:
 
 ## Success Criteria
 
-- [ ] Every view renders from the published result types; no hand-duplicated shape exists in `bff/ui/`.
-- [ ] No view issues an MCP request without an explicit user action; no timer or focus handler triggers a fetch.
-- [ ] `check_links` never runs as part of loading the page report.
-- [ ] Every one of the eleven `BffErrorCode` values renders a distinct, actionable state; none renders as empty.
-- [ ] `crawl_site` truncation, `check_links` probe bound, and every capped sample display a bound badge naming the limit.
-- [ ] `crawl_site` controls cannot submit `limit > 20` or `concurrency > 4`; defaults are 5 and 2.
-- [ ] The issues list covers all thirteen real codes emitted by `detectSeoIssues` with correct `warning`/`info` severity.
-- [ ] `MCP_AUTH_TOKEN` and any PageSpeed API key appear in no bundle, response, browser storage or log.
-- [ ] Static assets are unreachable without a valid gate session.
-- [ ] Every result view exports to JSON and CSV.
-- [ ] Result age, cache status and `retryAfter` are visible without opening devtools.
-- [ ] Automated accessibility checks pass on every view; keyboard-only navigation reaches every control.
-- [ ] `pnpm test` and `pnpm typecheck` pass, including BFF integration tests.
+- [x] Every view renders from the published result types; no hand-duplicated shape exists in `bff/ui/`.
+- [x] No view issues an MCP request without an explicit user action; no timer or focus handler triggers a fetch.
+- [x] `check_links` never runs as part of loading the page report.
+- [x] Every one of the eleven `BffErrorCode` values renders a distinct, actionable state; none renders as empty.
+- [x] `crawl_site` truncation, `check_links` probe bound, and every capped sample display a bound badge naming the limit.
+- [x] `crawl_site` controls cannot submit `limit > 20` or `concurrency > 4`; defaults are 5 and 2.
+- [x] The issues list covers all thirteen real codes emitted by `detectSeoIssues` with correct `warning`/`info` severity.
+- [x] `MCP_AUTH_TOKEN` and any PageSpeed API key appear in no bundle, response, browser storage or log.
+- [x] Static assets are unreachable without a valid gate session.
+- [x] Every result view exports to JSON and CSV.
+- [x] Result age, cache status and `retryAfter` are visible without opening devtools.
+- [x] Automated accessibility checks pass on every view; keyboard-only navigation reaches every control.
+- [x] `pnpm test` and `pnpm typecheck` pass, including BFF integration tests.
