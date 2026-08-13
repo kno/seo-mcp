@@ -2,9 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { Bound, Cardinality } from "./bounds";
 import {
   collectBounds,
+  collectDiffBounds,
+  collectOpportunityBounds,
   describeCappedList,
   describeCategory,
+  describeDiffBucket,
   describeGscRows,
+  describeOpportunityBound,
   describeOutputBytes,
   describeProbeSet,
   isBounded,
@@ -424,5 +428,111 @@ describe("collectBounds", () => {
 
   it("returns an empty array for search_console_query below the 250-row cap", () => {
     expect(collectBounds("search_console_query", { rowCount: 37 })).toEqual([]);
+  });
+});
+
+/**
+ * `gsc-insight-views` task 6.3 — the opportunity-tools bound reads
+ * `criteria.limit` (a value the SERVER echoed, possibly its own default),
+ * never a hardcoded constant, and never reports `"complete"` even below
+ * the bound (the undetectable pre-filter 250-row GSC pull cap).
+ */
+describe("describeOpportunityBound", () => {
+  it("is bounded when rowCount equals the echoed criteria.limit", () => {
+    const cardinality = describeOpportunityBound({
+      rowCount: 25,
+      criteria: { limit: 25, minImpressions: 1 },
+    });
+    expect(cardinality).toEqual({
+      state: "bounded",
+      bound: {
+        kind: "sample_cap",
+        scope: "rowCount",
+        limitName: "criteria.limit",
+        limitValue: 25,
+        shown: 25,
+      },
+    });
+  });
+
+  it("is none when rowCount is zero, distinct from below-the-bound", () => {
+    expect(
+      describeOpportunityBound({ rowCount: 0, criteria: { limit: 25 } }),
+    ).toEqual({ state: "none" });
+  });
+
+  it("is never 'complete' below the bound — the deeper 250-row pull cap is undetectable from the response", () => {
+    const cardinality = describeOpportunityBound({
+      rowCount: 3,
+      criteria: { limit: 25 },
+    });
+    expect(cardinality.state).toBe("unknown");
+    expect(cardinality.state).not.toBe("complete");
+  });
+
+  it("reads a different limit value when the server echoed a different default", () => {
+    // The same rowCount is bounded against one echoed limit and NOT
+    // bounded against a different one — proves the derivation reads
+    // criteria.limit, not a hardcoded constant.
+    expect(
+      describeOpportunityBound({ rowCount: 10, criteria: { limit: 10 } }).state,
+    ).toBe("bounded");
+    expect(
+      describeOpportunityBound({ rowCount: 10, criteria: { limit: 50 } }).state,
+    ).toBe("unknown");
+  });
+
+  it("collectOpportunityBounds wraps the bound for provenance, empty when not bounded", () => {
+    expect(
+      collectOpportunityBounds({ rowCount: 25, criteria: { limit: 25 } }),
+    ).toHaveLength(1);
+    expect(
+      collectOpportunityBounds({ rowCount: 3, criteria: { limit: 25 } }),
+    ).toEqual([]);
+  });
+});
+
+/**
+ * `gsc-insight-views` task 6.6 — each of the four `GscDiff` buckets labels
+ * its OWN bound independently; one bucket at `LIMITS.maxDiffRows` (100)
+ * MUST NOT imply another bucket is also at its cap.
+ */
+describe("describeDiffBucket / collectDiffBounds", () => {
+  it("is bounded when a bucket's length equals maxDiffRows", () => {
+    const bucket = new Array(100).fill({});
+    expect(describeDiffBucket(bucket, 100)).toEqual({
+      state: "bounded",
+      bound: {
+        kind: "sample_cap",
+        scope: "diff",
+        limitName: "maxDiffRows",
+        limitValue: 100,
+        shown: 100,
+      },
+    });
+  });
+
+  it("is complete (a real total) below the cap", () => {
+    expect(describeDiffBucket(new Array(3).fill({}), 100)).toEqual({
+      state: "complete",
+      total: 3,
+    });
+  });
+
+  it("is none for an empty bucket", () => {
+    expect(describeDiffBucket([], 100)).toEqual({ state: "none" });
+  });
+
+  it("collectDiffBounds derives each bucket independently — one bucket at the cap does not bound the others", () => {
+    const result = collectDiffBounds({
+      decayed: new Array(100).fill({}),
+      improved: [{}],
+      lost: [],
+      gained: new Array(100).fill({}),
+    });
+    expect(result.decayed.state).toBe("bounded");
+    expect(result.gained.state).toBe("bounded");
+    expect(result.improved.state).toBe("complete");
+    expect(result.lost.state).toBe("none");
   });
 });

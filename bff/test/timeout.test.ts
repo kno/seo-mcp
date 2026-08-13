@@ -10,6 +10,11 @@ describe("TOOL_TIMEOUT_MS", () => {
       crawl_site: 55000,
       check_links: 55000,
       search_console_query: 27000,
+      find_striking_distance_keywords: 27000,
+      find_low_ctr_opportunities: 27000,
+      snapshot_search_console: 28000,
+      list_search_console_snapshots: 10000,
+      compare_search_console: 10000,
     });
   });
 
@@ -17,6 +22,27 @@ describe("TOOL_TIMEOUT_MS", () => {
     expect(TOOL_TIMEOUT_MS.search_console_query).toBeGreaterThan(
       15_000 + 10_000,
     );
+  });
+
+  it("gives every live-Google-call gsc-insight tool the same margin as search_console_query", () => {
+    for (const tool of [
+      "find_striking_distance_keywords",
+      "find_low_ctr_opportunities",
+      "snapshot_search_console",
+    ] as const) {
+      expect(TOOL_TIMEOUT_MS[tool]).toBeGreaterThanOrEqual(15_000 + 10_000);
+    }
+  });
+
+  it("gives the D1-only snapshot tools a smaller timeout than any live-Google-call tool, since they never call Google", () => {
+    for (const tool of [
+      "list_search_console_snapshots",
+      "compare_search_console",
+    ] as const) {
+      expect(TOOL_TIMEOUT_MS[tool]).toBeLessThan(
+        TOOL_TIMEOUT_MS.search_console_query,
+      );
+    }
   });
 });
 

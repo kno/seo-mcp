@@ -25,7 +25,9 @@ export type BffErrorCode =
   | "bff_timeout"
   | "upstream_source_not_configured"
   | "upstream_credential_failure"
-  | "upstream_source_quota";
+  | "upstream_source_quota"
+  | "upstream_storage_not_configured"
+  | "insufficient_snapshots";
 
 export interface BffError {
   code: BffErrorCode;
@@ -107,6 +109,26 @@ export const ERROR_TABLE: Record<BffErrorCode, ErrorTableEntry> = {
     status: 429,
     message:
       "The upstream Google service's own quota has been exhausted for this window.",
+  },
+  // These two codes are specific to `gsc-insight-views`' D1-backed snapshot
+  // tools (`snapshot_search_console`, `list_search_console_snapshots`,
+  // `compare_search_console`) — classified by
+  // `bff/src/authenticated/classify.ts#classifyStorageFailure` from the
+  // tool's own error text (`src/server.ts`'s `if (!env.DB) return
+  // errorResult(...)` guard, and `compare_search_console`'s "Need at least
+  // two snapshots to compare" text), never from Google. Both MUST NOT
+  // collapse into `tool_failed`: a missing D1 binding and a genuinely
+  // insufficient snapshot count are each their own actionable state, not a
+  // silent empty list/diff.
+  upstream_storage_not_configured: {
+    status: 503,
+    message:
+      "The snapshot storage required for this data source is not configured.",
+  },
+  insufficient_snapshots: {
+    status: 422,
+    message:
+      "At least two stored snapshots are required to compare. Capture another snapshot first.",
   },
 };
 

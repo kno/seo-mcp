@@ -1164,6 +1164,10 @@
     color: var(--color-danger-600);
   }
 
+  .stat-info > dd {
+    color: var(--color-info-600);
+  }
+
   .stat-ok {
     background-color: var(--color-ok-50);
     border-color: color-mix(in oklab, var(--color-ok-600) 22%, transparent);
@@ -1177,6 +1181,11 @@
   .stat-danger {
     background-color: var(--color-danger-50);
     border-color: color-mix(in oklab, var(--color-danger-600) 22%, transparent);
+  }
+
+  .stat-info {
+    background-color: var(--color-info-50);
+    border-color: color-mix(in oklab, var(--color-info-600) 22%, transparent);
   }
 
   /* The stat grid is itself a `<dl>`, so its `<div>` rows inherit the base

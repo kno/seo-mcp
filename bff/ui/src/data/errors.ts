@@ -174,6 +174,29 @@ export const ERROR_PRESENTATION: Record<BffErrorCode, ErrorPresentation> = {
     retry: { kind: "disabled-until-elapsed", retryAfterSeconds: 0 },
     operatorActionRequired: false,
   },
+  // `gsc-insight-views`' D1-backed snapshot tools (PR6): classified by
+  // `bff/src/authenticated/classify.ts#classifyStorageFailure`, never by
+  // Google's own classifier. Both MUST render as their own actionable
+  // state, distinct from `tool_failed` and from an empty list/diff — see
+  // `GscInsightsContainer`'s onboarding/not-configured states.
+  upstream_storage_not_configured: {
+    code: "upstream_storage_not_configured",
+    title: "Snapshot storage not configured",
+    description:
+      "The snapshot storage required for this data source is not configured. This requires operator action.",
+    placement: "panel",
+    retry: { kind: "disabled-permanent" },
+    operatorActionRequired: true,
+  },
+  insufficient_snapshots: {
+    code: "insufficient_snapshots",
+    title: "Not enough snapshots to compare",
+    description:
+      "At least two stored snapshots are required to compare. Capture another snapshot first.",
+    placement: "panel",
+    retry: { kind: "manual" },
+    operatorActionRequired: false,
+  },
 };
 
 function unmappedPresentation(error: BffError): ErrorPresentation {

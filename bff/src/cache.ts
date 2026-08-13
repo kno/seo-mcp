@@ -39,12 +39,15 @@ export const MAX_TTL_SECONDS = 86400;
  *   external API call and its score does not meaningfully change within
  *   a few hours; requests carrying an explicit `apiKey` bypass caching
  *   entirely regardless of this value (see `isCacheable`).
- * - `search_console_query`: 21600s (6h) here ONLY to satisfy this
- *   `Record<ToolName, number>`'s exhaustiveness — `ToolName` (`timeout.ts`)
- *   includes every authenticated tool too, but `dispatchAuthenticated()`
- *   (`router.ts`) never reads this value. Its real TTL comes from the
- *   `authenticated-delayed` cache class below (`authenticatedTtlSeconds`),
- *   selected per-source and per-range-state rather than per-tool.
+ * - `search_console_query`, `find_striking_distance_keywords`,
+ *   `find_low_ctr_opportunities`, `snapshot_search_console`,
+ *   `list_search_console_snapshots`, `compare_search_console`: 21600s (6h)
+ *   here ONLY to satisfy this `Record<ToolName, number>`'s exhaustiveness —
+ *   `ToolName` (`timeout.ts`) includes every authenticated tool too, but
+ *   `dispatchAuthenticated()` (`router.ts`) never reads this value for any
+ *   of them. Their real TTL comes from the `authenticated-delayed` cache
+ *   class below (`authenticatedTtlSeconds`), selected per-source and
+ *   per-range-state rather than per-tool.
  *
  * ---
  *
@@ -86,6 +89,11 @@ export const CACHE_TTL_SECONDS: Record<ToolName, number> = {
   check_links: 1800,
   analyze_pagespeed: 21600,
   search_console_query: 21600,
+  find_striking_distance_keywords: 21600,
+  find_low_ctr_opportunities: 21600,
+  snapshot_search_console: 21600,
+  list_search_console_snapshots: 21600,
+  compare_search_console: 21600,
 };
 
 export function clampTtlSeconds(seconds: number): number {

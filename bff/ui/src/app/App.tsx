@@ -3,6 +3,7 @@ import { PageReportContainer } from "../containers/PageReportContainer";
 import { SiteCrawlContainer } from "../containers/SiteCrawlContainer";
 import { PageSpeedContainer } from "../containers/PageSpeedContainer";
 import { SearchConsoleContainer } from "../containers/SearchConsoleContainer";
+import { GscInsightsContainer } from "../containers/GscInsightsContainer";
 import { LoginContainer } from "../containers/LoginContainer";
 
 /**
@@ -46,6 +47,13 @@ const NAV_ITEMS = [
     description:
       "Query Google Search Console performance data for a property: clicks, impressions, CTR and position by query, page, country, device, date or search appearance.",
     View: SearchConsoleContainer,
+  },
+  {
+    href: "#search-console-insights",
+    label: "Search Console Insights",
+    description:
+      "Striking-distance keywords, low-CTR opportunities, and stored-snapshot comparison for a Search Console property — one shared property/date selector across all three.",
+    View: GscInsightsContainer,
   },
 ] as const;
 

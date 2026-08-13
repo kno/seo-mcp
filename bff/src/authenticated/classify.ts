@@ -45,3 +45,32 @@ export function classifyUpstreamFailure(text: string): BffErrorCode {
   // retry loop against a broken credential or an exhausted quota.
   return "tool_failed";
 }
+
+/**
+ * Classifies the `isError` text `gsc-insight-views`' three D1-backed
+ * snapshot tools (`snapshot_search_console`, `list_search_console_snapshots`,
+ * `compare_search_console`) can raise. Unlike `classifyUpstreamFailure`,
+ * these two texts are OUR OWN constants (`src/server.ts`'s `if (!env.DB)
+ * return errorResult(new Error("D1 storage is not configured"))` guard, and
+ * `compare_search_console`'s own "Need at least two snapshots to compare"
+ * message) — neither is Google-shaped text, so a separate classifier exists
+ * rather than folding these two checks into `classifyUpstreamFailure` and
+ * conflating a storage-configuration failure with a Google credential one.
+ * Both distinguish from the safe `tool_failed` default for the same reason
+ * `classifyUpstreamFailure` does: a missing D1 binding and a genuinely
+ * insufficient snapshot count are each their own actionable state, not a
+ * silent empty list/diff (`gsc-insight-views` spec, "fewer than two
+ * snapshots is a distinct, actionable state").
+ */
+const D1_NOT_CONFIGURED_TEXT = "D1 storage is not configured";
+const INSUFFICIENT_SNAPSHOTS_TEXT = "Need at least two snapshots to compare";
+
+export function classifyStorageFailure(text: string): BffErrorCode {
+  if (text === D1_NOT_CONFIGURED_TEXT) {
+    return "upstream_storage_not_configured";
+  }
+  if (text === INSUFFICIENT_SNAPSHOTS_TEXT) {
+    return "insufficient_snapshots";
+  }
+  return "tool_failed";
+}

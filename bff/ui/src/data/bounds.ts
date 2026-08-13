@@ -436,6 +436,105 @@ export function collectGscBounds(result: {
 }
 
 /**
+ * `gsc-insight-views`' opportunity-tools bound (`find_striking_distance_keywords`,
+ * `find_low_ctr_opportunities`) — task 6.3. Unlike `describeGscRows`, the
+ * limit is NOT a fixed config constant: it is read from the tool's own
+ * echoed `criteria.limit` (`OpportunityResult.criteria: Record<string,
+ * number>`), since the effective limit may be the server's own default
+ * when the caller omitted it (`gsc-insight-views` spec, "Applied Criteria
+ * Are Shown Alongside Results"). `rowCount === criteria.limit` is the ONLY
+ * available bound signal — there is no separate total-matching-count field,
+ * and a second, undetectable truncation layer (the raw GSC pull capped at
+ * `LIMITS.maxGscRows` before filtering) means this view MUST NEVER claim
+ * exhaustiveness even when the row-count bound is not reached. `limitName`
+ * intentionally reads "criteria.limit" rather than a config constant name —
+ * the limit named here IS the value the view displays alongside it (see
+ * `OpportunityCriteriaPanel`), so the two can never drift apart.
+ */
+export function describeOpportunityBound(result: {
+  readonly rowCount: number;
+  readonly criteria: Readonly<Record<string, number>>;
+}): Cardinality {
+  const limit = result.criteria.limit;
+  if (result.rowCount === 0) return { state: "none" };
+  if (typeof limit === "number" && result.rowCount === limit) {
+    return {
+      state: "bounded",
+      bound: {
+        kind: "sample_cap",
+        scope: "rowCount",
+        limitName: "criteria.limit",
+        limitValue: limit,
+        shown: result.rowCount,
+      },
+    };
+  }
+  // Never "complete" — see this function's doc comment: the raw
+  // pre-filter GSC pull is capped independently of `criteria.limit` and
+  // that truncation is undetectable from the response, so "below the
+  // row-count bound" still MUST NOT be presented as exhaustive. Callers
+  // pair this cardinality with an unconditional caveat rather than reading
+  // `"complete"` as "no more opportunities exist".
+  return { state: "unknown" };
+}
+
+/** `gsc-insight-views`' opportunity-tools bound, wrapped for `collectBounds`. */
+export function collectOpportunityBounds(result: {
+  readonly rowCount: number;
+  readonly criteria: Readonly<Record<string, number>>;
+}): Bound[] {
+  const cardinality = describeOpportunityBound(result);
+  return isBounded(cardinality) ? [cardinality.bound] : [];
+}
+
+export type DiffBucketName = "decayed" | "improved" | "lost" | "gained";
+
+/**
+ * `gsc-insight-views`' per-bucket comparison bound (task 6.6). Each of the
+ * four `GscDiff` buckets is truncated to `LIMITS.maxDiffRows`
+ * INDEPENDENTLY (`src/seo/gsc-diff.ts`), so a bucket reaching that cap is a
+ * bound signal specific to THAT bucket alone — one bucket at the cap MUST
+ * NOT imply any other bucket is also at (or near) its own cap. Callers
+ * derive this once per bucket, never once for the whole `diff`.
+ */
+export function describeDiffBucket(
+  bucket: readonly unknown[],
+  limit: number,
+): Cardinality {
+  if (bucket.length === 0) return { state: "none" };
+  if (bucket.length === limit) {
+    return {
+      state: "bounded",
+      bound: {
+        kind: "sample_cap",
+        scope: "diff",
+        limitName: "maxDiffRows",
+        limitValue: limit,
+        shown: bucket.length,
+      },
+    };
+  }
+  return { state: "complete", total: bucket.length };
+}
+
+/** All four `GscDiff` bucket bounds, wrapped for `collectBounds`, keyed by
+ * bucket name so a caller never has to re-derive which bucket a `Bound`
+ * belongs to. */
+export function collectDiffBounds(diff: {
+  readonly decayed: readonly unknown[];
+  readonly improved: readonly unknown[];
+  readonly lost: readonly unknown[];
+  readonly gained: readonly unknown[];
+}): Readonly<Record<DiffBucketName, Cardinality>> {
+  return {
+    decayed: describeDiffBucket(diff.decayed, LIMITS.maxDiffRows),
+    improved: describeDiffBucket(diff.improved, LIMITS.maxDiffRows),
+    lost: describeDiffBucket(diff.lost, LIMITS.maxDiffRows),
+    gained: describeDiffBucket(diff.gained, LIMITS.maxDiffRows),
+  };
+}
+
+/**
  * Single entry point `export/json.ts` and `export/csv.ts` both call for
  * provenance — `crawl_page` and `analyze_pagespeed` results carry no known
  * bound (single-page/single-analysis results, no sample-capped fields), so

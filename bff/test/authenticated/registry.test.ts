@@ -52,3 +52,64 @@ describe("authenticated tool registry — allowlist (threat row f)", () => {
     expect(getAuthenticatedRoute("not_a_real_tool")).toBeUndefined();
   });
 });
+
+/**
+ * `gsc-insight-views` (PR6) — the five-tool registry slice. Each of the
+ * three live-Google tools gets `callsGoogleUpstream: true` and a timeout at
+ * or above `search_console_query`'s own 27s Google-call margin; each of the
+ * two D1-only tools gets `callsGoogleUpstream: false` and a smaller timeout
+ * since neither makes a Google call at all.
+ */
+describe("authenticated tool registry — gsc-insight-views (PR6)", () => {
+  it.each([
+    ["find_striking_distance_keywords", 27_000],
+    ["find_low_ctr_opportunities", 27_000],
+    ["snapshot_search_console", 28_000],
+  ] as const)(
+    "registers %s as a live-Google GSC tool with timeout %i",
+    (name, timeoutMs) => {
+      expect(isAuthenticatedTool(name)).toBe(true);
+      const route = getAuthenticatedRoute(name);
+      expect(route).toBeDefined();
+      expect(route?.source).toBe("search-console");
+      expect(route?.timeoutMs).toBe(timeoutMs);
+      expect(route?.callsGoogleUpstream).toBe(true);
+    },
+  );
+
+  it.each([
+    ["list_search_console_snapshots", 10_000],
+    ["compare_search_console", 10_000],
+  ] as const)(
+    "registers %s as a D1-only tool with timeout %i and no Google upstream call",
+    (name, timeoutMs) => {
+      expect(isAuthenticatedTool(name)).toBe(true);
+      const route = getAuthenticatedRoute(name);
+      expect(route).toBeDefined();
+      expect(route?.source).toBe("search-console");
+      expect(route?.timeoutMs).toBe(timeoutMs);
+      expect(route?.callsGoogleUpstream).toBe(false);
+    },
+  );
+
+  it("gives every D1-only tool a smaller timeout than every live-Google tool", () => {
+    const googleTimeouts = [
+      "find_striking_distance_keywords",
+      "find_low_ctr_opportunities",
+      "snapshot_search_console",
+    ].map((name) => getAuthenticatedRoute(name)?.timeoutMs ?? 0);
+    const d1Timeouts = [
+      "list_search_console_snapshots",
+      "compare_search_console",
+    ].map((name) => getAuthenticatedRoute(name)?.timeoutMs ?? Infinity);
+    for (const d1Timeout of d1Timeouts) {
+      for (const googleTimeout of googleTimeouts) {
+        expect(d1Timeout).toBeLessThan(googleTimeout);
+      }
+    }
+  });
+
+  it("registers exactly six tools total (search_console_query + the five gsc-insight-views tools)", () => {
+    expect(Object.keys(AUTHENTICATED_REGISTRY)).toHaveLength(6);
+  });
+});

@@ -127,22 +127,22 @@ Record<string, number>`; rejects a payload exceeding `limit`
 
 ## Phase 6: `gsc-insight-views` UI (PR6) — `gsc-insight-views`
 
-- [ ] 6.1 RED shared property + date-range selector persists across tool switch; blocks submit on empty
+- [x] 6.1 RED shared property + date-range selector persists across tool switch; blocks submit on empty
       property
-- [ ] 6.2 RED applied `criteria` (including server defaults the tool echoes) rendered alongside every result
-- [ ] 6.3 RED bound label at `rowCount === criteria.limit`; never claims exhaustiveness; a zero-row result is
+- [x] 6.2 RED applied `criteria` (including server defaults the tool echoes) rendered alongside every result
+- [x] 6.3 RED bound label at `rowCount === criteria.limit`; never claims exhaustiveness; a zero-row result is
       distinct from an unfetched one
-- [ ] 6.4 RED comparison names both endpoints explicitly (base and current snapshot id, label, date range)
-- [ ] 6.5 RED each of the four decay buckets (`decayed`, `improved`, `lost`, `gained`) is rendered with an
+- [x] 6.4 RED comparison names both endpoints explicitly (base and current snapshot id, label, date range)
+- [x] 6.5 RED each of the four decay buckets (`decayed`, `improved`, `lost`, `gained`) is rendered with an
       unambiguous direction; `base: null` and `current: null` rows are labelled as new/lost, not as zero
-- [ ] 6.6 RED each bucket independently labels its own bound at `length === LIMITS.maxDiffRows`
-- [ ] 6.7 RED fewer-than-two-snapshots is a distinct actionable state (the tool errors, "Need at least two
+- [x] 6.6 RED each bucket independently labels its own bound at `length === LIMITS.maxDiffRows`
+- [x] 6.7 RED fewer-than-two-snapshots is a distinct actionable state (the tool errors, "Need at least two
       snapshots to compare"); D1-not-configured is a distinct state, not an empty diff
-- [ ] 6.8 RED reporting lag renders for every GSC-backed tool in the view, including the comparison's
+- [x] 6.8 RED reporting lag renders for every GSC-backed tool in the view, including the comparison's
       baseline period
-- [ ] 6.9 GREEN registry rows for the five tools + `bff/ui/gsc-insights/*` reusing the Phase 4 freshness and
+- [x] 6.9 GREEN registry rows for the five tools + `bff/ui/gsc-insights/*` reusing the Phase 4 freshness and
       bound components
-- [ ] 6.10 PROOF a11y + keyboard pass; `pnpm test -- gsc-insights`
+- [x] 6.10 PROOF a11y + keyboard pass; `pnpm test -- gsc-insights`
 
 ## Phase 7: Keyword schemas (PR7) — `keyword-research-view`, `mcp-result-contract`
 

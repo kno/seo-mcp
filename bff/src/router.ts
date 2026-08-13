@@ -65,7 +65,10 @@ import {
   GSC_REPORTING_LAG_DAYS,
   deriveSourceFreshness,
 } from "./authenticated/freshness";
-import { classifyUpstreamFailure } from "./authenticated/classify";
+import {
+  classifyStorageFailure,
+  classifyUpstreamFailure,
+} from "./authenticated/classify";
 import {
   getQuotaEstimate,
   recordUpstreamAttempt,
@@ -113,6 +116,63 @@ const searchConsoleQueryInputSchema = z.object({
     )
     .pipe(z.array(gscDimensionSchema).optional()),
   rowLimit: z.coerce.number().int().min(1).max(250).optional(),
+});
+
+// Mirrors `src/server.ts`'s `find_striking_distance_keywords` inputSchema
+// exactly (`gsc-insight-views`, PR6).
+const strikingDistanceInputSchema = z.object({
+  siteUrl: z.string().min(1),
+  startDate: dateOnlySchema,
+  endDate: dateOnlySchema,
+  minPosition: z.coerce.number().min(1).max(100).optional(),
+  maxPosition: z.coerce.number().min(1).max(100).optional(),
+  minImpressions: z.coerce.number().int().min(0).optional(),
+  limit: z.coerce.number().int().min(1).max(250).optional(),
+});
+
+// Mirrors `src/server.ts`'s `find_low_ctr_opportunities` inputSchema exactly.
+const lowCtrOpportunitiesInputSchema = z.object({
+  siteUrl: z.string().min(1),
+  startDate: dateOnlySchema,
+  endDate: dateOnlySchema,
+  maxPosition: z.coerce.number().min(1).max(100).optional(),
+  minImpressions: z.coerce.number().int().min(0).optional(),
+  maxCtr: z.coerce.number().min(0).max(1).optional(),
+  limit: z.coerce.number().int().min(1).max(250).optional(),
+});
+
+// Mirrors `src/server.ts`'s `snapshot_search_console` inputSchema exactly.
+const snapshotSearchConsoleInputSchema = z.object({
+  siteUrl: z.string().min(1),
+  startDate: dateOnlySchema,
+  endDate: dateOnlySchema,
+  dimensions: z
+    .string()
+    .optional()
+    .transform((value) =>
+      value === undefined
+        ? undefined
+        : value.split(",").filter((part) => part.length > 0),
+    )
+    .pipe(z.array(gscDimensionSchema).optional()),
+  label: z.string().min(1).optional(),
+});
+
+// Mirrors `src/server.ts`'s `list_search_console_snapshots` inputSchema
+// exactly.
+const listSearchConsoleSnapshotsInputSchema = z.object({
+  siteUrl: z.string().min(1),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+});
+
+// Mirrors `src/server.ts`'s `compare_search_console` inputSchema exactly.
+// Neither ID is a `dateOnlySchema` field — `dispatchAuthenticated()` derives
+// this tool's `sourceFreshness` from today's date rather than from any
+// request field (see `authenticated/registry.ts`'s doc comment).
+const compareSearchConsoleInputSchema = z.object({
+  siteUrl: z.string().min(1),
+  baseSnapshotId: z.coerce.number().int().positive().optional(),
+  currentSnapshotId: z.coerce.number().int().positive().optional(),
 });
 
 function parseQuery<T>(
@@ -261,21 +321,50 @@ function authenticatedToolResponse<T>(
 }
 
 /**
+ * A result is treated as "zero-row" for cache-TTL purposes (see
+ * `cache.ts#authenticatedTtlSeconds`'s `resultIsEmpty` parameter) across
+ * every one of the six authenticated tools' differently-shaped results:
+ * `rowCount` (the GSC/opportunity/snapshot-capture shapes), `count` (the
+ * snapshot-list shape), or — for `compare_search_console`'s `diff`, which
+ * has neither — all four decay buckets being empty.
+ */
+function isZeroResultLike(data: unknown): boolean {
+  if (typeof data !== "object" || data === null) return false;
+  const record = data as Record<string, unknown>;
+  if (typeof record.rowCount === "number") return record.rowCount === 0;
+  if (typeof record.count === "number") return record.count === 0;
+  if (record.diff && typeof record.diff === "object") {
+    const diff = record.diff as Record<string, unknown>;
+    return (["decayed", "improved", "lost", "gained"] as const).every(
+      (bucket) =>
+        Array.isArray(diff[bucket]) && (diff[bucket] as unknown[]).length === 0,
+    );
+  }
+  return false;
+}
+
+/**
  * Dispatches an authenticated route. Differs from `dispatch()` in four
  * ways required by `authenticated-source-contract`:
  * (1) the tool MUST be present in `authenticated/registry.ts`'s allowlist
  * — a `business_*` or otherwise unregistered name is rejected with a 404
  * before any cache read or upstream call (threat row f);
- * (2) upstream `isError` text is classified via `classify.ts` instead of
- * collapsing to a blind `tool_failed`, and the matched text is discarded
- * (threat row d);
+ * (2) upstream `isError` text is classified instead of collapsing to a
+ * blind `tool_failed`, and the matched text is discarded (threat row d) —
+ * via `classify.ts#classifyUpstreamFailure` for a route with
+ * `callsGoogleUpstream: true`, or `classify.ts#classifyStorageFailure`
+ * otherwise (`gsc-insight-views`' two D1-only tools, task 6.7);
  * (3) every response — hit, miss, or error — carries a freshly-derived
- * `sourceFreshness`, never merged with `resultAge`;
+ * `sourceFreshness`, never merged with `resultAge`; the calendar date it is
+ * derived from comes from `route.freshnessDate(args, data)`, since not
+ * every registered tool has a request-level `endDate`
+ * (`authenticated/registry.ts`'s doc comment);
  * (4) caching uses the `authenticated-delayed` class (`cache.ts`), TTL
  * selected per-source and per-range-state rather than per-tool, and the
  * upstream quota ledger is incremented exactly once per real upstream
- * ATTEMPT — never on a cache hit, a gate rejection, or an input-validation
- * failure (`authenticated/quota-ledger.ts`).
+ * ATTEMPT for a route with `callsGoogleUpstream: true` — never on a cache
+ * hit, a gate rejection, an input-validation failure, or a D1-only route
+ * that never touches Google at all (`authenticated/quota-ledger.ts`).
  *
  * `ctx` (the Worker's `ExecutionContext`) is threaded through so the
  * ledger increment can run via `ctx.waitUntil` — see
@@ -288,18 +377,20 @@ async function dispatchAuthenticated(
   env: Env,
   ctx: ExecutionContext | undefined,
   toolName: ToolName,
-  args: Record<string, unknown> & { endDate: string },
+  args: Record<string, unknown>,
 ): Promise<Response> {
   const route = getAuthenticatedRoute(toolName);
   if (!route) return new Response("Not found", { status: 404 });
 
   const key = await cacheKey(toolName, args);
-  const sourceFreshness = deriveSourceFreshness(route.source, args.endDate);
-  const rangeState = authRangeState(args.endDate, GSC_REPORTING_LAG_DAYS);
   const budget = env.AUTH_SOURCE_BUDGET[route.source] ?? 0;
 
   const readQuotaEstimate = () =>
     getQuotaEstimate(env.RESULT_CACHE, route.source, budget);
+
+  const classifyFailureText = route.callsGoogleUpstream
+    ? classifyUpstreamFailure
+    : classifyStorageFailure;
 
   // `route.schema` is typed as the UNION of every published schema (so the
   // registry can only ever hold a schema literal imported from
@@ -314,24 +405,31 @@ async function dispatchAuthenticated(
       token: env.MCP_AUTH_TOKEN,
       timeoutMs: route.timeoutMs,
       validateUpstreamResults: validateUpstreamResultsFlag(env),
-      classifyFailureText: classifyUpstreamFailure,
+      classifyFailureText,
       keyHash: key,
     });
 
   // Records the ledger increment IMMEDIATELY BEFORE the real upstream
-  // call, and only here — this is the single call site that runs exactly
-  // when `withSingleFlight` invokes it as the leader (never for a
-  // follower awaiting the same in-flight promise, and never when a cache
-  // hit or an earlier validation failure returns before reaching this
-  // line).
+  // call, and only for a route that actually calls Google
+  // (`callsGoogleUpstream: true`) — this is the single call site that runs
+  // exactly when `withSingleFlight` invokes it as the leader (never for a
+  // follower awaiting the same in-flight promise, never when a cache hit or
+  // an earlier validation failure returns before reaching this line, and
+  // never for a D1-only route, which spends no Google quota at all).
   const trackedCallUpstream = async () => {
-    await recordUpstreamAttempt(ctx, env.RESULT_CACHE, route.source);
+    if (route.callsGoogleUpstream) {
+      await recordUpstreamAttempt(ctx, env.RESULT_CACHE, route.source);
+    }
     return callUpstream();
   };
 
   if (!shouldBypassCacheRead(request, url)) {
     const cached = await getCached(env.RESULT_CACHE, key);
     if (cached.status === "hit") {
+      const sourceFreshness = deriveSourceFreshness(
+        route.source,
+        route.freshnessDate(args, cached.data),
+      );
       return authenticatedToolResponse(
         { ok: true, data: cached.data },
         "hit",
@@ -344,8 +442,10 @@ async function dispatchAuthenticated(
 
   const result = await withSingleFlight(key, trackedCallUpstream);
   if (result.ok) {
-    const isZeroRowResult =
-      (result.data as { rowCount?: number }).rowCount === 0;
+    const rangeState = authRangeState(
+      route.freshnessDate(args, result.data),
+      GSC_REPORTING_LAG_DAYS,
+    );
     await putCached(
       env.RESULT_CACHE,
       key,
@@ -355,10 +455,14 @@ async function dispatchAuthenticated(
         env.AUTH_SOURCE_TTL_SECONDS,
         route.source,
         rangeState,
-        isZeroRowResult,
+        isZeroResultLike(result.data),
       ),
     );
   }
+  const sourceFreshness = deriveSourceFreshness(
+    route.source,
+    route.freshnessDate(args, result.ok ? result.data : undefined),
+  );
   return authenticatedToolResponse(
     result,
     "miss",
@@ -483,7 +587,72 @@ export async function handleRequest(
       env,
       ctx,
       "search_console_query",
-      parsed.data as Record<string, unknown> & { endDate: string },
+      parsed.data as Record<string, unknown>,
+    );
+  }
+
+  if (url.pathname === "/api/tools/find_striking_distance_keywords") {
+    const parsed = parseQuery(url, strikingDistanceInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatchAuthenticated(
+      request,
+      url,
+      env,
+      ctx,
+      "find_striking_distance_keywords",
+      parsed.data as Record<string, unknown>,
+    );
+  }
+
+  if (url.pathname === "/api/tools/find_low_ctr_opportunities") {
+    const parsed = parseQuery(url, lowCtrOpportunitiesInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatchAuthenticated(
+      request,
+      url,
+      env,
+      ctx,
+      "find_low_ctr_opportunities",
+      parsed.data as Record<string, unknown>,
+    );
+  }
+
+  if (url.pathname === "/api/tools/snapshot_search_console") {
+    const parsed = parseQuery(url, snapshotSearchConsoleInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatchAuthenticated(
+      request,
+      url,
+      env,
+      ctx,
+      "snapshot_search_console",
+      parsed.data as Record<string, unknown>,
+    );
+  }
+
+  if (url.pathname === "/api/tools/list_search_console_snapshots") {
+    const parsed = parseQuery(url, listSearchConsoleSnapshotsInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatchAuthenticated(
+      request,
+      url,
+      env,
+      ctx,
+      "list_search_console_snapshots",
+      parsed.data as Record<string, unknown>,
+    );
+  }
+
+  if (url.pathname === "/api/tools/compare_search_console") {
+    const parsed = parseQuery(url, compareSearchConsoleInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatchAuthenticated(
+      request,
+      url,
+      env,
+      ctx,
+      "compare_search_console",
+      parsed.data as Record<string, unknown>,
     );
   }
 

@@ -13,6 +13,26 @@
  * `search_console_query` (authenticated-source-contract, PR2) gets 27s —
  * above `src/config.ts`'s `gscTimeoutMs` (15s) + `googleTokenTimeoutMs`
  * (10s) with a margin, per design.md's timeout table.
+ *
+ * The five `gsc-insight-views` tools (PR6) split into two latency profiles:
+ * - `find_striking_distance_keywords` / `find_low_ctr_opportunities` /
+ *   `snapshot_search_console` each make ONE live Search Console call with
+ *   the same `gscTimeoutMs` (15s) + `googleTokenTimeoutMs` (10s) budget as
+ *   `search_console_query`, so they get the same 27s margin.
+ *   `snapshot_search_console` additionally writes the result to D1
+ *   (`storeGscSnapshot`) after the GSC call returns, so it gets a slightly
+ *   larger 28s budget to leave room for that write.
+ * - `list_search_console_snapshots` / `compare_search_console` make NO
+ *   Google call at all — they only read (and, for `compare_search_console`,
+ *   diff) rows already stored in D1 by an earlier `snapshot_search_console`
+ *   call. A D1 read is far cheaper than a live Search Console round-trip, so
+ *   10s is a generous budget rather than a margin over any Google timeout —
+ *   there is no Google timeout in their path to add a margin to.
+ * (Note: these entries are only reached by `bff/src/cache.ts`'s
+ * `Record<ToolName, number>` exhaustiveness — `dispatchAuthenticated()`
+ * (`router.ts`) reads `timeoutMs` from `authenticated/registry.ts`'s own
+ * per-route field instead, the same pattern `search_console_query` already
+ * established.)
  */
 
 export type ToolName =
@@ -21,7 +41,12 @@ export type ToolName =
   | "crawl_site"
   | "check_links"
   | "analyze_pagespeed"
-  | "search_console_query";
+  | "search_console_query"
+  | "find_striking_distance_keywords"
+  | "find_low_ctr_opportunities"
+  | "snapshot_search_console"
+  | "list_search_console_snapshots"
+  | "compare_search_console";
 
 export const TOOL_TIMEOUT_MS: Record<ToolName, number> = {
   health: 5000,
@@ -30,6 +55,11 @@ export const TOOL_TIMEOUT_MS: Record<ToolName, number> = {
   crawl_site: 55000,
   check_links: 55000,
   search_console_query: 27_000,
+  find_striking_distance_keywords: 27_000,
+  find_low_ctr_opportunities: 27_000,
+  snapshot_search_console: 28_000,
+  list_search_console_snapshots: 10_000,
+  compare_search_console: 10_000,
 };
 
 export type TimeoutResult<T> =

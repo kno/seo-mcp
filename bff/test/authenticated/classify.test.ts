@@ -6,7 +6,10 @@
  * function signature has no way to leak it back to the caller).
  */
 import { describe, expect, it } from "vitest";
-import { classifyUpstreamFailure } from "../../src/authenticated/classify";
+import {
+  classifyStorageFailure,
+  classifyUpstreamFailure,
+} from "../../src/authenticated/classify";
 
 describe("classifyUpstreamFailure", () => {
   it("matches the exact not-configured constant", () => {
@@ -56,5 +59,49 @@ describe("classifyUpstreamFailure", () => {
     const result = classifyUpstreamFailure(decoy);
     expect(result).toBe("upstream_credential_failure");
     expect(JSON.stringify(result)).not.toContain("DECOY_REFRESH_TOKEN_xyz789");
+  });
+});
+
+/**
+ * `gsc-insight-views`' D1-backed snapshot tools (task 6.7): the two texts
+ * `classifyStorageFailure` matches are OUR OWN constants (`src/server.ts`),
+ * never Google-shaped, so this is a separate classifier from
+ * `classifyUpstreamFailure` rather than a shared match table.
+ */
+describe("classifyStorageFailure", () => {
+  it("classifies the exact D1-not-configured constant", () => {
+    expect(classifyStorageFailure("D1 storage is not configured")).toBe(
+      "upstream_storage_not_configured",
+    );
+  });
+
+  it("classifies the exact fewer-than-two-snapshots constant", () => {
+    expect(
+      classifyStorageFailure("Need at least two snapshots to compare"),
+    ).toBe("insufficient_snapshots");
+  });
+
+  it("does not classify a near-miss variant of either constant", () => {
+    expect(classifyStorageFailure("D1 storage is NOT configured!")).not.toBe(
+      "upstream_storage_not_configured",
+    );
+    expect(
+      classifyStorageFailure("Need at least 2 snapshots to compare"),
+    ).not.toBe("insufficient_snapshots");
+  });
+
+  it("classifies an unmatched message as the non-retryable safe default, never one of the two distinct codes", () => {
+    expect(classifyStorageFailure("Something went wrong")).toBe("tool_failed");
+  });
+
+  it("never returns a Google-classifier code for either D1 text", () => {
+    const notConfigured = classifyStorageFailure(
+      "D1 storage is not configured",
+    );
+    const insufficient = classifyStorageFailure(
+      "Need at least two snapshots to compare",
+    );
+    expect(notConfigured).not.toBe("upstream_source_not_configured");
+    expect(insufficient).not.toBe("upstream_source_quota");
   });
 });

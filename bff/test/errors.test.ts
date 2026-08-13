@@ -22,6 +22,8 @@ const ALL_CODES: BffErrorCode[] = [
   "upstream_source_not_configured",
   "upstream_credential_failure",
   "upstream_source_quota",
+  "upstream_storage_not_configured",
+  "insufficient_snapshots",
 ];
 
 describe("BFF error code table", () => {
@@ -52,6 +54,25 @@ describe("BFF error code table", () => {
   it("distinguishes a BFF timeout from upstream unavailability", () => {
     expect(ERROR_TABLE.bff_timeout.status).not.toBe(
       ERROR_TABLE.upstream_unavailable.status,
+    );
+  });
+
+  it("distinguishes a D1-not-configured failure from a fewer-than-two-snapshots failure — neither collapses into tool_failed", () => {
+    // `insufficient_snapshots` shares `tool_failed`'s 422 status (both are
+    // client-actionable, non-retryable failures) — the two codes are still
+    // distinct VALUES, which is what `classify.ts#classifyStorageFailure`
+    // and `ERROR_PRESENTATION` actually key off, not the HTTP status alone.
+    expect(ERROR_TABLE.upstream_storage_not_configured.status).not.toBe(
+      ERROR_TABLE.tool_failed.status,
+    );
+    expect("insufficient_snapshots" as BffErrorCode).not.toBe(
+      "tool_failed" as BffErrorCode,
+    );
+    expect(ERROR_TABLE.upstream_storage_not_configured.status).not.toBe(
+      ERROR_TABLE.insufficient_snapshots.status,
+    );
+    expect(ERROR_TABLE.upstream_storage_not_configured.message).not.toBe(
+      ERROR_TABLE.insufficient_snapshots.message,
     );
   });
 

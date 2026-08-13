@@ -9,9 +9,9 @@ describe("ERROR_PRESENTATION", () => {
     // (a missing key fails `tsc`) is enforced by `errors.ts`'s own type
     // annotation and is verified separately (see apply-progress).
     const codes = Object.keys(ERROR_PRESENTATION) as BffErrorCode[];
-    expect(codes).toHaveLength(14);
+    expect(codes).toHaveLength(16);
     const titles = new Set(codes.map((code) => ERROR_PRESENTATION[code].title));
-    expect(titles.size).toBe(14);
+    expect(titles.size).toBe(16);
   });
 });
 
@@ -48,6 +48,23 @@ describe("presentFor", () => {
       kind: "disabled-until-elapsed",
       retryAfterSeconds: 60,
     });
+  });
+
+  it("distinguishes upstream_storage_not_configured from insufficient_snapshots — neither collapses into tool_failed", () => {
+    const notConfigured = presentFor({
+      code: "upstream_storage_not_configured",
+      message: "not configured",
+    });
+    const insufficient = presentFor({
+      code: "insufficient_snapshots",
+      message: "need two",
+    });
+    const toolFailed = presentFor({ code: "tool_failed", message: "failed" });
+    expect(notConfigured.title).not.toBe(insufficient.title);
+    expect(notConfigured.title).not.toBe(toolFailed.title);
+    expect(insufficient.title).not.toBe(toolFailed.title);
+    expect(notConfigured.operatorActionRequired).toBe(true);
+    expect(insufficient.operatorActionRequired).toBe(false);
   });
 
   it("falls back to an explicit unmapped state naming the raw code and message, never empty/success", () => {

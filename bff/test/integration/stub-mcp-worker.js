@@ -31,6 +31,14 @@
  * discarded: `simulate-gsc-not-configured`, `simulate-gsc-credential-
  * failure`, `simulate-gsc-quota`, `simulate-gsc-unknown-failure`.
  *
+ * `gsc-insight-views` (`authenticated-gsc-insights.test.ts`, PR6) adds a
+ * third family of `isError` triggers, ALSO read from `siteUrl`, that
+ * simulate `classify.ts#classifyStorageFailure`'s two OWN (non-Google)
+ * texts: `simulate-d1-not-configured` ("D1 storage is not configured") and
+ * `simulate-insufficient-snapshots` ("Need at least two snapshots to
+ * compare") — the exact strings `src/server.ts` raises for its three
+ * D1-backed snapshot tools.
+ *
  * Plain JavaScript (not TypeScript): auxiliary `miniflare.workers` entries
  * are loaded directly by workerd, without the Vite/TypeScript transform
  * `wrangler: { configPath }` applies to the primary worker under test.
@@ -101,6 +109,126 @@ const TOOL_RESULTS = {
       },
     ],
   },
+  find_striking_distance_keywords: {
+    siteUrl: "https://example.com",
+    startDate: "2026-07-01",
+    endDate: "2026-07-28",
+    dimensions: ["query", "page"],
+    criteria: {
+      minPosition: 11,
+      maxPosition: 20,
+      minImpressions: 1,
+      limit: 25,
+    },
+    rowCount: 1,
+    rows: [
+      {
+        keys: ["seo mcp", "/"],
+        clicks: 4,
+        impressions: 300,
+        ctr: 0.013,
+        position: 14.2,
+      },
+    ],
+  },
+  find_low_ctr_opportunities: {
+    siteUrl: "https://example.com",
+    startDate: "2026-07-01",
+    endDate: "2026-07-28",
+    dimensions: ["query", "page"],
+    criteria: { maxPosition: 10, minImpressions: 10, maxCtr: 0.02, limit: 25 },
+    rowCount: 1,
+    rows: [
+      {
+        keys: ["seo mcp landing page", "/landing"],
+        clicks: 3,
+        impressions: 900,
+        ctr: 0.0033,
+        position: 4.1,
+      },
+    ],
+  },
+  snapshot_search_console: {
+    snapshotId: 1,
+    siteUrl: "https://example.com",
+    rowCount: 1,
+    capturedAt: "2026-07-28T00:00:00.000Z",
+  },
+  list_search_console_snapshots: {
+    siteUrl: "https://example.com",
+    count: 2,
+    snapshots: [
+      {
+        id: 2,
+        siteUrl: "https://example.com",
+        capturedAt: "2026-07-28T00:00:00.000Z",
+        startDate: "2026-07-01",
+        endDate: "2026-07-28",
+        label: "current",
+      },
+      {
+        id: 1,
+        siteUrl: "https://example.com",
+        capturedAt: "2026-06-28T00:00:00.000Z",
+        startDate: "2026-06-01",
+        endDate: "2026-06-28",
+        label: "base",
+      },
+    ],
+  },
+  compare_search_console: {
+    siteUrl: "https://example.com",
+    baseSnapshotId: 1,
+    currentSnapshotId: 2,
+    diff: {
+      baseCount: 2,
+      currentCount: 2,
+      decayed: [
+        {
+          query: "seo mcp",
+          page: "/",
+          base: { clicks: 10, impressions: 100, ctr: 0.1, position: 5.2 },
+          current: { clicks: 4, impressions: 100, ctr: 0.04, position: 8.1 },
+          clicksDelta: -6,
+          impressionsDelta: 0,
+          positionDelta: 2.9,
+        },
+      ],
+      improved: [
+        {
+          query: "seo tool",
+          page: "/tools",
+          base: { clicks: 2, impressions: 50, ctr: 0.04, position: 12.1 },
+          current: { clicks: 9, impressions: 60, ctr: 0.15, position: 6.4 },
+          clicksDelta: 7,
+          impressionsDelta: 10,
+          positionDelta: -5.7,
+        },
+      ],
+      lost: [
+        {
+          query: "discontinued feature",
+          page: "/old",
+          base: { clicks: 3, impressions: 40, ctr: 0.075, position: 9.5 },
+          current: null,
+          clicksDelta: -3,
+          impressionsDelta: -40,
+          positionDelta: 0,
+        },
+      ],
+      gained: [
+        {
+          query: "new launch",
+          page: "/new",
+          base: null,
+          current: { clicks: 5, impressions: 70, ctr: 0.071, position: 7.2 },
+          clicksDelta: 5,
+          impressionsDelta: 70,
+          positionDelta: 0,
+        },
+      ],
+    },
+  },
 };
 
 const DECOY_CREDENTIAL = "DECOY_REFRESH_TOKEN_xyz789";
@@ -110,6 +238,8 @@ const GSC_ERROR_TEXTS = {
   "simulate-gsc-credential-failure": `OAuth token exchange failed: invalid_grant ${DECOY_CREDENTIAL}`,
   "simulate-gsc-quota": `Search Analytics API error: quota exceeded ${DECOY_CREDENTIAL}`,
   "simulate-gsc-unknown-failure": `Unexpected upstream failure ${DECOY_CREDENTIAL}`,
+  "simulate-d1-not-configured": "D1 storage is not configured",
+  "simulate-insufficient-snapshots": "Need at least two snapshots to compare",
 };
 
 export default {
