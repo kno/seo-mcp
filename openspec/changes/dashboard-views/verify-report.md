@@ -812,3 +812,138 @@ organisms; Phases 1-4 are unaffected by a full revert) and is safe to merge on i
 None blocking. No CRITICAL or WARNING findings this pass — this is a clean PASS, notable given this PR's
 size (the largest in the chain so far) and the extra scrutiny applied to numeric literals after PR4's real
 defect.
+
+# Verify Report — dashboard-views, Phase 6 / PR6
+
+Scope: Phase 6 (tasks 6.1-6.2, commit `ef7ac10` on `feat/dashboard-views-build-wiring`) — the `pagespeed-view`
+UI, plus an out-of-band security fix to the already-archived `dashboard-bff-foundations` file
+`bff/src/router.ts`, made mid-apply after the orchestrator found `analyze_pagespeed`'s optional `apiKey`
+traveling as a GET query-string parameter (visible in DevTools' Network tab and access logs). The user
+approved fixing it in this same PR. Phases 1-5 remain `[x]` and out of scope for this pass; Phase 7 remains
+`[ ]`.
+
+## Verdict: PASS
+
+## Verdict — security fix specifically: PASS
+
+No path was found by which the old insecure (GET query-string) transport of `apiKey` still works. The fix is
+complete, narrowly scoped, and independently test-covered at both the router level and the UI transport level.
+
+## Command evidence (executed fresh, this session)
+
+- `pnpm test` -> 756/756 passed, 88 test files (up from the Phase 5 baseline of 695/695; +59 from
+  Phase 6 UI components/tests, +2 from the two new router-level security tests in
+  `bff/test/router.test.ts` and `bff/test/integration/cache.test.ts` — the apply-progress memory's stated
+  754 predates those last 2 tests, added by the later security-fix commit).
+- `pnpm typecheck` -> clean, exit 0 (`tsc --noEmit && tsc --noEmit -p bff/ui`).
+- `pnpm format:check` -> clean, "All matched files use Prettier code style!".
+
+## Security fix verification (maximum-skepticism pass)
+
+1. `bff/src/router.ts` read in full. Confirmed all four required properties:
+   - (a) POST /api/tools/analyze_pagespeed with apiKey in a JSON body is accepted: parseBody() reads
+     request.json(), validates against analyzePagespeedInputSchema (same schema as the GET path), and
+     dispatches on success.
+   - (b) GET /api/tools/analyze_pagespeed?...&apiKey=... is explicitly rejected: url.searchParams.has("apiKey")
+     is checked as the FIRST statement inside that route's GET branch, before parseQuery() even runs, and
+     returns bffErrorResponse("invalid_input") (400-class) without any dispatch to callTool.
+   - (c) GET without apiKey is unaffected — same code path as before, unchanged behavior, verified by
+     the passing "accepts an omitted apiKey (optional field)" test.
+   - (d) No other route was touched: git diff da55a7d..HEAD -- bff/src/router.ts shows 55 insertions, 0
+     deletions, all additive, confined to the analyze_pagespeed-specific comment block, the new
+     parseBody() helper, the new POST branch, and the new apiKey-in-query rejection check. health,
+     crawl_page, crawl_site, check_links routes are byte-for-byte unchanged.
+
+2. Searched for a residual insecure path. No case-sensitivity gap: URLSearchParams.has("apiKey") is
+   an exact string match and the schema itself only ever reads the exact key apiKey (Zod would reject an
+   APIKEY field as an unrecognized/missing key under analyzePagespeedInputSchema, since apiKey would
+   then be absent — a would-be attacker gains nothing by varying case). No body-reading path exists on the
+   GET branch, so there is no way to "smuggle" apiKey into a GET request's body that the route would honor
+   — GET requests are also spec-disallowed from carrying a body by the Fetch/HTTP model, and the router
+   never attempts to read one for GET. Checked dispatch()'s call order: the apiKey-in-query rejection in
+   handleRequest() happens BEFORE dispatch() is ever invoked, so cacheKey() (which hashes args) is
+   never even called for a rejected request — no window where the query-string value is hashed, cached, or
+   single-flighted before rejection. The bypass-from-cache path (isCacheable returning false for a
+   POST+apiKey request) is unrelated to this check and was already covered by the archived change.
+
+3. bff/ui/src/data/client.ts's requestTool() read in full. Confirmed: when opts.secrets is present,
+   the function unconditionally takes the POST + JSON-body branch (an early return — there is no
+   fallthrough to the GET branch below it for that call). Each SecretCell is .take()n exactly once inside
+   the for loop building the body; the returned value is written straight into the local body object and
+   never assigned to any other retained variable. SecretCell.take() itself (bff/ui/src/data/secret.ts)
+   sets this.#value = undefined on read, so even a caller holding the same cell object cannot recover the
+   value a second time — this is structurally enforced, not a convention, and is proven by
+   data/secret.test.ts's repeated-take()-returns-undefined case.
+
+4. Router-level tests read directly (bff/test/router.test.ts:341-380):
+   - "rejects an apiKey supplied over GET — it must travel over POST instead" — asserts response.status
+     is 400 and env.SEO_MCP.fetch was never called. Name matches assertion exactly.
+   - "accepts an explicit apiKey over POST and never echoes it back in the response" — sends the POST
+     request with apiKey: "secret-key" in the body, asserts response.status === 200, and asserts the
+     full serialized response body does not contain the string "secret-key". Name matches assertion
+     exactly. Both tests pass.
+
+5. bff/test/integration/cache.test.ts fix verified — the archived-change test file, now touched again
+   from this later change:
+   - "never caches an analyze_pagespeed request carrying an explicit apiKey" now issues the request as
+     POST with a JSON body (not the old GET+query form), and asserts cacheStatus: "bypass" on both of two
+     identical calls plus that the upstream stub is actually called twice (never served from cache).
+   - A NEW test, "rejects an apiKey supplied over GET even though the route otherwise accepts query-string
+     input", exists, issues a real GET request with apiKey in the query string, and asserts
+     response.status === 400. Both pass.
+
+No gap was found. The old insecure path (GET + apiKey in query string) is actively rejected at the
+earliest possible point in handleRequest(), and the UI transport (requestTool()) has no code path that
+would ever send a secret over GET in the first place — the fix closes the hole from both the server and the
+client side.
+
+## pagespeed-view UI verification
+
+- Mobile default — PageSpeedForm.tsx's strategy <select> uses defaultValue="mobile" (uncontrolled),
+  matching analyzePagespeedInputSchema's z.enum(["mobile", "desktop"]).default("mobile"). Covered by
+  PageSpeedForm.test.tsx's default-value assertion and PageSpeedContainer.test.tsx's outgoing-request
+  assertion.
+- Missing score/metric/field-data renders "unavailable", never 0 — ScoreGauge.tsx, LabMetricsPanel.tsx,
+  and FieldDataPanel.tsx all branch on === undefined (not falsy-check), each with a dedicated test proving
+  a genuine 0 (e.g. cumulativeLayoutShift: 0) renders as 0, distinct from the absent case. Read and
+  confirmed in source and tests.
+- Opportunity with no savings still listed — OpportunitiesTable.tsx never filters opportunities; an
+  entry with neither savingsMs nor savingsBytes renders its title with Absent in both savings columns.
+  Confirmed in source and in OpportunitiesTable.test.tsx's "still lists" case.
+
+- Five secrets-suite properties — PageSpeedContainer.secrets.test.tsx read in full. All five
+  (storage, URL, echo, export, cache-key) assert against a real DOM/network flow using a distinctive
+  THE_KEY value. Notably, the URL test and the echo test's assertions were UPDATED (as this verify pass
+  required checking) to reflect the new secure transport: the URL test asserts window.location.href/.search/.hash
+  and every pushState/replaceState call never contain the key, and the echo test now asserts the outgoing
+  fetch request URL itself does not contain THE_KEY — this replaces the OLD framing (recorded in the stale
+  sdd/dashboard-views/apply-progress Engram memory, written before the security fix landed) that had accepted
+  the query string containing the key as an inherent, accepted limitation. The code and tests are now
+  internally consistent with the new POST-based transport; the memory artifact is stale on this specific
+  point but the actual code/tests are correct.
+- SecretCell — bff/ui/src/data/secret.ts read in full. take() nulls #value on every call (not just
+  logically deprecating it), so "read once, never persisted" is a structural property of the class, not a
+  convention — confirmed via data/secret.test.ts's repeated-call assertions.
+
+## Regression check
+
+git diff da55a7d..HEAD --stat -- bff/src src/http src/security src/schemas src/types wrangler.jsonc
+bff/wrangler.jsonc shows exactly one file touched: bff/src/router.ts (+55/-0), the deliberate, documented
+exception this PR makes. No drift into src/http/_, src/security/_, root wrangler.jsonc,
+src/schemas/_, src/types/_, or any other frozen bff/src/*.ts file. openspec/specs/dashboard-bff/spec.md
+was extended additively (new requirement + 3 scenarios only, verified via diff); the archived
+openspec/changes/dashboard-bff-foundations/ folder itself was not touched (empty diff).
+
+## Task completion
+
+tasks.md Phase 6: 6.1-6.2 both [x], matching the actual shipped code and tests. Phase 7 correctly [ ].
+
+## Issues
+
+None CRITICAL. None WARNING for this PR's own scope.
+
+- SUGGESTION: the Engram memory sdd/dashboard-views/apply-progress (#2906) still describes the
+  pre-fix state of the "Key is not present in the URL" scenario as an accepted deviation with the outgoing
+  fetch URL containing the key. That description is now stale relative to the actual code and tests (which
+  correctly implement and test the secure POST transport). Recommend updating or superseding that memory
+  entry to avoid confusing a future reader who trusts the apply-progress record over the code.
