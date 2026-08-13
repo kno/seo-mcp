@@ -654,3 +654,161 @@ self-contained, independently revertible slice per the work-unit table's stated 
 None blocking. Two WARNINGs are non-blocking correctness/drift risks (untested checked-equals-zero
 corner case, hardcoded bound literal) that should be tracked but do not require reverting or
 blocking this PR. Carried-forward items from PR1/PR2 remain unaffected by PR4.
+
+# Verify Report — dashboard-views, Phase 5 / PR5
+
+Scope: this pass verifies Phase 5 (tasks 5.1-5.2, commit a767464 on
+feat/dashboard-views-build-wiring) — site-crawl-view: CrawlForm, DomainSummaryPanel,
+CrawlPolicyPanel, LinkGraphPanel, BarChart, PerPageTable, SiteCrawlContainer. Phases 1-4 were
+previously verified PASS/PASS WITH WARNINGS (both PR4 WARNINGs — the hardcoded 50 and the
+misleadingly-named test — were fixed in commit 9e11f6b, prior to this PR). Phases 6-7 remain correctly
+[ ] in tasks.md and are out of scope.
+
+## Verdict: PASS
+
+## Command evidence (executed fresh, this session)
+
+- pnpm test -> 79 test files, 695 tests passed, 0 failed (matches the apply note's claimed delta of
+  +75 over the Phase 4 baseline of 620).
+- pnpm typecheck -> tsc --noEmit && tsc --noEmit -p bff/ui, clean, exit 0.
+- pnpm format:check -> prettier --check ., clean, exit 0 ("All matched files use Prettier code style!").
+
+## Task completion
+
+tasks.md Phase 5: 5.1-5.2 both [x]. Phases 1-4 remain [x] (unaffected). Phases 6-7: correctly [ ].
+No unchecked task in the in-scope phase.
+
+## Spec compliance matrix (site-crawl-view/spec.md, 7 requirements / 19 scenarios)
+
+| Requirement                                                        | Scenarios | Verdict | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------ | --------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bounded Crawl Input Controls                                       | 4/4       | PASS    | CrawlForm.tsx: useState(5)/useState(2) defaults (CrawlForm.test.tsx:7-11); validate() blocks out-of-range and never calls onSubmit (CrawlForm.test.tsx:29-57); isAtMaximum gates a distinct pendingConfirmation step naming "up to 40 seconds" and "shared rate limit bucket", with onSubmit firing only from the separate "Confirm and run crawl" button (CrawlForm.tsx:83-96, tests at CrawlForm.test.tsx:59-103); below-maximum values submit directly on the first click (CrawlForm.test.tsx:13-27).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Domain Summary Panel Reflects the Real Result Shape                | 3/3       | PASS    | DomainSummaryPanel.tsx renders exactly DomainSummary's fields; CategoryRow renders category.count unconditionally (renders 0, DomainSummaryPanel.tsx:80); imagesMissingAlt.{pages,images} both rendered with distinct data-testids (DomainSummaryPanel.tsx:151-157). Covered by DomainSummaryPanel.test.tsx (5 cases, passing).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Crawl Policy Panel Reflects the Real Result Shape                  | 2/2       | PASS    | robotsFound renders one of two mutually exclusive strings (CrawlPolicyPanel.tsx:25-27); disallowedSkipped count + sample + SampleBadge labeling via describeCategory (CrawlPolicyPanel.tsx:53-70). Covered by CrawlPolicyPanel.test.tsx (3 cases, passing).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Internal Link Graph Shows Orphans and Most-Linked Pages            | 2/2       | PASS    | orphanPages.count === 0 renders an explicit "No orphan pages found." distinct from the truncated/empty case (LinkGraphPanel.tsx:34-36); topLinkedPages rendered by BarChart in result order, never re-sorted (BarChart.tsx:35, comment confirms). Covered by LinkGraphPanel.test.tsx/BarChart.test.tsx (6 cases, passing).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Per-Page Table With Drill-Down                                     | 2/2       | PASS    | PerPageTable.tsx renders page.error with no issue count when result is absent (PerPageTable.tsx:40-46); drill-down calls onDrillDown(page.result) directly, no data/client/requestTool import anywhere in the file (confirmed by direct read, grep-confirmed). SiteCrawlContainer.test.tsx's "opens the drill-down..." test asserts global.fetch stays at 1 call after the drill-down click (SiteCrawlContainer.test.tsx:146-163).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Bound-Versus-Empty Distinction Across All Panels                   | 3/3       | PASS    | Every capped field routes through the shared describeCategory/describeCappedList + SampleBadge (bounds.ts, SampleBadge.tsx) — no bespoke one-off labeling found in any panel. describeOutputBytes (bounds.ts:152-174) implements the "at or near maxSiteOutputBytes" (documented as >=95% of cap) AND crawled+failed < requested compound condition, surfaced at the container's StateRegion cardinality level, independent of per-panel SampleBadges (SiteCrawlContainer.tsx:88-101). Covered by SiteCrawlContainer.test.tsx:178+ (output-byte truncation test) and bounds.test.ts.                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Long-Running Crawl Shows Progress or an Honest Indeterminate State | 3/3       | PASS    | StateRegion's new optional detail field renders "Crawl in progress... this can take up to ~40 seconds..." (SiteCrawlContainer.tsx:63-67, StateRegion.tsx additive diff). Duplicate-submit-while-in-flight is blocked by real disabled={inFlight} on the submit button (jsdom does not fire click on a disabled button) plus a second if (inFlight) return guard in the handler (SiteCrawlContainer.tsx:52, CrawlForm.tsx:142-144). Covered by SiteCrawlContainer.test.tsx's "blocks a duplicate submit..." test (lines 113-144), which asserts global.fetch stays at exactly 1 call across both the first submit and the blocked second click. No streaming/SSE surface exists yet server-side, so the determinate-progress scenario is not independently exercised — acceptable, since the requirement is conditional ("if the BFF surface... reports incremental progress") and today's surface does not; the seam (readToolResponse/progress.ts) exists and is unit-tested against its own contract. |
+
+All 19 scenarios have a passing covering test or, for the one BFF-surface-conditional scenario
+(determinate-progress-via-SSE), a documented and reasonable "not applicable today" status consistent with
+the requirement's own conditional wording — not a gap.
+
+## Deliberate-default verification
+
+CrawlForm defaults limit=5/concurrency=2, confirmed as a deliberate documented choice, not an
+accidental mismatch with the tool's own defaults (LIMITS.defaultCrawlPages 10, router's concurrency
+default 4): proposal.md's Decision 4 table explicitly states "UI defaults crawl_site to limit 5,
+concurrency 2; 20/4 is an explicit warned choice" against the rejected alternative "Default to the
+server's own 10/4", with the rationale "the cheap path must be the default path; the expensive one must be
+chosen knowingly." CrawlForm.tsx's own doc comment cites this reasoning directly.
+
+## Numeric-literal / config-import audit (spot-checked given PR4's precedent defect)
+
+- CrawlForm.tsx imports LIMITS.maxCrawlPages (20) and LIMITS.maxConcurrency (4) from src/config.ts —
+  confirmed present at src/config.ts:25-26. The 1 minimums (MIN_LIMIT, MIN_CONCURRENCY) are
+  undocumented-in-config literals matching the frozen crawlSiteInputSchema's own hardcoded .min(1) —
+  acceptable, same pattern the schema itself uses.
+- SiteCrawlContainer.tsx imports LIMITS.maxSiteOutputBytes (256,000) from src/config.ts:22 — confirmed,
+  not hardcoded.
+- DomainSummaryPanel.tsx (DUPLICATE_GROUP_SAMPLE_CAP = 10, DOMAIN_CATEGORY_SAMPLE_CAP = 25),
+  CrawlPolicyPanel.tsx (SITEMAPS_DECLARED_CAP = 20, DISALLOWED_SKIPPED_SAMPLE_CAP = 25),
+  LinkGraphPanel.tsx (ORPHAN_PAGES_SAMPLE_CAP = 25, TOP_LINKED_PAGES_CAP = 10): spot-checked each
+  against src/crawl/site.ts directly — topLinkedPages: topEntries.slice(0, 10) (line 91), group sample
+  urls.slice(0, 10) (line 149), group list cap groups.slice(0, 20) (line 156), category sample
+  urls.slice(0, 25) (line 160), sitemapsDeclared: robots.rules.sitemaps.slice(0, 20) (line 254),
+  disallowedSkipped.sample: disallowedUrls.slice(0, 25) (line 257). All six literals match exactly and are
+  never exported from src/config.ts (grep-confirmed) — the apply note's claim holds up under direct
+  verification, and each consuming file carries a comment citing this sourcing.
+
+## Duplicate-submit / drill-down / BarChart verification (load-bearing new behavior)
+
+- SiteCrawlContainer.tsx:110 passes disabled={inFlight} to CrawlForm, which forwards it to both the
+  submit button and the confirm button (CrawlForm.tsx:136,142) — genuinely disabled, not a cosmetic
+  overlay. SiteCrawlContainer.tsx:52 (if (inFlight) return) is a second, container-owned guard.
+  SiteCrawlContainer.test.tsx:113-144 simulates a still-pending fetch via a manually-controlled unresolved
+  promise, asserts the button is disabled, clicks it again, and asserts global.fetch call count stays at 1
+  — direct, non-optimistic proof.
+- PerPageTable.tsx — grep-confirmed zero references to data/client or requestTool anywhere in the
+  file; onDrillDown receives page.result (SitePageAnalysis) directly by value. SiteCrawlContainer.tsx
+  feeds the drilled-down value straight into OnPageCard/HeadingsPanel/OpenGraphPanel/JsonLdPanel/
+  IssuesList (the same Phase-3 presentational organisms) as plain props, with no internal fetch in any of
+  them.
+- BarChart.tsx — hand-rolled inline SVG; no charting library appears in package.json (searched for
+  chart/d3/recharts/victory/visx, none found). Its accessible fallback is a real table (URL +
+  inbound-count columns) with the SVG marked aria-hidden="true", verified directly in source and by
+  BarChart.test.tsx.
+
+## Design coherence
+
+Three documented deviations from design.md, all WARNING-level (non-spec-breaking) and explicitly reasoned
+in the apply note, confirmed by direct source inspection:
+
+1. readToolResponse wraps the parsed-envelope promise requestTool() returns rather than a raw Response
+   — consistent with the real data/client.ts contract established in Phase 2, which already fully consumes
+   the response. Not a regression; changing that contract was out of this phase's scope.
+2. Duplicate-submit blocking is implemented as a global in-flight disable rather than design.md's
+   per-input-keyed version. The spec's own scenario ("another crawl_site request for the same site") is
+   satisfied by the global version; this is a legitimate simplification, not a spec gap.
+3. CategoryCard/StatGroup/SampleList (named in design.md's architecture table) were not built as
+   separate components — SampleBadge + describeCategory/describeCappedList are used inline instead.
+   Confirmed this does not weaken any binding invariant: every panel still routes through the same shared
+   describeCategory/describeCappedList derivation and SampleBadge rendering, so no bespoke one-off
+   labeling logic exists anywhere in the PR.
+
+## Regression / scope check
+
+The PR5 commit (a767464) touches only bff/ui/src/** (charts/containers/data/molecules/organisms) plus
+openspec/changes/dashboard-views/tasks.md — 23 files, all in scope, zero touches to src/http/_,
+src/security/_, root wrangler.jsonc, src/schemas/_, src/types/_, or any bff/src/*.ts file. A diff
+does exist against bff/src/router.ts relative to main, but it was confirmed to originate in the PR1
+build-wiring commit f752133 (router.ts is absent from the PR5 commit's own file list) and was already
+covered by the Phase 1 verify report — not a PR5 regression. StateRegion.tsx's diff for this PR (+11/-2)
+is additive-only: the new detail? field is optional and the render falls back to the original generic
+text when absent — no existing caller's behavior changes. bounds.ts's diff adds three new exported
+functions (describeCategory, describeCappedList, describeOutputBytes) with zero changes to the
+pre-existing Bound, Cardinality, isBounded, or describeProbeSet — confirmed additive by direct read.
+
+## Issues
+
+CRITICAL: None.
+
+WARNING: None new. (Design deviations above are non-blocking and explicitly reasoned; no untested
+scenario, no hardcoded config literal, no scope drift found in this PR — unlike PR4, which had two real
+findings at this stage.)
+
+SUGGESTION:
+
+1. The determinate-progress-via-SSE scenario has no dedicated covering test today because no SSE-capable
+   BFF surface for crawl_site exists yet; the readToolResponse seam is unit-tested against its own
+   contract only. This is consistent with the requirement's own conditional wording, not a gap, but it is
+   worth flagging so a future PR adding real streaming remembers to add the scenario's test at that time.
+2. App.tsx still does not wire SiteCrawlContainer into the shell's routing (consistent with Phase 3/4's
+   established pattern of container-first, shell-integration-later) — noted for continuity, no action
+   required this pass.
+
+Carried forward, unchanged (out of PR5's scope, no action required this pass):
+
+- SUGGESTION (PR1): missing /api/* 404 guard test.
+- WARNING (PR2): design.md route-contract (POST vs. real GET) and secret-transport documentation staleness.
+
+## Files inspected
+
+CrawlForm.tsx/CrawlForm.test.tsx, DomainSummaryPanel.tsx, CrawlPolicyPanel.tsx,
+LinkGraphPanel.tsx, BarChart.tsx, PerPageTable.tsx, SiteCrawlContainer.tsx/
+SiteCrawlContainer.test.tsx, data/bounds.ts, molecules/SampleBadge.tsx, molecules/StateRegion.tsx
+diff, src/config.ts (LIMITS), src/crawl/site.ts (literal-cap spot-check), package.json (charting-
+library absence), openspec/changes/dashboard-views/{tasks.md,proposal.md,specs/site-crawl-view/spec.md},
+plus fresh pnpm test/pnpm typecheck/pnpm format:check execution and commit-diff/stat regression checks.
+
+## Next recommended
+
+sdd-apply for Phase 6 (PageSpeed) once this PR5 slice is reviewed and merged. PR5 is a self-contained,
+independently revertible slice per the work-unit table's stated rollback boundary (revert the route/
+organisms; Phases 1-4 are unaffected by a full revert) and is safe to merge on its own.
+
+## Risks
+
+None blocking. No CRITICAL or WARNING findings this pass — this is a clean PASS, notable given this PR's
+size (the largest in the chain so far) and the extra scrutiny applied to numeric literals after PR4's real
+defect.
