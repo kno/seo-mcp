@@ -306,3 +306,153 @@ for a reverted view rather than a broken route) and is safe to merge on its own 
 None blocking. Carried forward: the `/api/*` 404 guard test gap (SUGGESTION, unchanged) and the
 `design.md` route-contract/secret-transport documentation staleness (WARNINGs above) — neither is a defect
 in what PR2 shipped, and the secret-transport contradiction has zero effect until Phase 6 begins.
+
+# Verify Report — dashboard-views, Phase 3 / PR3
+
+Scope: PR3 (commit `af5952a` on `feat/dashboard-views-build-wiring`) adds `page-report-view`:
+`OnPageCard`, `HeadingsPanel`, `OpenGraphPanel`, `JsonLdPanel`, `IssuesList`, `PageReportContainer`, and
+supporting atoms (`Absent`, `Badge`). This PR's implementation was produced by an apply session that was
+interrupted mid-flight; on resume, two real bugs were found and fixed before commit (see below). Phases
+4-7 remain correctly `[ ]` in `tasks.md` and are out of scope for this pass.
+
+## Verdict: PASS
+
+## Command evidence (executed fresh, this session)
+
+- `pnpm test` -> 594/594 passed, 67 test files (534 baseline from PR2 + 60 new this PR). jsdom still emits
+  the same non-fatal `HTMLCanvasElement.getContext` stderr warnings from axe-core's color-contrast check
+  during the pre-existing a11y tests — a known jsdom limitation carried from PR2, not a new failure or a
+  PR3 regression.
+- `pnpm typecheck` -> `tsc --noEmit && tsc --noEmit -p bff/ui`, clean, exit 0.
+- `pnpm format:check` -> `prettier --check .`, clean, exit 0.
+
+## Task completion
+
+`tasks.md` Phase 3: 3.1-3.2 both `[x]`. Phases 4-7: all `[ ]`, correctly untouched. No unchecked task in
+the in-scope phase.
+
+## Fix 1 — test-fixture bug (`PageReportContainer.test.tsx`), verified real and complete
+
+Read `PageReportContainer.test.tsx` directly. `SAMPLE_ANALYSIS.h1` is `["Welcome"]`, distinct from
+`title: "Example"` — confirmed the old collision (`h1: ["Example"]` matching `title: "Example"`) is gone,
+with an explicit code comment recording why the value was chosen. Ran the fixture's own test
+("fetches only after an explicit form submission and renders the report") three consecutive times via
+`pnpm vitest run --project ui -t "fetches only after an explicit form submission"` — passed all three runs,
+no flakiness observed. **Confirmed real and complete.**
+
+## Fix 2 — `workers-ambient.d.ts`, reproduced directly (not just read)
+
+Temporarily removed `bff/ui/src/workers-ambient.d.ts` and re-ran `pnpm typecheck`: it failed with exactly
+the errors the commit message describes —
+
+```
+src/config.ts(3,22): error TS2304: Cannot find name 'RateLimit'.
+src/config.ts(14,8): error TS2552: Cannot find name 'D1Database'. Did you mean 'IDBDatabase'?
+src/seo/html.ts(303,27): error TS2304: Cannot find name 'HTMLRewriter'.
+src/seo/html.ts(304-332): 9x error TS7006 implicit 'any' on HTMLRewriter callback params
+```
+
+Restored the file (`git checkout -- bff/ui/src/workers-ambient.d.ts`) and re-ran `pnpm typecheck`: clean,
+exit 0, `git status --short` confirmed no residual diff. This is a genuine reproduction, not a read-only
+inference.
+
+Read the file's declarations: exactly three ambient globals — `HTMLRewriter` (class, `on`/`transform`
+methods only), `D1Database` (index-signature interface), `RateLimit` (index-signature interface). No
+`fetch`, `Request`, or `Response` declaration anywhere in the file, and no reference to
+`@cloudflare/workers-types` as a package — confirmed by reading the file's own content and its
+doc-comment, which explicitly states the reasoning for scoping to only these three DOM-equivalent-free
+globals. This does not reintroduce the `fetch`/`Response` collision `bff/ui/tsconfig.json`'s separate DOM-only
+lib exists to avoid. **Confirmed real, complete, and narrowly scoped as claimed.**
+
+## Issue code coverage — `IssuesList.tsx`'s `ISSUE_TITLES` vs. `src/seo/analyze.ts`
+
+Re-read `src/seo/analyze.ts`'s `detectSeoIssues` fresh (not from memory). It emits exactly 13 distinct
+`code` literals: `missing_title`, `title_length`, `missing_description`, `description_length`,
+`missing_h1`, `multiple_h1`, `missing_canonical`, `missing_lang`, `images_missing_alt`, `noindex`,
+`invalid_jsonld`, `missing_open_graph`, `thin_content`.
+
+`IssuesList.tsx`'s `ISSUE_TITLES` table has exactly 13 keys, and a field-by-field comparison shows every
+key matches one of the 13 codes above exactly — no typos, no extra/missing entries, no renamed code.
+`IssuesList.test.tsx` has one dedicated test per code (13 tests), plus a severity-distinction test, an
+empty-state test, and an unrecognized-code test — 16 test cases total, all passing.
+
+Unmapped-code fallback path verified as a real branch, not just read: `future_unknown_code` test renders
+`screen.getByText("future_unknown_code")` (raw code), the raw message, and asserts
+`getByTestId("badge-warning")` (its own reported severity, not a reclassification) plus
+`getByTestId("issue-unmapped")` (the distinct unmapped marker) — all present in the passing suite output.
+**Confirmed: exactly 13 codes mapped, unmapped path renders visibly rather than dropping.**
+
+## Absence handling — `OnPageCard` / `Absent`
+
+`Absent.tsx` renders a fixed `"{label}: not present"` (or bare `"Not present"`) string via
+`data-testid="absent"`, never a blank string or a value derived from props beyond the label. `OnPageCard.tsx`
+uses `canonical ?? <Absent label="canonical" />`, `robots ?? <Absent label="robots" />`,
+`lang ?? <Absent label="lang" />` — nullish-coalescing on each of the three legitimately-optional
+`PageSignals` fields, matching the spec's field list exactly (not `title`/`description`, which are always
+present). `OnPageCard.test.tsx` asserts the not-present indicator's text content matches `/not present/i`
+and explicitly asserts the canonical field's text does NOT match a fabricated `https?://` value.
+**Confirmed.**
+
+## Open Graph / JSON-LD invalid-block handling
+
+`JsonLdPanel.tsx` renders `jsonLd.types` verbatim as a list and, only when `jsonLd.invalid > 0`, an
+additional, separate paragraph naming the invalid count — it never subtracts from or adds to `types`.
+For the spec's exact scenario (`blocks: 2, types: ["Article"], invalid: 1`),
+`JsonLdPanel.test.tsx`'s second test asserts `getByTestId("jsonld-invalid")` has text content `"1"`, `"Article"`
+is present, and — the critical negative assertion — `getAllByText("Article")` has length exactly 1 (never
+2), directly encoding the spec's "MUST NOT report 2 valid types" language. `OpenGraphPanel.tsx` renders an
+explicit "No Open Graph metadata present." paragraph for an empty map, confirmed by its own passing test.
+**Confirmed.**
+
+## Failure-not-empty — `PageReportContainer`
+
+Re-read the container's `handleSubmit`: on `"error" in result`, it calls
+`setState({ phase: "error", error: result.error })` and returns immediately — `analysis` is never set (it
+was already reset to `null` at the top of `handleSubmit`), so the `{analysis && (...)}` block guarding
+`OnPageCard`/`HeadingsPanel`/`OpenGraphPanel`/`JsonLdPanel`/`IssuesList` never renders on a failure path.
+The container's own third test mocks a `crawl_page` failure (`upstream_unavailable`) and asserts
+`getByRole("alert")` with `/temporarily unavailable/i` text, plus two explicit negative assertions:
+`queryByTestId("onpage-canonical")` and `queryByText(/no issues detected/i)` are both absent. This directly
+proves the failure path renders the shared error contract, not an empty-looking success.
+**Confirmed.**
+
+## Regression / scope check
+
+`git diff --stat da55a7d af5952a -- src/http src/security wrangler.jsonc src/schemas src/types bff/src`
+returns no output — zero drift into any frozen file across PR2→PR3. A targeted diff of root `src/` (excluding
+`bff/ui`) between the same two commits is also empty — this PR touches only `bff/ui/src/{atoms,organisms,
+containers}/**` and `bff/ui/src/workers-ambient.d.ts` (confirmed by `git show --stat af5952a`, 17 files, all
+under `bff/ui/`). No Google/Ads/D1 path appears anywhere in the diff.
+
+## Issues
+
+None CRITICAL. None WARNING for this PR's own scope.
+
+Carried forward, unchanged (out of PR3's scope, no action required this pass):
+
+- SUGGESTION (PR1): missing `/api/*` 404 guard test.
+- WARNING (PR2): `design.md` route-contract (`POST` vs. real `GET`) and secret-transport
+  (query string vs. "POST body only") documentation staleness — the secret-transport item remains
+  relevant only starting at Phase 6.
+
+## Files inspected
+
+`bff/ui/src/organisms/{OnPageCard,HeadingsPanel,OpenGraphPanel,JsonLdPanel,IssuesList}.tsx` and their
+`.test.tsx` files, `bff/ui/src/atoms/{Absent,Badge}.tsx` and their `.test.tsx` files,
+`bff/ui/src/containers/PageReportContainer.tsx` and `.test.tsx`, `bff/ui/src/workers-ambient.d.ts`,
+`src/seo/analyze.ts` (re-read fresh), `openspec/changes/dashboard-views/{tasks.md,
+specs/page-report-view/spec.md}`, `git show --stat af5952a`, plus fresh command execution and the two
+break-it-to-prove-it reproductions above (workers-ambient.d.ts removal/restoration confirmed clean
+afterward via `git status --short`).
+
+## Next recommended
+
+`sdd-apply` for Phase 4 (Broken Links). PR3 is a self-contained, independently revertible slice per the
+work-unit table's stated rollback boundary (revert `organisms/OnPageCard` etc.) and is safe to merge on its
+own before Phase 4 starts.
+
+## Risks
+
+None blocking. Carried forward unchanged: the `/api/*` 404 guard test gap (SUGGESTION) and the
+`design.md` route-contract/secret-transport documentation staleness (WARNINGs) — neither originates in or
+is affected by PR3.
