@@ -19,7 +19,7 @@ phases:
   tasks: done
   apply: done
   verify: done
-  archive: pending
+  archive: done
 
 notes: |
   Proposal settled the numbers: FREE_PLAN_SUBREQUEST_CEILING: 50 (new named constant),
