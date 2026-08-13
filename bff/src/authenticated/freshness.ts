@@ -20,9 +20,25 @@
  * as `2`, Google's commonly observed Search Console reporting delay. Phase
  * 3 moves this into `bff/wrangler.jsonc` as a tunable var — this constant
  * is the single place that migration touches.
+ *
+ * `keyword-research-view` (PR8) extends `AuthenticatedSource` with
+ * `"google-ads"` for `get_keyword_metrics`/`discover_keywords`. Those two
+ * tools take NO date-range input at all (verified against
+ * `src/google/ads.ts`) — Keyword Planner metrics are a rolling market-volume
+ * figure, not a calendar-ranged report the way Search Console's is. There is
+ * therefore no "Google is N days behind on this date range" fact to state
+ * for this source, so `authenticated/registry.ts`'s `google-ads` routes pass
+ * `lagDays: 0` and today's own date as the "endDate" this function derives
+ * from (`adsRollingWindowFreshnessDate`, mirroring the same-shaped
+ * `todayAsFreshnessFallback` this module's sibling already uses for
+ * `compare_search_console`, which has no date field for a different reason).
+ * The resulting `{ asOf: today, lagDays: 0, basis: "assumed" }` is an honest
+ * statement — "this is the response for a rolling-window query issued
+ * today", not a claim that Google's own data is exactly current — never a
+ * fabricated reporting lag borrowed from the GSC constant above.
  */
 
-export type AuthenticatedSource = "search-console";
+export type AuthenticatedSource = "search-console" | "google-ads";
 
 export interface SourceFreshness {
   /** Upstream identity this freshness value describes. Extended per source

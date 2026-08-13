@@ -15,6 +15,9 @@ describe("TOOL_TIMEOUT_MS", () => {
       snapshot_search_console: 28000,
       list_search_console_snapshots: 10000,
       compare_search_console: 10000,
+      get_keyword_metrics: 32000,
+      discover_keywords: 32000,
+      cluster_keywords: 10000,
     });
   });
 

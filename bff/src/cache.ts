@@ -41,13 +41,20 @@ export const MAX_TTL_SECONDS = 86400;
  *   entirely regardless of this value (see `isCacheable`).
  * - `search_console_query`, `find_striking_distance_keywords`,
  *   `find_low_ctr_opportunities`, `snapshot_search_console`,
- *   `list_search_console_snapshots`, `compare_search_console`: 21600s (6h)
- *   here ONLY to satisfy this `Record<ToolName, number>`'s exhaustiveness —
- *   `ToolName` (`timeout.ts`) includes every authenticated tool too, but
+ *   `list_search_console_snapshots`, `compare_search_console`,
+ *   `get_keyword_metrics`, `discover_keywords`: 21600s (6h) here ONLY to
+ *   satisfy this `Record<ToolName, number>`'s exhaustiveness — `ToolName`
+ *   (`timeout.ts`) includes every authenticated tool too, but
  *   `dispatchAuthenticated()` (`router.ts`) never reads this value for any
  *   of them. Their real TTL comes from the `authenticated-delayed` cache
  *   class below (`authenticatedTtlSeconds`), selected per-source and
  *   per-range-state rather than per-tool.
+ * - `cluster_keywords`: 3600s (1h) — this IS its real TTL. It is NOT
+ *   authenticated (no Google call, no credential) and goes through the
+ *   ordinary `dispatch()` path, which reads this table directly. Pure text
+ *   analysis over a fixed keyword list is deterministic, so a refetch is
+ *   always byte-identical — 1h balances that against not pinning a stale
+ *   result indefinitely.
  *
  * ---
  *
@@ -94,6 +101,9 @@ export const CACHE_TTL_SECONDS: Record<ToolName, number> = {
   snapshot_search_console: 21600,
   list_search_console_snapshots: 21600,
   compare_search_console: 21600,
+  get_keyword_metrics: 21600,
+  discover_keywords: 21600,
+  cluster_keywords: 3600,
 };
 
 export function clampTtlSeconds(seconds: number): number {

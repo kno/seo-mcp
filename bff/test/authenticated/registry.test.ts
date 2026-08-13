@@ -109,7 +109,48 @@ describe("authenticated tool registry — gsc-insight-views (PR6)", () => {
     }
   });
 
-  it("registers exactly six tools total (search_console_query + the five gsc-insight-views tools)", () => {
-    expect(Object.keys(AUTHENTICATED_REGISTRY)).toHaveLength(6);
+  it("registers exactly six search-console-backed tools (search_console_query + the five gsc-insight-views tools)", () => {
+    const searchConsoleTools = Object.values(AUTHENTICATED_REGISTRY).filter(
+      (route) => route.source === "search-console",
+    );
+    expect(searchConsoleTools).toHaveLength(6);
+  });
+});
+
+/**
+ * `keyword-research-view` (PR8) — task 8.5/8.6/8.7. `get_keyword_metrics`
+ * and `discover_keywords` are registered under a NEW source, `google-ads`,
+ * distinct from `search-console` — this is what the view's second, separate
+ * quota indicator and the `AUTH_SOURCE_BUDGET`/`AUTH_SOURCE_TTL_SECONDS`
+ * lookups both key off. `cluster_keywords` is deliberately absent: it has
+ * no Google Ads call, no credential, and no quota, so it is verified NOT to
+ * be in this allowlist at all — by construction, not merely by omission.
+ */
+describe("authenticated tool registry — keyword-research-view (PR8)", () => {
+  it.each(["get_keyword_metrics", "discover_keywords"] as const)(
+    "registers %s under a new, separate google-ads source",
+    (name) => {
+      expect(isAuthenticatedTool(name)).toBe(true);
+      const route = getAuthenticatedRoute(name);
+      expect(route).toBeDefined();
+      expect(route?.source).toBe("google-ads");
+      expect(route?.source).not.toBe("search-console");
+      expect(route?.callsGoogleUpstream).toBe(true);
+    },
+  );
+
+  it("gives both google-ads routes a lagDays override of 0 — a rolling-window metric has no reporting-lag figure", () => {
+    for (const name of ["get_keyword_metrics", "discover_keywords"]) {
+      expect(getAuthenticatedRoute(name)?.lagDays).toBe(0);
+    }
+  });
+
+  it("does NOT register cluster_keywords — it has no Google Ads call, credential, or quota", () => {
+    expect(isAuthenticatedTool("cluster_keywords")).toBe(false);
+    expect(getAuthenticatedRoute("cluster_keywords")).toBeUndefined();
+  });
+
+  it("registers exactly eight tools total after PR8 (six GSC-backed + two google-ads-backed)", () => {
+    expect(Object.keys(AUTHENTICATED_REGISTRY)).toHaveLength(8);
   });
 });

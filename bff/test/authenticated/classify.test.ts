@@ -54,6 +54,24 @@ describe("classifyUpstreamFailure", () => {
     expect(classifyUpstreamFailure("")).toBe("tool_failed");
   });
 
+  it("matches the exact Google Ads developer-token not-configured constant (task 8.6)", () => {
+    expect(
+      classifyUpstreamFailure("Google Ads developer token is not configured"),
+    ).toBe("upstream_source_not_configured");
+  });
+
+  it("matches the exact Google Ads customer-ID not-configured constant — the second real 'operator forgot to configure this' guard in src/google/ads.ts", () => {
+    expect(
+      classifyUpstreamFailure("Google Ads customer ID is not configured"),
+    ).toBe("upstream_source_not_configured");
+  });
+
+  it("does not match a near-miss variant of the Ads not-configured text", () => {
+    expect(
+      classifyUpstreamFailure("Google Ads developer token is NOT configured!"),
+    ).not.toBe("upstream_source_not_configured");
+  });
+
   it("discards the matched upstream text — only the class is observable", () => {
     const decoy = "invalid_grant DECOY_REFRESH_TOKEN_xyz789";
     const result = classifyUpstreamFailure(decoy);

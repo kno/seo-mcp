@@ -35,8 +35,21 @@
     // - `open` 900s (15min) — short, because data inside the reporting-lag
     //   window may still be arriving; a stale answer here is more likely to
     //   be wrong than a stale answer for a closed range.
+    // `google-ads` (`get_keyword_metrics`/`discover_keywords`,
+    // `keyword-research-view`, PR8): Keyword Planner metrics are a rolling
+    // market-volume figure with NO calendar range and NO reporting-lag
+    // window (unlike GSC's date-ranged reports), so the `closed`/`open`
+    // split this shape was designed for does not map onto this source at
+    // all. Both fields carry the SAME value here — an honest flattening of
+    // a shape that does not fit, rather than inventing a lag window that
+    // does not exist for this source. 21600s (6h): a refetch of the same
+    // keyword list is usually near-identical (Keyword Planner volumes
+    // update on Google's own cadence, not per-request), so this favors
+    // sparing both the MCP bucket and the Ads developer-token quota over
+    // maximal freshness.
     "AUTH_SOURCE_TTL_SECONDS": {
       "search-console": { "closed": 21600, "open": 900 },
+      "google-ads": { "closed": 21600, "open": 21600 },
     },
     // `authenticated-source-contract`'s BFF-observed quota ledger
     // (`bff/src/authenticated/quota-ledger.ts`), keyed by
@@ -48,9 +61,28 @@
     // single-owner dashboard that issues no automatic/background requests
     // (per the "no polling" rule, every call here is a deliberate user
     // action), not a hard technical ceiling.
+    // `google-ads`'s soft accounting threshold. Google Ads' own Keyword
+    // Planner quota is, by Google's documented default, far lower than
+    // Search Console's — 100/day is a conservative, round, single-owner
+    // "you are calling this a lot" signal for the same reason
+    // `search-console`'s 300 is, not a claim about Google's real ceiling.
     "AUTH_SOURCE_BUDGET": {
       "search-console": 300,
+      "google-ads": 100,
     },
+    // `keyword-research-view`'s "Monetary Values Are Never Rendered Without
+    // a Currency Label" requirement: `lowTopOfPageBid`/`highTopOfPageBid`
+    // are bare numbers with NO currency field anywhere in the tool response,
+    // `Env`, or config (verified: `src/google/ads.ts:9-16`,
+    // `src/config.ts:8-10`). The single-tenant deployment has exactly one
+    // Google Ads account and therefore exactly one billing currency, so this
+    // is an operator-configured, out-of-band label — never read from or
+    // guessed against the tool payload. `bff/src/router.ts#dispatchAuthenticated`
+    // omits the response's `currencyLabel` field entirely (never an empty
+    // string) whenever this is unset, and the view renders an explicit
+    // "currency not configured" state in that case rather than a bare
+    // number or a guessed default.
+    "ADS_BID_CURRENCY_LABEL": "USD",
   },
   // `run_worker_first: true` is load-bearing, not decorative: without it
   // the Asset Worker answers matching paths BEFORE the User Worker, so

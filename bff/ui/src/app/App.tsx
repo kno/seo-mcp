@@ -4,6 +4,7 @@ import { SiteCrawlContainer } from "../containers/SiteCrawlContainer";
 import { PageSpeedContainer } from "../containers/PageSpeedContainer";
 import { SearchConsoleContainer } from "../containers/SearchConsoleContainer";
 import { GscInsightsContainer } from "../containers/GscInsightsContainer";
+import { KeywordResearchContainer } from "../containers/KeywordResearchContainer";
 import { LoginContainer } from "../containers/LoginContainer";
 
 /**
@@ -54,6 +55,13 @@ const NAV_ITEMS = [
     description:
       "Striking-distance keywords, low-CTR opportunities, and stored-snapshot comparison for a Search Console property — one shared property/date selector across all three.",
     View: GscInsightsContainer,
+  },
+  {
+    href: "#keyword-research",
+    label: "Keyword Research",
+    description:
+      "Google Ads Keyword Planner volume, competition and bid data for a keyword list; discover related keyword ideas from seeds or a URL; cluster any keyword list by shared term and intent — clustering needs no Ads call or quota.",
+    View: KeywordResearchContainer,
   },
 ] as const;
 

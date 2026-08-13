@@ -33,6 +33,17 @@
  * (`router.ts`) reads `timeoutMs` from `authenticated/registry.ts`'s own
  * per-route field instead, the same pattern `search_console_query` already
  * established.)
+ *
+ * `keyword-research-view` (PR8) adds three tools:
+ * - `get_keyword_metrics` / `discover_keywords`: authenticated, routed
+ *   through `dispatchAuthenticated()`, so — like the six tools above them —
+ *   `authenticated/registry.ts`'s own `timeoutMs` (32s) is what actually
+ *   governs; these entries exist only for this `Record`'s exhaustiveness.
+ * - `cluster_keywords`: NOT authenticated (no Google call, no credential),
+ *   routed through the ordinary `dispatch()` path — this IS its real
+ *   timeout budget. 10s is generous for pure in-memory text analysis over
+ *   at most 500 keywords; there is no network call in its path to bound
+ *   against.
  */
 
 export type ToolName =
@@ -46,7 +57,10 @@ export type ToolName =
   | "find_low_ctr_opportunities"
   | "snapshot_search_console"
   | "list_search_console_snapshots"
-  | "compare_search_console";
+  | "compare_search_console"
+  | "get_keyword_metrics"
+  | "discover_keywords"
+  | "cluster_keywords";
 
 export const TOOL_TIMEOUT_MS: Record<ToolName, number> = {
   health: 5000,
@@ -60,6 +74,9 @@ export const TOOL_TIMEOUT_MS: Record<ToolName, number> = {
   snapshot_search_console: 28_000,
   list_search_console_snapshots: 10_000,
   compare_search_console: 10_000,
+  get_keyword_metrics: 32_000,
+  discover_keywords: 32_000,
+  cluster_keywords: 10_000,
 };
 
 export type TimeoutResult<T> =

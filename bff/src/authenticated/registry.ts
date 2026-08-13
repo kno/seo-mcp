@@ -56,10 +56,25 @@
  *   spec's own words: "the 'as-of' fact for each side of the comparison is
  *   that snapshot's own `capturedAt` timestamp... not the moment the
  *   comparison was computed."
+ *
+ * `keyword-research-view` (PR8) adds two more rows under a NEW source,
+ * `"google-ads"`: `get_keyword_metrics` and `discover_keywords`
+ * (`callsGoogleUpstream: true` — both make a real Keyword Planner call).
+ * `cluster_keywords` is deliberately NOT in this registry at all — it is
+ * pure text analysis with no Google Ads call, no credential, and no quota,
+ * so it is wired through `router.ts`'s ordinary, non-authenticated
+ * `dispatch()` path instead, exactly like `crawl_page`/`crawl_site`.
+ *
+ * Neither `google-ads` route has a request-level `endDate` (Keyword Planner
+ * metrics are a rolling-window figure, not a calendar-ranged report) — see
+ * `authenticated/freshness.ts`'s doc comment for why `adsRollingWindowFreshnessDate`
+ * resolves today's date with `lagDays: 0` rather than reusing
+ * `fromRequestEndDate` or inventing a fake reporting lag.
  */
 import * as publishedSchemas from "../../../src/types/schemas";
 
-export type AuthenticatedSource = "search-console";
+export type { AuthenticatedSource } from "./freshness";
+import type { AuthenticatedSource } from "./freshness";
 
 type PublishedSchema = (typeof publishedSchemas)[keyof typeof publishedSchemas];
 
@@ -77,6 +92,13 @@ export interface AuthenticatedRouteDefinition {
   /** Resolves the calendar date `sourceFreshness` is derived from — see this
    * module's doc comment for why this cannot always be `args.endDate`. */
   freshnessDate: (args: Record<string, unknown>, data: unknown) => string;
+  /** Overrides `authenticated/freshness.ts`'s `GSC_REPORTING_LAG_DAYS`
+   * default for `deriveSourceFreshness`/`cache.ts#authRangeState`. Omitted
+   * (falls back to the GSC constant, unchanged behavior) for every
+   * Search-Console-backed route. `google-ads` routes set this to `0` — see
+   * this module's doc comment for why a rolling-window metric has no real
+   * reporting-lag figure to state. */
+  lagDays?: number;
 }
 
 function todayIsoDate(): string {
@@ -115,6 +137,16 @@ function fromMostRecentSnapshotEndDate(
  * satisfies the comparison's own as-of requirement (the view renders each
  * snapshot's `capturedAt` directly instead). */
 function todayAsFreshnessFallback(): string {
+  return todayIsoDate();
+}
+
+/** `get_keyword_metrics`/`discover_keywords` have no request-level date field
+ * at all (verified against `src/google/ads.ts`) — Keyword Planner metrics
+ * are a rolling market-volume figure, not a calendar-ranged report. Mirrors
+ * `todayAsFreshnessFallback` exactly (same body), kept as its own named
+ * function so the two "no date field" cases read as documented, independent
+ * decisions rather than one function serving two different justifications. */
+function adsRollingWindowFreshnessDate(): string {
   return todayIsoDate();
 }
 
@@ -160,6 +192,26 @@ export const AUTHENTICATED_REGISTRY = {
     timeoutMs: 10_000,
     callsGoogleUpstream: false,
     freshnessDate: todayAsFreshnessFallback,
+  },
+  // `keyword-research-view` (PR8). `adsTimeoutMs` (`src/config.ts`) is
+  // 20_000ms; 32_000ms leaves the same kind of margin over
+  // `adsTimeoutMs + googleTokenTimeoutMs` (20s + 10s) that
+  // `search_console_query`'s 27_000ms leaves over ITS own 15s + 10s budget.
+  get_keyword_metrics: {
+    source: "google-ads",
+    schema: publishedSchemas.keywordMetricsResultSchema,
+    timeoutMs: 32_000,
+    callsGoogleUpstream: true,
+    freshnessDate: adsRollingWindowFreshnessDate,
+    lagDays: 0,
+  },
+  discover_keywords: {
+    source: "google-ads",
+    schema: publishedSchemas.keywordMetricsResultSchema,
+    timeoutMs: 32_000,
+    callsGoogleUpstream: true,
+    freshnessDate: adsRollingWindowFreshnessDate,
+    lagDays: 0,
   },
 } satisfies Record<string, AuthenticatedRouteDefinition>;
 

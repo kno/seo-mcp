@@ -12,10 +12,28 @@
  * `tool_failed`, a NON-retryable, operator-facing failure: a classification
  * miss must never degrade into a retry loop against a broken credential or
  * an exhausted quota.
+ *
+ * `keyword-research-view` (PR8) extends the not-configured match to
+ * `"Google Ads developer token is not configured"` AND `"Google Ads
+ * customer ID is not configured"` — `src/google/ads.ts`'s own two guards
+ * (deliberately NOT naming the Ads credential/customer-id env vars here;
+ * see `bff/test/authenticated/containment.test.ts`'s structural fence,
+ * which bans those identifiers from every `bff/src` file, comments
+ * included), the exact same shape of "our own text, never Google's" as the
+ * GSC constant below. Task 8.6's requirement — a missing Ads developer
+ * token renders `upstream_source_not_configured`, distinct from an empty
+ * result — applies equally to a missing customer ID: both are the same
+ * "operator forgot to configure this source" state, not two different
+ * failures, so both are two extra literals in the same exact-match set,
+ * not a new classifier.
  */
 import type { BffErrorCode } from "../errors";
 
-const NOT_CONFIGURED_TEXT = "Google credentials are not configured";
+const NOT_CONFIGURED_TEXTS = [
+  "Google credentials are not configured",
+  "Google Ads developer token is not configured",
+  "Google Ads customer ID is not configured",
+];
 
 const CREDENTIAL_FAILURE_MARKERS = [
   "invalid_grant",
@@ -34,7 +52,9 @@ function includesAny(text: string, markers: string[]): boolean {
 }
 
 export function classifyUpstreamFailure(text: string): BffErrorCode {
-  if (text === NOT_CONFIGURED_TEXT) return "upstream_source_not_configured";
+  if (NOT_CONFIGURED_TEXTS.includes(text)) {
+    return "upstream_source_not_configured";
+  }
   if (includesAny(text, CREDENTIAL_FAILURE_MARKERS)) {
     return "upstream_credential_failure";
   }

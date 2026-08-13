@@ -157,19 +157,19 @@ Record<string, number>`; rejects a payload exceeding `limit`
 
 ## Phase 8: `keyword-research-view` UI (PR8) — `keyword-research-view`
 
-- [ ] 8.1 RED the view renders with `get_keyword_metrics` alone; `discover_keywords` and `cluster_keywords`
+- [x] 8.1 RED the view renders with `get_keyword_metrics` alone; `discover_keywords` and `cluster_keywords`
       are additive, not prerequisites
-- [ ] 8.2 RED no monetary value renders without a currency label; the label comes from operator config, never
+- [x] 8.2 RED no monetary value renders without a currency label; the label comes from operator config, never
       from the tool payload (no currency field exists)
-- [ ] 8.3 RED a `0` bid/volume renders with a hedged label — absent and zero are indistinguishable at the
+- [x] 8.3 RED a `0` bid/volume renders with a hedged label — absent and zero are indistinguishable at the
       source (`normalizeMetric`), so the view MUST NOT assert "no data" or "exactly zero"
-- [ ] 8.4 RED clusters are inspectable: every `KeywordCluster.keywords` member is listed, no opaque grouping
-- [ ] 8.5 RED a second `google-ads` quota indicator, textually distinct from the Search Console one and from
+- [x] 8.4 RED clusters are inspectable: every `KeywordCluster.keywords` member is listed, no opaque grouping
+- [x] 8.5 RED a second `google-ads` quota indicator, textually distinct from the Search Console one and from
       the MCP bucket; `cluster_keywords` touches neither (no credential, no quota)
-- [ ] 8.6 RED missing Ads developer token renders `upstream_source_not_configured`, distinct from empty
-- [ ] 8.7 GREEN registry rows (`google-ads` source for two tools, credential-free for clustering) +
+- [x] 8.6 RED missing Ads developer token renders `upstream_source_not_configured`, distinct from empty
+- [x] 8.7 GREEN registry rows (`google-ads` source for two tools, credential-free for clustering) +
       `bff/ui/keyword-research/*`
-- [ ] 8.8 PROOF a11y + keyboard pass; `pnpm test -- keyword-research`
+- [x] 8.8 PROOF a11y + keyboard pass; `pnpm test -- keyword-research`
 
 ## Phase 9: Intelligence + domain-report schemas (PR9) — `seo-intelligence-view`, `mcp-result-contract`
 

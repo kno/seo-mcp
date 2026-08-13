@@ -381,3 +381,118 @@ describe("router — analyze_pagespeed input validation", () => {
     expect(bodyText).not.toContain("secret-key");
   });
 });
+
+describe("router — get_keyword_metrics input validation (keyword-research-view, PR8)", () => {
+  it("rejects a request missing the required keywords list", async () => {
+    const env = fakeEnv();
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/get_keyword_metrics",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(400);
+    expect(env.SEO_MCP.fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects more than 100 comma-separated keywords before calling the MCP tool", async () => {
+    const env = fakeEnv();
+    const tooMany = Array.from({ length: 101 }, (_, i) => `kw${i}`).join(",");
+    const request = await authenticatedRequest(
+      env,
+      `/api/tools/get_keyword_metrics?keywords=${tooMany}`,
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(400);
+    expect(env.SEO_MCP.fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("router — discover_keywords input validation (keyword-research-view, PR8)", () => {
+  it("accepts a request with only seedKeywords (seedUrl is optional)", async () => {
+    const env = fakeEnv({
+      RESULT_CACHE: undefined,
+      AUTH_SOURCE_BUDGET: { "search-console": 300, "google-ads": 100 },
+      AUTH_SOURCE_TTL_SECONDS: {
+        "search-console": { closed: 21600, open: 900 },
+        "google-ads": { closed: 21600, open: 21600 },
+      },
+      ADS_BID_CURRENCY_LABEL: "USD",
+      SEO_MCP: {
+        fetch: stubToolFetch({
+          customerId: "123",
+          count: 1,
+          keywords: [
+            {
+              keyword: "seo tool",
+              avgMonthlySearches: 100,
+              competition: "LOW",
+              competitionIndex: 10,
+              lowTopOfPageBid: 0.5,
+              highTopOfPageBid: 1,
+            },
+          ],
+        }),
+      } as unknown as Fetcher,
+    });
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/discover_keywords?seedKeywords=seo%20tool",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(200);
+    expect(env.SEO_MCP.fetch).toHaveBeenCalledOnce();
+  });
+});
+
+describe("router — cluster_keywords input validation (keyword-research-view, PR8)", () => {
+  it("rejects a request missing the required keywords list", async () => {
+    const env = fakeEnv();
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/cluster_keywords",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(400);
+    expect(env.SEO_MCP.fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects more than 500 comma-separated keywords before calling the MCP tool", async () => {
+    const env = fakeEnv();
+    const tooMany = Array.from({ length: 501 }, (_, i) => `kw${i}`).join(",");
+    const request = await authenticatedRequest(
+      env,
+      `/api/tools/cluster_keywords?keywords=${tooMany}`,
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(400);
+    expect(env.SEO_MCP.fetch).not.toHaveBeenCalled();
+  });
+
+  it("dispatches a valid request through the ORDINARY (non-authenticated) path — no sourceFreshness, no quota", async () => {
+    const env = fakeEnv({
+      SEO_MCP: {
+        fetch: stubToolFetch({
+          count: 1,
+          intents: { informational: 1 },
+          clusters: [{ label: "seo", keywords: ["seo tool"] }],
+          keywords: [
+            {
+              keyword: "seo tool",
+              intent: "informational",
+              tokens: ["seo", "tool"],
+            },
+          ],
+        }),
+      } as unknown as Fetcher,
+    });
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/cluster_keywords?keywords=seo%20tool",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(200);
+    const body = (await response.clone().json()) as Record<string, unknown>;
+    expect(body.sourceFreshness).toBeUndefined();
+    expect(body.quota).toBeUndefined();
+  });
+});

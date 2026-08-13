@@ -39,6 +39,12 @@
  * compare") — the exact strings `src/server.ts` raises for its three
  * D1-backed snapshot tools.
  *
+ * `keyword-research-view` (`authenticated-keyword-research.test.ts`, PR8)
+ * adds a fourth family, read from the `keywords`/`seedKeywords`/`seedUrl`
+ * tool arguments instead of `siteUrl` (neither Ads-backed tool has a
+ * `siteUrl` field): `simulate-ads-not-configured` ("Google Ads developer
+ * token is not configured") — `src/google/ads.ts`'s own constant, task 8.6.
+ *
  * Plain JavaScript (not TypeScript): auxiliary `miniflare.workers` entries
  * are loaded directly by workerd, without the Vite/TypeScript transform
  * `wrangler: { configPath }` applies to the primary worker under test.
@@ -229,6 +235,47 @@ const TOOL_RESULTS = {
       ],
     },
   },
+  get_keyword_metrics: {
+    customerId: "1234567890",
+    count: 1,
+    keywords: [
+      {
+        keyword: "seo tool",
+        avgMonthlySearches: 1000,
+        competition: "MEDIUM",
+        competitionIndex: 45,
+        lowTopOfPageBid: 1.2,
+        highTopOfPageBid: 3.4,
+      },
+    ],
+  },
+  discover_keywords: {
+    customerId: "1234567890",
+    count: 1,
+    keywords: [
+      {
+        keyword: "seo software",
+        avgMonthlySearches: 500,
+        competition: "LOW",
+        competitionIndex: 12,
+        lowTopOfPageBid: 0.8,
+        highTopOfPageBid: 2.1,
+      },
+    ],
+  },
+  cluster_keywords: {
+    count: 2,
+    intents: { commercial: 2 },
+    clusters: [{ label: "seo", keywords: ["seo tool", "seo software"] }],
+    keywords: [
+      { keyword: "seo tool", intent: "commercial", tokens: ["seo", "tool"] },
+      {
+        keyword: "seo software",
+        intent: "commercial",
+        tokens: ["seo", "software"],
+      },
+    ],
+  },
 };
 
 const DECOY_CREDENTIAL = "DECOY_REFRESH_TOKEN_xyz789";
@@ -240,6 +287,10 @@ const GSC_ERROR_TEXTS = {
   "simulate-gsc-unknown-failure": `Unexpected upstream failure ${DECOY_CREDENTIAL}`,
   "simulate-d1-not-configured": "D1 storage is not configured",
   "simulate-insufficient-snapshots": "Need at least two snapshots to compare",
+};
+
+const ADS_ERROR_TEXTS = {
+  "simulate-ads-not-configured": "Google Ads developer token is not configured",
 };
 
 export default {
@@ -256,9 +307,24 @@ export default {
     const toolName = body?.params?.name;
     const argUrl = body?.params?.arguments?.url ?? "";
     const argSiteUrl = body?.params?.arguments?.siteUrl ?? "";
+    const argKeywordsText = [
+      ...(body?.params?.arguments?.keywords ?? []),
+      ...(body?.params?.arguments?.seedKeywords ?? []),
+      body?.params?.arguments?.seedUrl ?? "",
+    ].join(" ");
 
     for (const [trigger, text] of Object.entries(GSC_ERROR_TEXTS)) {
       if (argSiteUrl.includes(trigger)) {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: "stub",
+          result: { content: [{ type: "text", text }], isError: true },
+        });
+      }
+    }
+
+    for (const [trigger, text] of Object.entries(ADS_ERROR_TEXTS)) {
+      if (argKeywordsText.includes(trigger)) {
         return Response.json({
           jsonrpc: "2.0",
           id: "stub",

@@ -60,6 +60,7 @@ import { siteCrawlResultSchema } from "../../src/schemas/site";
 import { linkCheckResultSchema } from "../../src/schemas/links";
 import { pageSpeedResultSchema } from "../../src/schemas/pagespeed";
 import { gscDimensionSchema } from "../../src/schemas/search-console";
+import { clusterResultSchema } from "../../src/schemas/keywords";
 import { getAuthenticatedRoute } from "./authenticated/registry";
 import {
   GSC_REPORTING_LAG_DAYS,
@@ -173,6 +174,70 @@ const compareSearchConsoleInputSchema = z.object({
   siteUrl: z.string().min(1),
   baseSnapshotId: z.coerce.number().int().positive().optional(),
   currentSnapshotId: z.coerce.number().int().positive().optional(),
+});
+
+// A GET route carries no repeated-key array support here (same constraint
+// `dimensions` above already works around), so every array-shaped input for
+// the three `keyword-research-view` tools below travels as a single
+// comma-separated query parameter, split and trimmed here.
+function commaSeparatedList(value: string): string[] {
+  return value
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+}
+
+const requiredKeywordListSchema = (max: number) =>
+  z
+    .string()
+    .transform(commaSeparatedList)
+    .pipe(z.array(z.string().min(1)).min(1).max(max));
+
+const optionalKeywordListSchema = z
+  .string()
+  .optional()
+  .transform((value) =>
+    value === undefined ? undefined : commaSeparatedList(value),
+  )
+  .pipe(z.array(z.string().min(1)).optional());
+
+const optionalGeoTargetIdsSchema = z
+  .string()
+  .optional()
+  .transform((value) =>
+    value === undefined ? undefined : commaSeparatedList(value),
+  )
+  .pipe(z.array(z.string()).optional());
+
+// Mirrors `src/server.ts`'s `get_keyword_metrics` inputSchema exactly.
+const getKeywordMetricsInputSchema = z.object({
+  keywords: requiredKeywordListSchema(100),
+  geoTargetIds: optionalGeoTargetIdsSchema,
+  languageId: z.string().optional(),
+  customerId: z.string().optional(),
+});
+
+// Mirrors `src/server.ts`'s `discover_keywords` inputSchema exactly. The
+// "at least one of seedKeywords/seedUrl" cross-field constraint is enforced
+// tool-side (`discoverKeywords` throws "Provide seedKeywords or seedUrl") —
+// this route deliberately does not duplicate it, the same "let the tool's
+// own validation classify" precedent every other route in this file follows
+// for a non-Google-shaped, our-own-text failure.
+const discoverKeywordsInputSchema = z.object({
+  seedKeywords: optionalKeywordListSchema,
+  seedUrl: z.string().optional(),
+  geoTargetIds: optionalGeoTargetIdsSchema,
+  languageId: z.string().optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  customerId: z.string().optional(),
+});
+
+// Mirrors `src/server.ts`'s `cluster_keywords` inputSchema exactly. Not
+// authenticated — no Google Ads call, no credential, no quota — so this
+// route is dispatched via the ordinary `dispatch()` path below, never
+// `dispatchAuthenticated()`.
+const clusterKeywordsInputSchema = z.object({
+  keywords: requiredKeywordListSchema(500),
 });
 
 function parseQuery<T>(
@@ -302,6 +367,17 @@ async function dispatch<TInput, TResult>(
  *   response — hit or miss — including when its own `basis` is
  *   `"unavailable"` (threat matrix row e: a KV failure degrades the
  *   ESTIMATE, never the request).
+ * - `currencyLabel`, present ONLY for a `"google-ads"`-source route with an
+ *   operator-configured `env.ADS_BID_CURRENCY_LABEL`
+ *   (`keyword-research-view`'s "Monetary Values Are Never Rendered Without a
+ *   Currency Label" requirement). Omitted entirely — never an empty string —
+ *   when unset, so the view's "configuration needed" state (task 8.2) can
+ *   distinguish "no label configured" from "label is an empty string" by the
+ *   field's mere presence, the same optional-field discipline
+ *   `sourceFreshness` uses for its own REQUIRED-ness in the other direction.
+ *   This is a BFF-ENVELOPE field sourced from config, never read from the
+ *   tool's own payload — `KeywordMetric` carries no currency field at all
+ *   (verified: `src/google/ads.ts:9-16`).
  */
 function authenticatedToolResponse<T>(
   result: McpClientResult<T>,
@@ -309,6 +385,7 @@ function authenticatedToolResponse<T>(
   resultAge: number,
   sourceFreshness: ReturnType<typeof deriveSourceFreshness>,
   quota: QuotaEstimate,
+  currencyLabel?: string,
 ): Response {
   if (!result.ok) return bffErrorResponse(result.code, result.retryAfter);
   return Response.json({
@@ -317,6 +394,7 @@ function authenticatedToolResponse<T>(
     resultAge,
     sourceFreshness,
     quota,
+    ...(currencyLabel !== undefined ? { currencyLabel } : {}),
   });
 }
 
@@ -384,6 +462,18 @@ async function dispatchAuthenticated(
 
   const key = await cacheKey(toolName, args);
   const budget = env.AUTH_SOURCE_BUDGET[route.source] ?? 0;
+  const lagDays = route.lagDays ?? GSC_REPORTING_LAG_DAYS;
+
+  // See `authenticatedToolResponse`'s doc comment: omitted (never an empty
+  // string) whenever the operator has not configured a label, so the view
+  // can distinguish "not configured" from "configured as empty" by the
+  // field's mere presence.
+  const currencyLabel =
+    route.source === "google-ads" &&
+    typeof env.ADS_BID_CURRENCY_LABEL === "string" &&
+    env.ADS_BID_CURRENCY_LABEL.length > 0
+      ? env.ADS_BID_CURRENCY_LABEL
+      : undefined;
 
   const readQuotaEstimate = () =>
     getQuotaEstimate(env.RESULT_CACHE, route.source, budget);
@@ -429,6 +519,8 @@ async function dispatchAuthenticated(
       const sourceFreshness = deriveSourceFreshness(
         route.source,
         route.freshnessDate(args, cached.data),
+        undefined,
+        lagDays,
       );
       return authenticatedToolResponse(
         { ok: true, data: cached.data },
@@ -436,6 +528,7 @@ async function dispatchAuthenticated(
         cached.resultAge,
         sourceFreshness,
         await readQuotaEstimate(),
+        currencyLabel,
       );
     }
   }
@@ -444,7 +537,7 @@ async function dispatchAuthenticated(
   if (result.ok) {
     const rangeState = authRangeState(
       route.freshnessDate(args, result.data),
-      GSC_REPORTING_LAG_DAYS,
+      lagDays,
     );
     await putCached(
       env.RESULT_CACHE,
@@ -462,6 +555,8 @@ async function dispatchAuthenticated(
   const sourceFreshness = deriveSourceFreshness(
     route.source,
     route.freshnessDate(args, result.ok ? result.data : undefined),
+    undefined,
+    lagDays,
   );
   return authenticatedToolResponse(
     result,
@@ -469,6 +564,7 @@ async function dispatchAuthenticated(
     0,
     sourceFreshness,
     await readQuotaEstimate(),
+    currencyLabel,
   );
 }
 
@@ -653,6 +749,47 @@ export async function handleRequest(
       ctx,
       "compare_search_console",
       parsed.data as Record<string, unknown>,
+    );
+  }
+
+  if (url.pathname === "/api/tools/get_keyword_metrics") {
+    const parsed = parseQuery(url, getKeywordMetricsInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatchAuthenticated(
+      request,
+      url,
+      env,
+      ctx,
+      "get_keyword_metrics",
+      parsed.data as Record<string, unknown>,
+    );
+  }
+
+  if (url.pathname === "/api/tools/discover_keywords") {
+    const parsed = parseQuery(url, discoverKeywordsInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatchAuthenticated(
+      request,
+      url,
+      env,
+      ctx,
+      "discover_keywords",
+      parsed.data as Record<string, unknown>,
+    );
+  }
+
+  // NOT authenticated — no Google Ads call, no credential, no quota. Routed
+  // through the ordinary `dispatch()` path, exactly like `crawl_page`.
+  if (url.pathname === "/api/tools/cluster_keywords") {
+    const parsed = parseQuery(url, clusterKeywordsInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatch(
+      request,
+      url,
+      env,
+      "cluster_keywords",
+      parsed.data,
+      clusterResultSchema,
     );
   }
 
