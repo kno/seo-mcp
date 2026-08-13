@@ -48,13 +48,22 @@ export function StateRegion({ label, state, children }: StateRegionProps) {
 
   if (state.phase === "loading") {
     return (
-      <section aria-labelledby={headingId}>
+      <section className="region" aria-labelledby={headingId}>
         <h2 id={headingId} ref={headingRef} tabIndex={-1}>
           {label}
         </h2>
-        <p role="status">
+        <p className="state-loading" role="status">
           <Spinner /> {state.detail ?? `Loading ${label}…`}
         </p>
+        {/* Purely decorative placeholder rows so a long-running request
+            reads as "a result is being assembled here" rather than an empty
+            card. `aria-hidden` — the `role="status"` line above remains the
+            single announced loading channel (`Spinner`'s contract). */}
+        <div className="skeleton-stack" aria-hidden="true">
+          <div className="skeleton-bar" style={{ inlineSize: "38%" }} />
+          <div className="skeleton-bar" style={{ inlineSize: "82%" }} />
+          <div className="skeleton-bar" style={{ inlineSize: "64%" }} />
+        </div>
       </section>
     );
   }
@@ -62,13 +71,13 @@ export function StateRegion({ label, state, children }: StateRegionProps) {
   if (state.phase === "error") {
     const presentation = presentFor(state.error);
     return (
-      <section aria-labelledby={headingId}>
+      <section className="region" aria-labelledby={headingId}>
         <h2 id={headingId} ref={headingRef} tabIndex={-1}>
           {label}
         </h2>
-        <div role="alert">
-          <p>{presentation.title}</p>
-          <p>{presentation.description}</p>
+        <div className="alert" role="alert">
+          <p className="alert-title">{presentation.title}</p>
+          <p className="alert-description">{presentation.description}</p>
         </div>
         {presentation.retry.kind === "disabled-until-elapsed" && (
           <Countdown
@@ -84,22 +93,22 @@ export function StateRegion({ label, state, children }: StateRegionProps) {
 
   if (cardinality.state === "none") {
     return (
-      <section aria-labelledby={headingId}>
+      <section className="region" aria-labelledby={headingId}>
         <h2 id={headingId} ref={headingRef} tabIndex={-1}>
           {label}
         </h2>
-        <p>No {label.toLowerCase()} found.</p>
+        <p className="empty-state">No {label.toLowerCase()} found.</p>
       </section>
     );
   }
 
   return (
-    <section aria-labelledby={headingId}>
+    <section className="region" aria-labelledby={headingId}>
       <h2 id={headingId} ref={headingRef} tabIndex={-1}>
         {label}
       </h2>
       {cardinality.state === "bounded" && (
-        <p data-testid="bound-indicator">
+        <p className="bound-indicator" data-testid="bound-indicator">
           Showing {cardinality.bound.shown} of a maximum{" "}
           {cardinality.bound.limitValue} ({cardinality.bound.limitName}).
         </p>

@@ -39,10 +39,17 @@ export function UsageContainer() {
   }, []);
 
   return (
-    <div>
-      <button type="button" onClick={() => void load()}>
-        Refresh usage
-      </button>
+    <div className="panel">
+      <div className="panel-head">
+        <h3>Shared bucket</h3>
+        <button
+          className="btn-ghost btn-sm"
+          type="button"
+          onClick={() => void load()}
+        >
+          Refresh usage
+        </button>
+      </div>
       {snapshot && <HeadroomIndicator snapshot={snapshot} />}
     </div>
   );

@@ -62,39 +62,66 @@ export function PageSpeedForm({ onSubmit, disabled }: PageSpeedFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} aria-label="PageSpeed analysis request">
-      <label htmlFor="pagespeed-url">Page URL</label>
-      {/* No `required` attribute: the browser's native constraint
-          validation would silently swallow the submit event before this
-          handler ever runs, so the "submission without a URL is blocked"
-          behavior is enforced explicitly in `handleSubmit` below instead. */}
-      <input id="pagespeed-url" name="url" type="url" ref={urlRef} />
+    <form
+      className="toolbar"
+      onSubmit={handleSubmit}
+      aria-label="PageSpeed analysis request"
+    >
+      <div className="field-row">
+        <div className="field field-url">
+          <label htmlFor="pagespeed-url">Page URL</label>
+          {/* No `required` attribute: the browser's native constraint
+              validation would silently swallow the submit event before this
+              handler ever runs, so the "submission without a URL is blocked"
+              behavior is enforced explicitly in `handleSubmit` below instead. */}
+          <input
+            id="pagespeed-url"
+            name="url"
+            type="url"
+            placeholder="https://example.com/page"
+            ref={urlRef}
+          />
+        </div>
 
-      <label htmlFor="pagespeed-strategy">Strategy</label>
-      <select
-        id="pagespeed-strategy"
-        name="strategy"
-        ref={strategyRef}
-        defaultValue="mobile"
-      >
-        <option value="mobile">Mobile</option>
-        <option value="desktop">Desktop</option>
-      </select>
+        <div className="field">
+          <label htmlFor="pagespeed-strategy">Strategy</label>
+          <select
+            id="pagespeed-strategy"
+            name="strategy"
+            ref={strategyRef}
+            defaultValue="mobile"
+          >
+            <option value="mobile">Mobile</option>
+            <option value="desktop">Desktop</option>
+          </select>
+        </div>
 
-      <label htmlFor="pagespeed-api-key">PageSpeed API key (optional)</label>
-      <input
-        id="pagespeed-api-key"
-        name="apiKey"
-        type="password"
-        autoComplete="off"
-        ref={apiKeyRef}
-      />
+        <div className="field">
+          <label htmlFor="pagespeed-api-key">
+            PageSpeed API key (optional)
+          </label>
+          <input
+            id="pagespeed-api-key"
+            name="apiKey"
+            type="password"
+            autoComplete="off"
+            ref={apiKeyRef}
+          />
+          <p className="field-hint">Never stored, never echoed back.</p>
+        </div>
+      </div>
 
-      {validationError && <p role="alert">{validationError}</p>}
+      {validationError && (
+        <p className="alert" role="alert">
+          {validationError}
+        </p>
+      )}
 
-      <button type="submit" disabled={disabled}>
-        Analyze
-      </button>
+      <div className="form-actions">
+        <button className="btn-primary" type="submit" disabled={disabled}>
+          Analyze
+        </button>
+      </div>
     </form>
   );
 }

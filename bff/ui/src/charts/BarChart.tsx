@@ -18,41 +18,77 @@ export interface BarChartProps {
 
 export function BarChart({ items }: BarChartProps) {
   if (items.length === 0) {
-    return <p>No linked pages to show.</p>;
+    return <p className="empty-state">No linked pages to show.</p>;
   }
 
   const maxInbound = Math.max(...items.map((item) => item.inbound), 1);
 
   return (
-    <table aria-label="Most-linked pages">
-      <thead>
-        <tr>
-          <th scope="col">URL</th>
-          <th scope="col">Inbound links</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((item) => {
-          const widthPercent = (item.inbound / maxInbound) * 100;
-          return (
-            <tr key={item.url}>
-              <td>
-                {item.url}
-                <svg
-                  aria-hidden="true"
-                  viewBox="0 0 100 10"
-                  preserveAspectRatio="none"
-                  width="100%"
-                  height="0.6em"
-                >
-                  <rect x={0} y={0} width={widthPercent} height={10} />
-                </svg>
-              </td>
-              <td>{item.inbound}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <div className="table-scroll">
+      <table className="bar-table" aria-label="Most-linked pages">
+        <thead>
+          <tr>
+            <th scope="col">URL</th>
+            <th scope="col">Inbound links</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((item) => {
+            const widthPercent = (item.inbound / maxInbound) * 100;
+            return (
+              <tr key={item.url}>
+                <td>
+                  <span className="bar-cell">
+                    <span className="cell-url">{item.url}</span>
+                    <svg
+                      className="bar-svg"
+                      aria-hidden="true"
+                      viewBox="0 0 100 6"
+                      preserveAspectRatio="none"
+                      width="100%"
+                      height="0.375rem"
+                    >
+                      <defs>
+                        <linearGradient
+                          id={`bar-gradient-${encodeURIComponent(item.url)}`}
+                          x1="0"
+                          x2="1"
+                          y1="0"
+                          y2="0"
+                        >
+                          <stop
+                            offset="0%"
+                            stopColor="var(--color-brand-400)"
+                          />
+                          <stop
+                            offset="100%"
+                            stopColor="var(--color-brand-700)"
+                          />
+                        </linearGradient>
+                      </defs>
+                      <rect
+                        x={0}
+                        y={0}
+                        width={100}
+                        height={6}
+                        fill="var(--color-line-soft)"
+                      />
+                      <rect
+                        x={0}
+                        y={0}
+                        width={widthPercent}
+                        height={6}
+                        fill={`url(#bar-gradient-${encodeURIComponent(item.url)})`}
+                      />
+                    </svg>
+                  </span>
+                </td>
+                <td className="cell-figure">{item.inbound}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }

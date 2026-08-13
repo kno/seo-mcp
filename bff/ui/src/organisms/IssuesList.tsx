@@ -47,30 +47,37 @@ function badgeVariantFor(severity: "warning" | "info"): BadgeVariant {
 export function IssuesList({ issues }: IssuesListProps) {
   if (issues.length === 0) {
     return (
-      <section aria-label="Issues">
-        <p>No issues detected.</p>
+      <section className="panel" aria-label="Issues">
+        <h3>Issues</h3>
+        <p className="empty-state empty-state-ok">No issues detected.</p>
       </section>
     );
   }
 
   return (
-    <section aria-label="Issues">
-      <ul>
+    <section className="panel" aria-label="Issues">
+      <div className="panel-head">
+        <h3>Issues</h3>
+        <p className="panel-subtitle">
+          <span className="metric-inline">{issues.length}</span> detected
+        </p>
+      </div>
+      <ul className="item-list">
         {issues.map((issue, index) => {
           const title = ISSUE_TITLES[issue.code];
           const isUnmapped = title === undefined;
           return (
-            <li key={`${issue.code}-${index}`}>
+            <li className="item-row" key={`${issue.code}-${index}`}>
               <Badge variant={badgeVariantFor(issue.severity)}>
                 {issue.severity}
               </Badge>
               {isUnmapped && (
-                <span data-testid="issue-unmapped">
+                <span className="item-title" data-testid="issue-unmapped">
                   Unrecognized issue code: <code>{issue.code}</code>
                 </span>
               )}
-              {!isUnmapped && <strong>{title}</strong>}
-              <span>{issue.message}</span>
+              {!isUnmapped && <strong className="item-title">{title}</strong>}
+              <span className="item-detail">{issue.message}</span>
             </li>
           );
         })}

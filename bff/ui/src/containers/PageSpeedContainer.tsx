@@ -74,23 +74,28 @@ export function PageSpeedContainer() {
   }
 
   return (
-    <div>
+    <div className="view-stack">
       <PageSpeedForm onSubmit={handleSubmit} disabled={inFlight} />
 
       {state && (
         <StateRegion label="PageSpeed analysis" state={state}>
           {result && (
-            <>
-              <ScorePanel
-                performanceScore={result.performanceScore}
-                accessibilityScore={result.accessibilityScore}
-                bestPracticesScore={result.bestPracticesScore}
-                seoScore={result.seoScore}
-              />
+            <div className="region-body">
+              <div className="span-full">
+                <ScorePanel
+                  performanceScore={result.performanceScore}
+                  accessibilityScore={result.accessibilityScore}
+                  bestPracticesScore={result.bestPracticesScore}
+                  seoScore={result.seoScore}
+                />
+              </div>
               <LabMetricsPanel labMetrics={result.labMetrics} />
               <FieldDataPanel fieldMetrics={result.fieldMetrics} />
-              <OpportunitiesTable opportunities={result.opportunities} />
-            </>
+              <div className="panel span-full">
+                <h3>Opportunities</h3>
+                <OpportunitiesTable opportunities={result.opportunities} />
+              </div>
+            </div>
           )}
         </StateRegion>
       )}

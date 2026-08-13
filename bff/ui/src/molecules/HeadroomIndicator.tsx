@@ -21,11 +21,11 @@ export interface HeadroomIndicatorProps {
 
 export function HeadroomIndicator({ snapshot }: HeadroomIndicatorProps) {
   return (
-    <div data-testid="headroom-indicator">
-      <p>
-        <strong>{snapshot.callCount} calls</strong> observed in the last{" "}
-        {snapshot.windowElapsedSeconds}s of a {snapshot.windowSeconds}s window
-        (estimate)
+    <div className="headroom" data-testid="headroom-indicator">
+      <p className="meta-line">
+        <strong className="metric-inline">{snapshot.callCount} calls</strong>{" "}
+        observed in the last {snapshot.windowElapsedSeconds}s of a{" "}
+        {snapshot.windowSeconds}s window (estimate)
       </p>
       <details>
         <summary>Why is this only an estimate?</summary>

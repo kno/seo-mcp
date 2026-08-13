@@ -21,39 +21,43 @@ export interface OpportunitiesTableProps {
 
 export function OpportunitiesTable({ opportunities }: OpportunitiesTableProps) {
   if (opportunities.length === 0) {
-    return <p>No opportunities reported.</p>;
+    return (
+      <p className="empty-state empty-state-ok">No opportunities reported.</p>
+    );
   }
 
   return (
-    <table aria-label="Optimization opportunities">
-      <thead>
-        <tr>
-          <th scope="col">Opportunity</th>
-          <th scope="col">Time savings</th>
-          <th scope="col">Size savings</th>
-        </tr>
-      </thead>
-      <tbody>
-        {opportunities.map((opportunity) => (
-          <tr key={opportunity.id}>
-            <td>{opportunity.title}</td>
-            <td data-testid={`savings-ms-${opportunity.id}`}>
-              {opportunity.savingsMs === undefined ? (
-                <Absent label="time savings" />
-              ) : (
-                `${opportunity.savingsMs} ms`
-              )}
-            </td>
-            <td data-testid={`savings-bytes-${opportunity.id}`}>
-              {opportunity.savingsBytes === undefined ? (
-                <Absent label="size savings" />
-              ) : (
-                `${opportunity.savingsBytes} bytes`
-              )}
-            </td>
+    <div className="table-scroll">
+      <table aria-label="Optimization opportunities">
+        <thead>
+          <tr>
+            <th scope="col">Opportunity</th>
+            <th scope="col">Time savings</th>
+            <th scope="col">Size savings</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {opportunities.map((opportunity) => (
+            <tr key={opportunity.id}>
+              <td>{opportunity.title}</td>
+              <td data-testid={`savings-ms-${opportunity.id}`}>
+                {opportunity.savingsMs === undefined ? (
+                  <Absent label="time savings" />
+                ) : (
+                  `${opportunity.savingsMs} ms`
+                )}
+              </td>
+              <td data-testid={`savings-bytes-${opportunity.id}`}>
+                {opportunity.savingsBytes === undefined ? (
+                  <Absent label="size savings" />
+                ) : (
+                  `${opportunity.savingsBytes} bytes`
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

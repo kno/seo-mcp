@@ -66,10 +66,18 @@ export function BrokenLinksContainer({ pageUrl }: BrokenLinksContainerProps) {
   }
 
   return (
-    <div>
-      <button type="button" onClick={handleCheckLinks}>
-        Check links
-      </button>
+    <div className="view-stack">
+      <div className="toolbar toolbar-inline">
+        <p className="panel-subtitle">
+          Probe every outbound link on this page for 4xx/5xx and unreachable
+          targets.
+        </p>
+        <div className="form-actions">
+          <button type="button" onClick={handleCheckLinks}>
+            Check links
+          </button>
+        </div>
+      </div>
 
       {state && (
         <StateRegion label="Broken links" state={state}>

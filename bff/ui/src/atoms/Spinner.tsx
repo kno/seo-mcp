@@ -5,5 +5,5 @@
  * `dashboard-shell`'s "loading is distinct" requirement.
  */
 export function Spinner() {
-  return <span aria-hidden="true" data-testid="spinner" />;
+  return <span className="spinner" aria-hidden="true" data-testid="spinner" />;
 }

@@ -21,25 +21,32 @@ export interface JsonLdPanelProps {
 export function JsonLdPanel({ jsonLd }: JsonLdPanelProps) {
   if (jsonLd.blocks === 0) {
     return (
-      <section aria-label="JSON-LD">
-        <p>No JSON-LD present.</p>
+      <section className="panel" aria-label="JSON-LD">
+        <h3>JSON-LD</h3>
+        <p className="empty-state">No JSON-LD present.</p>
       </section>
     );
   }
 
   return (
-    <section aria-label="JSON-LD">
-      <p>{jsonLd.blocks} JSON-LD block(s) found.</p>
+    <section className="panel" aria-label="JSON-LD">
+      <h3>JSON-LD</h3>
+      <p className="meta-line">
+        <span className="metric-inline">{jsonLd.blocks}</span> JSON-LD block(s)
+        found.
+      </p>
       {jsonLd.invalid > 0 && (
-        <p data-testid="jsonld-invalid">
+        <p className="alert alert-notice" data-testid="jsonld-invalid">
           {jsonLd.invalid} block(s) failed to parse and are excluded from the
           types below.
         </p>
       )}
       {jsonLd.types.length > 0 && (
-        <ul aria-label="JSON-LD types">
+        <ul className="tag-list" aria-label="JSON-LD types">
           {jsonLd.types.map((type) => (
-            <li key={type}>{type}</li>
+            <li key={type} className="tag">
+              {type}
+            </li>
           ))}
         </ul>
       )}

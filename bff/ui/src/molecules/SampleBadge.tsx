@@ -22,7 +22,7 @@ export function SampleBadge({ cardinality }: SampleBadgeProps) {
   const { bound } = cardinality;
 
   return (
-    <span data-testid="sample-badge">
+    <span className="sample-badge" data-testid="sample-badge">
       Sample of {bound.shown}
       {bound.total !== undefined ? ` of ${bound.total}` : ""} (max{" "}
       {bound.limitValue} — {bound.limitName})

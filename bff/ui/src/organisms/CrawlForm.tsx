@@ -96,52 +96,84 @@ export function CrawlForm({ onSubmit, disabled }: CrawlFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} aria-label="Site crawl request">
-      <label htmlFor="crawl-url">Site URL</label>
-      <input
-        id="crawl-url"
-        name="url"
-        type="url"
-        required
-        value={url}
-        onChange={(event) => setUrl(event.currentTarget.value)}
-      />
+    <form
+      className="toolbar"
+      onSubmit={handleSubmit}
+      aria-label="Site crawl request"
+    >
+      <div className="field-row">
+        <div className="field field-url">
+          <label htmlFor="crawl-url">Site URL</label>
+          <input
+            id="crawl-url"
+            name="url"
+            type="url"
+            placeholder="https://example.com"
+            required
+            value={url}
+            onChange={(event) => setUrl(event.currentTarget.value)}
+          />
+        </div>
 
-      <label htmlFor="crawl-limit">Limit</label>
-      <input
-        id="crawl-limit"
-        name="limit"
-        type="number"
-        value={limit}
-        onChange={(event) => setLimit(Number(event.currentTarget.value))}
-      />
+        <div className="field">
+          <label htmlFor="crawl-limit">Limit</label>
+          <input
+            id="crawl-limit"
+            name="limit"
+            type="number"
+            value={limit}
+            onChange={(event) => setLimit(Number(event.currentTarget.value))}
+          />
+        </div>
 
-      <label htmlFor="crawl-concurrency">Concurrency</label>
-      <input
-        id="crawl-concurrency"
-        name="concurrency"
-        type="number"
-        value={concurrency}
-        onChange={(event) => setConcurrency(Number(event.currentTarget.value))}
-      />
+        <div className="field">
+          <label htmlFor="crawl-concurrency">Concurrency</label>
+          <input
+            id="crawl-concurrency"
+            name="concurrency"
+            type="number"
+            value={concurrency}
+            onChange={(event) =>
+              setConcurrency(Number(event.currentTarget.value))
+            }
+          />
+        </div>
+      </div>
 
-      {validationError && <p role="alert">{validationError}</p>}
+      {validationError && (
+        <p className="alert" role="alert">
+          {validationError}
+        </p>
+      )}
 
       {pendingConfirmation && (
-        <div role="alert">
-          <p>
+        <div className="alert alert-notice" role="alert">
+          <p className="alert-description">
             Running a crawl at the maximum setting can take up to 40 seconds and
             consumes the shared rate limit bucket. Confirm to continue.
           </p>
-          <button type="button" onClick={handleConfirm} disabled={disabled}>
-            Confirm and run crawl
-          </button>
+          <div className="form-actions">
+            <button
+              className="btn-primary"
+              type="button"
+              onClick={handleConfirm}
+              disabled={disabled}
+            >
+              Confirm and run crawl
+            </button>
+          </div>
         </div>
       )}
 
-      <button type="submit" disabled={disabled}>
-        Start crawl
-      </button>
+      <div className="form-actions">
+        <button className="btn-primary" type="submit" disabled={disabled}>
+          Start crawl
+        </button>
+        <span className="field-hint">
+          Crawling is the most expensive action here — it spends the shared
+          rate-limit bucket.
+        </span>
+      </div>
     </form>
   );
 }

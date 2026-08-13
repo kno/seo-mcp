@@ -21,12 +21,15 @@ function HeadingLevelList({
   readonly headings: readonly string[];
 }) {
   return (
-    <div data-testid={`headings-${level}`}>
-      <h3>{level.toUpperCase()}</h3>
+    // `h4`, not `h3`: the enclosing panel now carries a visible `h3` title,
+    // so these level groups sit one step below it and the document keeps a
+    // strictly descending heading order (axe's heading-order rule).
+    <div className="heading-group" data-testid={`headings-${level}`}>
+      <h4>{level.toUpperCase()}</h4>
       {headings.length === 0 ? (
-        <p>No {level.toUpperCase()} headings found.</p>
+        <p className="empty-state">No {level.toUpperCase()} headings found.</p>
       ) : (
-        <ul>
+        <ul className="bullet-list">
           {headings.map((heading, index) => (
             <li key={`${level}-${index}`}>{heading}</li>
           ))}
@@ -44,16 +47,23 @@ export function HeadingsPanel({
   externalLinks,
 }: HeadingsPanelProps) {
   return (
-    <section aria-label="Headings and links">
-      <HeadingLevelList level="h1" headings={h1} />
-      <HeadingLevelList level="h2" headings={h2} />
-      <HeadingLevelList level="h3" headings={h3} />
-      <dl>
-        <dt>Internal links</dt>
-        <dd data-testid="headings-internal-links">{internalLinks}</dd>
-        <dt>External links</dt>
-        <dd data-testid="headings-external-links">{externalLinks}</dd>
+    <section className="panel" aria-label="Headings and links">
+      <h3>Headings and links</h3>
+      <dl className="stat-grid">
+        <div className="stat">
+          <dt>Internal links</dt>
+          <dd data-testid="headings-internal-links">{internalLinks}</dd>
+        </div>
+        <div className="stat">
+          <dt>External links</dt>
+          <dd data-testid="headings-external-links">{externalLinks}</dd>
+        </div>
       </dl>
+      <div className="section-grid">
+        <HeadingLevelList level="h1" headings={h1} />
+        <HeadingLevelList level="h2" headings={h2} />
+        <HeadingLevelList level="h3" headings={h3} />
+      </div>
     </section>
   );
 }

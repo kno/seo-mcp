@@ -35,14 +35,14 @@ export function FreshnessBadge({
 
   if (cacheStatus === "hit") {
     return (
-      <span data-testid="freshness-badge">
+      <span className="freshness-badge" data-testid="freshness-badge">
         Cached result — {ageSeconds}s old
       </span>
     );
   }
 
   return (
-    <span data-testid="freshness-badge">
+    <span className="freshness-badge" data-testid="freshness-badge">
       Fresh result{ageSeconds > 0 ? ` — ${ageSeconds}s old` : ""}
     </span>
   );

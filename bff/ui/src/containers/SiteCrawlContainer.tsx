@@ -106,30 +106,42 @@ export function SiteCrawlContainer() {
   }
 
   return (
-    <div>
+    <div className="view-stack">
       <CrawlForm onSubmit={handleSubmit} disabled={inFlight} />
 
       {state && (
         <StateRegion label="Site crawl" state={state}>
           {result && (
-            <>
+            <div className="region-body">
               <DomainSummaryPanel summary={result.summary} />
               <CrawlPolicyPanel crawlPolicy={result.crawlPolicy} />
-              <LinkGraphPanel linkGraph={result.linkGraph} />
-              <PerPageTable
-                pages={result.pages}
-                onDrillDown={handleDrillDown}
-              />
-            </>
+              <div className="span-full">
+                <LinkGraphPanel linkGraph={result.linkGraph} />
+              </div>
+              <div className="panel panel-wide span-full">
+                <h3>Per-page results</h3>
+                <PerPageTable
+                  pages={result.pages}
+                  onDrillDown={handleDrillDown}
+                />
+              </div>
+            </div>
           )}
         </StateRegion>
       )}
 
       {drillDown && (
-        <section aria-label="Drill-down page report">
-          <button type="button" onClick={() => setDrillDown(null)}>
-            Close
-          </button>
+        <section className="drawer" aria-label="Drill-down page report">
+          <div className="drawer-head">
+            <h2>Page detail</h2>
+            <button
+              className="btn-ghost"
+              type="button"
+              onClick={() => setDrillDown(null)}
+            >
+              Close
+            </button>
+          </div>
           <OnPageCard
             title={drillDown.title}
             description={drillDown.description}
@@ -145,8 +157,10 @@ export function SiteCrawlContainer() {
             internalLinks={drillDown.internalLinks}
             externalLinks={drillDown.externalLinks}
           />
-          <OpenGraphPanel openGraph={drillDown.openGraph} />
-          <JsonLdPanel jsonLd={drillDown.jsonLd} />
+          <div className="section-grid">
+            <OpenGraphPanel openGraph={drillDown.openGraph} />
+            <JsonLdPanel jsonLd={drillDown.jsonLd} />
+          </div>
           <IssuesList issues={drillDown.issues} />
         </section>
       )}

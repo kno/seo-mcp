@@ -75,17 +75,35 @@ export function PageReportContainer() {
   }
 
   return (
-    <div>
-      <form onSubmit={handleSubmit} aria-label="Page report request">
-        <label htmlFor="page-report-url">Page URL</label>
-        <input id="page-report-url" name="url" type="url" required />
-        <button type="submit">Get report</button>
+    <div className="view-stack">
+      <form
+        className="toolbar"
+        onSubmit={handleSubmit}
+        aria-label="Page report request"
+      >
+        <div className="field-row">
+          <div className="field field-url">
+            <label htmlFor="page-report-url">Page URL</label>
+            <input
+              id="page-report-url"
+              name="url"
+              type="url"
+              placeholder="https://example.com/page"
+              required
+            />
+          </div>
+          <div className="form-actions">
+            <button className="btn-primary" type="submit">
+              Get report
+            </button>
+          </div>
+        </div>
       </form>
 
       {state && (
         <StateRegion label="Page report" state={state}>
           {analysis && (
-            <>
+            <div className="region-body">
               <OnPageCard
                 title={analysis.title}
                 description={analysis.description}
@@ -103,11 +121,21 @@ export function PageReportContainer() {
               />
               <OpenGraphPanel openGraph={analysis.openGraph} />
               <JsonLdPanel jsonLd={analysis.jsonLd} />
-              <p data-testid="page-report-word-count">
-                Word count: {analysis.wordCount}
-              </p>
-              <IssuesList issues={analysis.issues} />
-            </>
+              <div className="panel">
+                <h3>Content</h3>
+                <dl className="stat-grid">
+                  <div className="stat">
+                    <dt>Word count</dt>
+                    <dd data-testid="page-report-word-count">
+                      {analysis.wordCount}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+              <div className="span-full">
+                <IssuesList issues={analysis.issues} />
+              </div>
+            </div>
           )}
         </StateRegion>
       )}

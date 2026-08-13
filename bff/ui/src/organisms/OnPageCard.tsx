@@ -26,28 +26,38 @@ export function OnPageCard({
   indexable,
 }: OnPageCardProps) {
   return (
-    <dl aria-label="On-page metadata">
-      <dt>Title</dt>
-      <dd>{title}</dd>
+    <section className="panel">
+      {/* Visible panel title matching the list's existing accessible name —
+          a sighted user now sees the same label assistive technology has
+          always been given. */}
+      <h3>On-page metadata</h3>
+      <dl aria-label="On-page metadata">
+        <dt>Title</dt>
+        <dd>{title}</dd>
 
-      <dt>Description</dt>
-      <dd>{description}</dd>
+        <dt>Description</dt>
+        <dd>{description}</dd>
 
-      <dt>Canonical</dt>
-      <dd data-testid="onpage-canonical">
-        {canonical ?? <Absent label="canonical" />}
-      </dd>
+        <dt>Canonical</dt>
+        <dd className="cell-url" data-testid="onpage-canonical">
+          {canonical ?? <Absent label="canonical" />}
+        </dd>
 
-      <dt>Robots</dt>
-      <dd data-testid="onpage-robots">{robots ?? <Absent label="robots" />}</dd>
+        <dt>Robots</dt>
+        <dd data-testid="onpage-robots">
+          {robots ?? <Absent label="robots" />}
+        </dd>
 
-      <dt>Language</dt>
-      <dd data-testid="onpage-lang">{lang ?? <Absent label="lang" />}</dd>
+        <dt>Language</dt>
+        <dd data-testid="onpage-lang">{lang ?? <Absent label="lang" />}</dd>
 
-      <dt>Indexability</dt>
-      <dd data-testid="onpage-indexable">
-        {indexable ? "Indexable" : "Not indexable"}
-      </dd>
-    </dl>
+        <dt>Indexability</dt>
+        <dd data-testid="onpage-indexable">
+          <span className={indexable ? "pill pill-ok" : "pill pill-danger"}>
+            {indexable ? "Indexable" : "Not indexable"}
+          </span>
+        </dd>
+      </dl>
+    </section>
   );
 }

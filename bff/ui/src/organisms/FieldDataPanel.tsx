@@ -20,8 +20,9 @@ export interface FieldDataPanelProps {
 export function FieldDataPanel({ fieldMetrics }: FieldDataPanelProps) {
   if (!fieldMetrics) {
     return (
-      <section aria-label="Field data">
-        <p data-testid="field-data-unavailable">
+      <section className="panel" aria-label="Field data">
+        <h3>Field data</h3>
+        <p className="empty-state" data-testid="field-data-unavailable">
           No field data available for this URL.
         </p>
       </section>
@@ -29,7 +30,8 @@ export function FieldDataPanel({ fieldMetrics }: FieldDataPanelProps) {
   }
 
   return (
-    <section aria-label="Field data">
+    <section className="panel" aria-label="Field data">
+      <h3>Field data</h3>
       <dl>
         <dt>Overall category</dt>
         <dd>

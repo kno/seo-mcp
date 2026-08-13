@@ -20,19 +20,25 @@ const DISALLOWED_SKIPPED_SAMPLE_CAP = 25;
 
 export function CrawlPolicyPanel({ crawlPolicy }: CrawlPolicyPanelProps) {
   return (
-    <section aria-label="Crawl policy">
-      <p data-testid="robots-status">
+    <section className="panel" aria-label="Crawl policy">
+      <h3>Crawl policy</h3>
+      <p
+        className={
+          crawlPolicy.robotsFound ? "empty-state empty-state-ok" : "empty-state"
+        }
+        data-testid="robots-status"
+      >
         {crawlPolicy.robotsFound
           ? "robots.txt found"
           : "No robots.txt was found for this site"}
       </p>
 
-      <div>
-        <h3>Declared sitemaps</h3>
+      <div className="subpanel">
+        <h4>Declared sitemaps</h4>
         {crawlPolicy.sitemapsDeclared.length === 0 ? (
-          <p>No sitemaps declared.</p>
+          <p className="empty-state">No sitemaps declared.</p>
         ) : (
-          <ul>
+          <ul className="url-list">
             {crawlPolicy.sitemapsDeclared.map((url) => (
               <li key={url}>{url}</li>
             ))}
@@ -48,13 +54,13 @@ export function CrawlPolicyPanel({ crawlPolicy }: CrawlPolicyPanelProps) {
         />
       </div>
 
-      <div>
-        <h3>Disallowed by robots rules</h3>
-        <p data-testid="disallowed-skipped-count">
+      <div className="subpanel">
+        <h4>Disallowed by robots rules</h4>
+        <p className="figure" data-testid="disallowed-skipped-count">
           {crawlPolicy.disallowedSkipped.count}
         </p>
         {crawlPolicy.disallowedSkipped.count > 0 && (
-          <ul>
+          <ul className="url-list">
             {crawlPolicy.disallowedSkipped.sample.map((url) => (
               <li key={url}>{url}</li>
             ))}

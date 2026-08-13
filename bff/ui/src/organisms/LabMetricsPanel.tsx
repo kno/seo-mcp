@@ -38,28 +38,31 @@ function renderMetric(
 
 export function LabMetricsPanel({ labMetrics }: LabMetricsPanelProps) {
   return (
-    <dl aria-label="Lab metrics">
-      {renderMetric(
-        "First Contentful Paint",
-        labMetrics.firstContentfulPaintMs,
-        " ms",
-      )}
-      {renderMetric(
-        "Largest Contentful Paint",
-        labMetrics.largestContentfulPaintMs,
-        " ms",
-      )}
-      {renderMetric(
-        "Total Blocking Time",
-        labMetrics.totalBlockingTimeMs,
-        " ms",
-      )}
-      {renderMetric(
-        "Cumulative Layout Shift",
-        labMetrics.cumulativeLayoutShift,
-        "",
-      )}
-      {renderMetric("Speed Index", labMetrics.speedIndexMs, " ms")}
-    </dl>
+    <section className="panel">
+      <h3>Lab metrics</h3>
+      <dl aria-label="Lab metrics">
+        {renderMetric(
+          "First Contentful Paint",
+          labMetrics.firstContentfulPaintMs,
+          " ms",
+        )}
+        {renderMetric(
+          "Largest Contentful Paint",
+          labMetrics.largestContentfulPaintMs,
+          " ms",
+        )}
+        {renderMetric(
+          "Total Blocking Time",
+          labMetrics.totalBlockingTimeMs,
+          " ms",
+        )}
+        {renderMetric(
+          "Cumulative Layout Shift",
+          labMetrics.cumulativeLayoutShift,
+          "",
+        )}
+        {renderMetric("Speed Index", labMetrics.speedIndexMs, " ms")}
+      </dl>
+    </section>
   );
 }

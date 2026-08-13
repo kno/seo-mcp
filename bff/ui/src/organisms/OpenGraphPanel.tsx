@@ -13,14 +13,16 @@ export function OpenGraphPanel({ openGraph }: OpenGraphPanelProps) {
 
   if (entries.length === 0) {
     return (
-      <section aria-label="Open Graph metadata">
-        <p>No Open Graph metadata present.</p>
+      <section className="panel" aria-label="Open Graph metadata">
+        <h3>Open Graph</h3>
+        <p className="empty-state">No Open Graph metadata present.</p>
       </section>
     );
   }
 
   return (
-    <section aria-label="Open Graph metadata">
+    <section className="panel" aria-label="Open Graph metadata">
+      <h3>Open Graph</h3>
       <dl>
         {entries.map(([key, value]) => (
           <div key={key}>

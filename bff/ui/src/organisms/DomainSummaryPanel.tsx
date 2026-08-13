@@ -33,16 +33,17 @@ function DuplicateGroupList({
   readonly scopePrefix: string;
 }) {
   return (
-    <div>
-      <h3>{title}</h3>
+    <div className="subpanel">
+      <h4>{title}</h4>
       {groups.length === 0 ? (
-        <p>None found.</p>
+        <p className="empty-state empty-state-ok">None found.</p>
       ) : (
-        <ul>
+        <ul className="item-list">
           {groups.map((group, index) => (
-            <li key={`${group.value}-${index}`}>
-              <strong>{group.value}</strong> — {group.count} page(s)
-              <ul>
+            <li className="item-row group-row" key={`${group.value}-${index}`}>
+              <strong className="item-title">{group.value}</strong> —{" "}
+              <span className="metric-inline">{group.count} page(s)</span>
+              <ul className="url-list">
                 {group.sample.map((url) => (
                   <li key={url}>{url}</li>
                 ))}
@@ -75,12 +76,12 @@ function CategoryRow({
   readonly scope: string;
 }) {
   return (
-    <div>
+    <div className={category.count > 0 ? "stat stat-warn" : "stat stat-ok"}>
       <dt>{label}</dt>
       <dd data-testid={testId}>{category.count}</dd>
       {category.count > 0 && (
         <>
-          <ul>
+          <ul className="url-list">
             {category.sample.map((url) => (
               <li key={url}>{url}</li>
             ))}
@@ -101,10 +102,14 @@ function CategoryRow({
 
 export function DomainSummaryPanel({ summary }: DomainSummaryPanelProps) {
   return (
-    <section aria-label="Domain summary">
-      <p data-testid="pages-analyzed">
-        Pages analyzed: {summary.pagesAnalyzed}
-      </p>
+    <section className="panel" aria-label="Domain summary">
+      <div className="panel-head">
+        <h3>Domain summary</h3>
+        <p className="panel-subtitle" data-testid="pages-analyzed">
+          Pages analyzed:{" "}
+          <span className="metric-inline">{summary.pagesAnalyzed}</span>
+        </p>
+      </div>
 
       <DuplicateGroupList
         title="Duplicate titles"
@@ -117,7 +122,7 @@ export function DomainSummaryPanel({ summary }: DomainSummaryPanelProps) {
         scopePrefix="summary.duplicateDescriptions"
       />
 
-      <dl>
+      <dl className="stat-grid">
         <CategoryRow
           testId="missing-h1-count"
           label="Missing H1"
@@ -144,17 +149,21 @@ export function DomainSummaryPanel({ summary }: DomainSummaryPanelProps) {
         />
       </dl>
 
-      <div>
-        <h3>Images missing alt text</h3>
-        <dl>
-          <dt>Pages</dt>
-          <dd data-testid="images-missing-alt-pages">
-            {summary.imagesMissingAlt.pages}
-          </dd>
-          <dt>Images</dt>
-          <dd data-testid="images-missing-alt-images">
-            {summary.imagesMissingAlt.images}
-          </dd>
+      <div className="subpanel">
+        <h4>Images missing alt text</h4>
+        <dl className="stat-grid">
+          <div className="stat">
+            <dt>Pages</dt>
+            <dd data-testid="images-missing-alt-pages">
+              {summary.imagesMissingAlt.pages}
+            </dd>
+          </div>
+          <div className="stat">
+            <dt>Images</dt>
+            <dd data-testid="images-missing-alt-images">
+              {summary.imagesMissingAlt.images}
+            </dd>
+          </div>
         </dl>
       </div>
     </section>

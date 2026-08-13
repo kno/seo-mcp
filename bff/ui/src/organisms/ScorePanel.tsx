@@ -20,11 +20,14 @@ export function ScorePanel({
   seoScore,
 }: ScorePanelProps) {
   return (
-    <section aria-label="PageSpeed scores">
-      <ScoreGauge label="Performance" score={performanceScore} />
-      <ScoreGauge label="Accessibility" score={accessibilityScore} />
-      <ScoreGauge label="Best Practices" score={bestPracticesScore} />
-      <ScoreGauge label="SEO" score={seoScore} />
+    <section className="panel" aria-label="PageSpeed scores">
+      <h3>Scores</h3>
+      <div className="gauge-grid">
+        <ScoreGauge label="Performance" score={performanceScore} />
+        <ScoreGauge label="Accessibility" score={accessibilityScore} />
+        <ScoreGauge label="Best Practices" score={bestPracticesScore} />
+        <ScoreGauge label="SEO" score={seoScore} />
+      </div>
     </section>
   );
 }

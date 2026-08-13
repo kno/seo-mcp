@@ -26,14 +26,18 @@ function variantFor(state: LinkProbe["state"]): BadgeVariant {
 
 export function ProbeRow({ probe }: ProbeRowProps) {
   return (
-    <li>
-      <span>{probe.url}</span>
+    <li className="item-row probe-row">
+      <span className="probe-url">{probe.url}</span>
       <Badge variant={variantFor(probe.state)}>{probe.state}</Badge>
       {probe.state === "broken" && (
-        <span data-testid="probe-status">{probe.status}</span>
+        <span className="probe-detail" data-testid="probe-status">
+          {probe.status}
+        </span>
       )}
       {probe.state === "error" && (
-        <span data-testid="probe-error">{probe.error}</span>
+        <span className="probe-detail" data-testid="probe-error">
+          {probe.error}
+        </span>
       )}
     </li>
   );

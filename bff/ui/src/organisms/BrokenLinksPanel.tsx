@@ -21,22 +21,37 @@ export function BrokenLinksPanel({ result }: BrokenLinksPanelProps) {
   const problems = result.results.filter((probe) => probe.state !== "ok");
 
   return (
-    <section aria-label="Broken links">
-      <dl>
-        <dt>Checked</dt>
-        <dd data-testid="links-checked">{result.checked}</dd>
-        <dt>OK</dt>
-        <dd data-testid="links-ok">{result.ok}</dd>
-        <dt>Broken</dt>
-        <dd data-testid="links-broken">{result.broken}</dd>
-        <dt>Errors</dt>
-        <dd data-testid="links-errors">{result.errors}</dd>
+    <section className="panel" aria-label="Broken links">
+      <h3>Link check</h3>
+      {/* All four figures always render together, as four equally-weighted
+          stat cards. The colour treatment follows the figure's own meaning
+          (`ok` green, `broken` red, `errors` amber) and never suppresses a
+          zero — a zero-broken result is a green "0", not an omitted card. */}
+      <dl className="stat-grid">
+        <div className="stat">
+          <dt>Checked</dt>
+          <dd data-testid="links-checked">{result.checked}</dd>
+        </div>
+        <div className="stat stat-ok">
+          <dt>OK</dt>
+          <dd data-testid="links-ok">{result.ok}</dd>
+        </div>
+        <div className={result.broken > 0 ? "stat stat-danger" : "stat"}>
+          <dt>Broken</dt>
+          <dd data-testid="links-broken">{result.broken}</dd>
+        </div>
+        <div className={result.errors > 0 ? "stat stat-warn" : "stat"}>
+          <dt>Errors</dt>
+          <dd data-testid="links-errors">{result.errors}</dd>
+        </div>
       </dl>
 
       {problems.length === 0 ? (
-        <p>No broken or unreachable links found.</p>
+        <p className="empty-state empty-state-ok">
+          No broken or unreachable links found.
+        </p>
       ) : (
-        <ul aria-label="Problem links">
+        <ul className="item-list" aria-label="Problem links">
           {problems.map((probe) => (
             <ProbeRow key={probe.url} probe={probe} />
           ))}

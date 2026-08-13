@@ -20,7 +20,15 @@ export interface BadgeProps {
 
 export function Badge({ variant, children }: BadgeProps) {
   return (
-    <span data-testid={`badge-${variant}`} data-variant={variant}>
+    // `data-variant` is both the test hook and the styling hook — the five
+    // variants are five visually distinct treatments in `styles.css`
+    // (`.badge[data-variant="…"]`), so `broken` and `error` can never
+    // collapse into one generic marker at the CSS level either.
+    <span
+      className="badge"
+      data-testid={`badge-${variant}`}
+      data-variant={variant}
+    >
       {children}
     </span>
   );

@@ -11,7 +11,7 @@ export interface AbsentProps {
 
 export function Absent({ label }: AbsentProps) {
   return (
-    <span data-testid="absent">
+    <span className="absent" data-testid="absent">
       {label ? `${label}: not present` : "Not present"}
     </span>
   );

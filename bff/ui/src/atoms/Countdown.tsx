@@ -33,7 +33,7 @@ export function Countdown({ seconds, label, onElapsed }: CountdownProps) {
   }, [remaining, onElapsed]);
 
   return (
-    <p role="status" aria-live="polite">
+    <p className="countdown" role="status" aria-live="polite">
       {label} {remaining}s
     </p>
   );

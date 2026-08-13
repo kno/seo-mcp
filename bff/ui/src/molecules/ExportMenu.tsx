@@ -33,8 +33,9 @@ export function ExportMenu({
   filenameBase,
 }: ExportMenuProps) {
   return (
-    <div role="group" aria-label="Export result">
+    <div className="form-actions" role="group" aria-label="Export result">
       <button
+        className="btn-sm"
         type="button"
         onClick={() =>
           download(jsonContent, "application/json", `${filenameBase}.json`)
@@ -43,6 +44,7 @@ export function ExportMenu({
         Export JSON
       </button>
       <button
+        className="btn-sm"
         type="button"
         onClick={() => download(csvContent, "text/csv", `${filenameBase}.csv`)}
       >

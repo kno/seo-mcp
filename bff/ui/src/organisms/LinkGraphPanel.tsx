@@ -23,20 +23,31 @@ const TOP_LINKED_PAGES_CAP = 10;
 
 export function LinkGraphPanel({ linkGraph }: LinkGraphPanelProps) {
   return (
-    <section aria-label="Internal link graph">
-      <p data-testid="crawled-pages">
-        Crawled pages considered: {linkGraph.crawledPages}
-      </p>
+    <section className="panel" aria-label="Internal link graph">
+      <div className="panel-head">
+        <h3>Internal link graph</h3>
+        <p className="panel-subtitle" data-testid="crawled-pages">
+          Crawled pages considered:{" "}
+          <span className="metric-inline">{linkGraph.crawledPages}</span>
+        </p>
+      </div>
 
-      <div>
-        <h3>Orphan pages</h3>
-        <p data-testid="orphan-pages">
+      <div className="subpanel">
+        <h4>Orphan pages</h4>
+        <p
+          className={
+            linkGraph.orphanPages.count === 0
+              ? "empty-state empty-state-ok"
+              : "empty-state"
+          }
+          data-testid="orphan-pages"
+        >
           {linkGraph.orphanPages.count === 0
             ? "No orphan pages found."
             : `${linkGraph.orphanPages.count} orphan page(s) found.`}
         </p>
         {linkGraph.orphanPages.count > 0 && (
-          <ul>
+          <ul className="url-list">
             {linkGraph.orphanPages.sample.map((url) => (
               <li key={url}>{url}</li>
             ))}
@@ -52,8 +63,8 @@ export function LinkGraphPanel({ linkGraph }: LinkGraphPanelProps) {
         />
       </div>
 
-      <div>
-        <h3>Most-linked pages</h3>
+      <div className="subpanel">
+        <h4>Most-linked pages</h4>
         <BarChart items={linkGraph.topLinkedPages} />
         <SampleBadge
           cardinality={describeCappedList(
