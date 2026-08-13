@@ -338,7 +338,18 @@ describe("router — analyze_pagespeed input validation", () => {
     expect(env.SEO_MCP.fetch).toHaveBeenCalledOnce();
   });
 
-  it("accepts an explicit apiKey and never echoes it back in the response", async () => {
+  it("rejects an apiKey supplied over GET — it must travel over POST instead", async () => {
+    const env = fakeEnv();
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/analyze_pagespeed?url=https%3A%2F%2Fexample.com&strategy=desktop&apiKey=secret-key",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(400);
+    expect(env.SEO_MCP.fetch).not.toHaveBeenCalled();
+  });
+
+  it("accepts an explicit apiKey over POST and never echoes it back in the response", async () => {
     const env = fakeEnv({
       SEO_MCP: {
         fetch: stubToolFetch({
@@ -351,7 +362,16 @@ describe("router — analyze_pagespeed input validation", () => {
     });
     const request = await authenticatedRequest(
       env,
-      "/api/tools/analyze_pagespeed?url=https%3A%2F%2Fexample.com&strategy=desktop&apiKey=secret-key",
+      "/api/tools/analyze_pagespeed",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          url: "https://example.com",
+          strategy: "desktop",
+          apiKey: "secret-key",
+        }),
+      },
     );
     const response = await handleRequest(request, env);
     expect(response.status).toBe(200);

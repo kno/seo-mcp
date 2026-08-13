@@ -69,8 +69,8 @@ Chain strategy: stacked-to-main
 
 ## Phase 6: PageSpeed (PR6)
 
-- [ ] 6.1 RED: mobile default; missing score/metric/field-data shows unavailable not 0; opportunity with no savings still listed; secrets suite (storage/URL/echo/export/cache-key).
-- [ ] 6.2 GREEN: `PageSpeedForm` (uncontrolled input), `ScorePanel`, `LabMetricsPanel`, `FieldDataPanel`, `OpportunitiesTable`, `ScoreGauge`, `data/secret.ts`, `PageSpeedContainer`.
+- [x] 6.1 RED: mobile default; missing score/metric/field-data shows unavailable not 0; opportunity with no savings still listed; secrets suite (storage/URL/echo/export/cache-key).
+- [x] 6.2 GREEN: `PageSpeedForm` (uncontrolled input), `ScorePanel`, `LabMetricsPanel`, `FieldDataPanel`, `OpportunitiesTable`, `ScoreGauge`, `data/secret.ts`, `PageSpeedContainer`.
 
 ## Phase 7: Export & Quota (PR7)
 

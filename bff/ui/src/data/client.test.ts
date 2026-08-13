@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { requestTool, userIntent } from "./client";
+import { SecretCell } from "./secret";
 
 describe("userIntent", () => {
   it("mints a token from a real user-gesture event type", () => {
@@ -111,5 +112,65 @@ describe("requestTool", () => {
         retryAfter: 30,
       },
     });
+  });
+
+  it("consumes a secret cell into a POST body exactly once, never into the URL, and never retains it", async () => {
+    const mockResponse = {
+      json: () =>
+        Promise.resolve({ data: {}, cacheStatus: "bypass", resultAge: 0 }),
+    };
+    vi.mocked(global.fetch).mockResolvedValue(mockResponse as Response);
+
+    const intent = userIntent({ type: "submit" });
+    const controller = new AbortController();
+    const secret = SecretCell.from("real-api-key");
+
+    await requestTool(
+      "analyze_pagespeed",
+      { url: "https://example.com", strategy: "mobile" },
+      intent,
+      { signal: controller.signal, secrets: { apiKey: secret } },
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith("/api/tools/analyze_pagespeed", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        url: "https://example.com",
+        strategy: "mobile",
+        apiKey: "real-api-key",
+      }),
+      signal: controller.signal,
+    });
+    // The secret never appears in the request URL itself.
+    const requestUrl = String(vi.mocked(global.fetch).mock.calls[0]?.[0]);
+    expect(requestUrl).not.toContain("real-api-key");
+    // The cell was consumed by requestTool building the body; a second read
+    // (e.g. from a caller that mistakenly held the same cell) returns
+    // undefined.
+    expect(secret.take()).toBeUndefined();
+  });
+
+  it("omits the secret param entirely when the cell has already been taken", async () => {
+    const mockResponse = {
+      json: () =>
+        Promise.resolve({ data: {}, cacheStatus: "bypass", resultAge: 0 }),
+    };
+    vi.mocked(global.fetch).mockResolvedValue(mockResponse as Response);
+
+    const intent = userIntent({ type: "submit" });
+    const controller = new AbortController();
+    const secret = SecretCell.from("real-api-key");
+    secret.take(); // exhausted before requestTool ever sees it
+
+    await requestTool(
+      "analyze_pagespeed",
+      { url: "https://example.com", strategy: "mobile" },
+      intent,
+      { signal: controller.signal, secrets: { apiKey: secret } },
+    );
+
+    const requestUrl = String(vi.mocked(global.fetch).mock.calls[0]?.[0]);
+    expect(requestUrl).not.toContain("apiKey");
   });
 });

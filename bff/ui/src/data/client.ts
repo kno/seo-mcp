@@ -15,6 +15,7 @@
 
 import type { BffError, BffOk } from "../../../src/errors";
 import type { ToolName } from "../../../src/timeout";
+import type { SecretCell } from "./secret";
 
 declare const brand: unique symbol;
 
@@ -46,14 +47,26 @@ export interface RequestToolOptions {
   readonly signal: AbortSignal;
   /** Forces the BFF to bypass its KV cache read (`?refresh=1`). */
   readonly refresh?: boolean;
+  /**
+   * Secret-bearing inputs, e.g. `analyze_pagespeed`'s optional `apiKey`.
+   * When present, the whole request is sent as `POST` with a JSON body
+   * (`bff/src/router.ts`'s one secret-bearing route accepts this) instead
+   * of `GET` with a query string, so the secret never appears in the
+   * outgoing request URL — not in DevTools' Network tab, not in any access
+   * log the request passes through. Each cell is `.take()`n exactly once
+   * while building that body; the raw value is never assigned to any
+   * variable this function keeps beyond building the body payload, and
+   * never appears in any thrown error, log, or the resolved value.
+   */
+  readonly secrets?: Readonly<Record<string, SecretCell>>;
 }
 
 /**
- * Calls the BFF's `GET /api/tools/{tool}` route. The real route contract
- * (verified against `bff/src/router.ts`) takes inputs as query-string
- * parameters on a GET request, not a POST body — this function matches
- * that frozen contract rather than the design note's illustrative
- * `POST /api/tools/{tool}` shape (see apply-progress for the deviation).
+ * Calls the BFF's `/api/tools/{tool}` route. Ordinary calls use `GET` with
+ * query-string parameters, matching `bff/src/router.ts`'s default contract.
+ * A call carrying `opts.secrets` instead uses `POST` with a JSON body, the
+ * one exception that route accepts specifically so a secret input never
+ * travels as a query-string parameter.
  */
 export async function requestTool<T>(
   tool: ToolName,
@@ -64,6 +77,21 @@ export async function requestTool<T>(
   // The token's only job is to exist at the call site; requestTool never
   // reads its value.
   void intent;
+
+  if (opts.secrets) {
+    const body: Record<string, string | number | boolean> = { ...input };
+    for (const [key, cell] of Object.entries(opts.secrets)) {
+      const value = cell.take();
+      if (value !== undefined) body[key] = value;
+    }
+    const response = await fetch(`/api/tools/${tool}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: opts.signal,
+    });
+    return (await response.json()) as BffOk<T> | { error: BffError };
+  }
 
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(input)) {

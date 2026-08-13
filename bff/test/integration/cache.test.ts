@@ -23,14 +23,18 @@ async function stubCallCount(): Promise<number> {
   return body.calls;
 }
 
-async function authenticatedRequest(path: string): Promise<Request> {
+async function authenticatedRequest(
+  path: string,
+  init: RequestInit = {},
+): Promise<Request> {
   const cookie = await createSessionCookie(
     "dashboard",
     3600,
     stubEnv.DASHBOARD_SESSION_KEY,
   );
   return new Request(`https://bff.example${path}`, {
-    headers: { cookie: `dashboard_session=${cookie}` },
+    ...init,
+    headers: { ...(init.headers ?? {}), cookie: `dashboard_session=${cookie}` },
   });
 }
 
@@ -119,25 +123,38 @@ describe("BFF result cache (integration, real KV)", () => {
 
   it("never caches an analyze_pagespeed request carrying an explicit apiKey", async () => {
     const before = await stubCallCount();
+    const requestInit: RequestInit = {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        url: "https://example.com",
+        apiKey: "secret-key",
+      }),
+    };
 
     const first = await SELF.fetch(
-      await authenticatedRequest(
-        "/api/tools/analyze_pagespeed?url=https%3A%2F%2Fexample.com&apiKey=secret-key",
-      ),
+      await authenticatedRequest("/api/tools/analyze_pagespeed", requestInit),
     );
     const firstBody = (await first.json()) as { cacheStatus: string };
     expect(firstBody.cacheStatus).toBe("bypass");
     expect(await stubCallCount()).toBe(before + 1);
 
     const second = await SELF.fetch(
-      await authenticatedRequest(
-        "/api/tools/analyze_pagespeed?url=https%3A%2F%2Fexample.com&apiKey=secret-key",
-      ),
+      await authenticatedRequest("/api/tools/analyze_pagespeed", requestInit),
     );
     const secondBody = (await second.json()) as { cacheStatus: string };
     expect(secondBody.cacheStatus).toBe("bypass");
     // Every apiKey-bearing request reaches upstream — never served from
     // cache, since it is never written to the cache in the first place.
     expect(await stubCallCount()).toBe(before + 2);
+  });
+
+  it("rejects an apiKey supplied over GET even though the route otherwise accepts query-string input", async () => {
+    const response = await SELF.fetch(
+      await authenticatedRequest(
+        "/api/tools/analyze_pagespeed?url=https%3A%2F%2Fexample.com&apiKey=secret-key",
+      ),
+    );
+    expect(response.status).toBe(400);
   });
 });

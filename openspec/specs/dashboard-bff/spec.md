@@ -38,6 +38,32 @@ When a new tool is added to `seo-mcp`, the BFF route set MUST be extended in the
 - WHEN the underlying MCP tool call succeeds
 - THEN the route MUST return a JSON body containing the validated `PageSpeedResult` structured content
 
+### Requirement: A Secret-Bearing Input Never Travels as a Query-String Parameter
+
+`analyze_pagespeed`'s optional `apiKey` is a secret the caller supplies at request time, unlike every other
+input any route accepts. A query-string parameter is visible in browser DevTools' Network tab and in any
+access log the request passes through; a request body is not. The `analyze_pagespeed` route MUST accept
+`apiKey` only over `POST` with a JSON body, and MUST reject a request that supplies `apiKey` over `GET` as a
+query-string parameter, even though `GET` remains available on that same route for the no-`apiKey` case.
+
+#### Scenario: apiKey over POST is accepted
+
+- GIVEN a `POST` request to the `analyze_pagespeed` route with `apiKey` in a JSON body
+- WHEN the BFF processes the request
+- THEN the request MUST be accepted and dispatched normally
+
+#### Scenario: apiKey over GET is rejected, not silently accepted
+
+- GIVEN a `GET` request to the `analyze_pagespeed` route with `apiKey` present as a query-string parameter
+- WHEN the BFF processes the request
+- THEN the BFF MUST reject the request with a validation error, and MUST NOT dispatch it to the MCP tool
+
+#### Scenario: GET remains available for the no-apiKey case
+
+- GIVEN a `GET` request to the `analyze_pagespeed` route with no `apiKey` parameter
+- WHEN the BFF processes the request
+- THEN the request MUST be accepted and dispatched normally, unaffected by the `apiKey`-specific POST requirement
+
 ### Requirement: Read-Only Usage and Headroom Source
 
 The BFF MUST expose a read-only view of its own recent upstream call volume, sufficient for a client to show how close the shared rate-limit bucket is to its limit and how old a served result is. This MUST be derived from the BFF's own call accounting, because the Workers rate-limit binding reports only success or failure and never a remaining count (`src/http/auth.ts:104-107`). The BFF MUST NOT present derived headroom as an authoritative upstream figure, since the bucket is shared with every other MCP consumer and the BFF cannot observe their traffic.

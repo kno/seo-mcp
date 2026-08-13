@@ -12,6 +12,11 @@
  * bounds, same defaults) before any dispatch to `callTool`. Inputs arrive
  * as query string parameters on a `GET` request, coerced to the right
  * primitive type where needed (`limit`, `concurrency` arrive as strings).
+ * The one exception: `POST /api/tools/analyze_pagespeed` accepts the same
+ * inputs as a JSON body instead, so a caller supplying the secret `apiKey`
+ * field never sends it as a query-string parameter (visible in DevTools'
+ * Network tab and in any access log). `GET` on that same route remains
+ * available for the no-`apiKey` case.
  *
  * Every route (except `analyze_pagespeed` with an explicit `apiKey`, see
  * `isCacheable`) is cached in `env.RESULT_CACHE` and deduplicated via
@@ -69,6 +74,29 @@ function parseQuery<T>(
 ): { ok: true; data: T } | { ok: false } {
   const raw: Record<string, string> = {};
   for (const [key, value] of url.searchParams) raw[key] = value;
+  const parsed = schema.safeParse(raw);
+  return parsed.success ? { ok: true, data: parsed.data } : { ok: false };
+}
+
+/**
+ * Parses a JSON request body against a tool's input schema. This is the
+ * transport used ONLY for a route carrying a secret input (currently just
+ * `analyze_pagespeed`'s optional `apiKey`) — a query string is visible in
+ * browser DevTools' Network tab and in any access log the request passes
+ * through, which a POST body is not. Every other route stays GET +
+ * query-string, unchanged, to avoid touching their already-verified
+ * cache/single-flight behavior.
+ */
+async function parseBody<T>(
+  request: Request,
+  schema: z.ZodType<T>,
+): Promise<{ ok: true; data: T } | { ok: false }> {
+  let raw: unknown;
+  try {
+    raw = await request.json();
+  } catch {
+    return { ok: false };
+  }
   const parsed = schema.safeParse(raw);
   return parsed.success ? { ok: true, data: parsed.data } : { ok: false };
 }
@@ -168,6 +196,26 @@ export async function handleRequest(
   if (outcome === "unavailable") return bffErrorResponse("gate_unavailable");
   if (outcome === "denied") return bffErrorResponse("gate_unauthorized");
 
+  // The one secret-bearing route accepts POST with a JSON body, so a
+  // caller supplying apiKey never sends it as a query-string parameter.
+  // GET remains available on this same route for the no-apiKey case,
+  // preserving cache/single-flight behavior for that common path.
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/tools/analyze_pagespeed"
+  ) {
+    const parsed = await parseBody(request, analyzePagespeedInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatch(
+      request,
+      url,
+      env,
+      "analyze_pagespeed",
+      parsed.data,
+      pageSpeedResultSchema,
+    );
+  }
+
   if (request.method !== "GET") {
     return new Response("Not found", { status: 404 });
   }
@@ -220,6 +268,13 @@ export async function handleRequest(
   }
 
   if (url.pathname === "/api/tools/analyze_pagespeed") {
+    // An apiKey supplied over GET would travel as a query-string parameter
+    // — exactly what the POST + JSON body path above exists to avoid.
+    // Reject rather than silently accept it, so this route cannot be used
+    // insecurely even by a caller other than this project's own UI.
+    if (url.searchParams.has("apiKey")) {
+      return bffErrorResponse("invalid_input");
+    }
     const parsed = parseQuery(url, analyzePagespeedInputSchema);
     if (!parsed.ok) return bffErrorResponse("invalid_input");
     return dispatch(
