@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { MouseEvent } from "react";
 import type { LinkCheckResult } from "../../../../src/types";
+import { LIMITS } from "../../../../src/config";
 import { requestTool, userIntent } from "../data/client";
 import { describeProbeSet } from "../data/bounds";
 import { StateRegion } from "../molecules/StateRegion";
@@ -57,7 +58,10 @@ export function BrokenLinksContainer({ pageUrl }: BrokenLinksContainerProps) {
     setResult(response.data);
     setState({
       phase: "ready",
-      cardinality: describeProbeSet(response.data.checked, 50),
+      cardinality: describeProbeSet(
+        response.data.checked,
+        LIMITS.maxLinkChecks,
+      ),
     });
   }
 

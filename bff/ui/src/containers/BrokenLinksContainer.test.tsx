@@ -133,7 +133,7 @@ describe("BrokenLinksContainer", () => {
     expect(screen.queryByTestId("links-broken")).not.toBeInTheDocument();
   });
 
-  it("aborts a stale in-flight request and issues only one fetch on a rapid double-click", async () => {
+  it("aborts a stale in-flight request rather than deduplicating a rapid double-click", async () => {
     vi.mocked(global.fetch).mockResolvedValue(
       jsonResponse({ data: RESULT, cacheStatus: "miss", resultAge: 0 }),
     );
@@ -146,8 +146,10 @@ describe("BrokenLinksContainer", () => {
     await user.click(button);
 
     await screen.findByTestId("links-checked");
-    // Exactly one fetch per click — two explicit activations, two calls,
-    // never more per activation and never a duplicate for one activation.
+    // Each click is its own explicit activation, so two clicks legitimately
+    // issue two upstream calls -- this container does not deduplicate
+    // concurrent clicks, it only guards against a STALE response
+    // overwriting a newer one via the requestId check.
     expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 });
