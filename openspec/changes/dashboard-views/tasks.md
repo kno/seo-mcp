@@ -54,8 +54,8 @@ Chain strategy: stacked-to-main
 
 ## Phase 3: Page Report (PR3)
 
-- [ ] 3.1 RED per `page-report-view` scenarios (absence, headings, OG/JSON-LD, all 13 issue codes + unknown, failure-not-empty).
-- [ ] 3.2 GREEN: `OnPageCard`, `HeadingsPanel`, `OpenGraphPanel`, `JsonLdPanel`, `IssuesList`, `PageReportContainer`.
+- [x] 3.1 RED per `page-report-view` scenarios (absence, headings, OG/JSON-LD, all 13 issue codes + unknown, failure-not-empty).
+- [x] 3.2 GREEN: `OnPageCard`, `HeadingsPanel`, `OpenGraphPanel`, `JsonLdPanel`, `IssuesList`, `PageReportContainer`.
 
 ## Phase 4: Broken Links (PR4)
 
