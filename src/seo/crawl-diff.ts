@@ -1,22 +1,18 @@
+import type * as z from "zod/v4";
 import { LIMITS } from "../config";
+import {
+  crawlPageIssueChangeSchema,
+  crawlDiffSchema,
+} from "../schemas/crawl-snapshots";
 
 export interface CrawlSnapshotPage {
   page: string;
   issueCodes: string[];
 }
 
-export interface CrawlPageIssueChange {
-  page: string;
-  codes: string[];
-}
+export type CrawlPageIssueChange = z.infer<typeof crawlPageIssueChangeSchema>;
 
-export interface CrawlDiff {
-  newPages: string[];
-  removedPages: string[];
-  newIssues: CrawlPageIssueChange[];
-  resolvedIssues: CrawlPageIssueChange[];
-  issueCountDeltas: Record<string, number>;
-}
+export type CrawlDiff = z.infer<typeof crawlDiffSchema>;
 
 function indexByPage(
   pages: CrawlSnapshotPage[],

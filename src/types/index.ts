@@ -6,7 +6,8 @@
  * `list_search_console_snapshots`, `compare_search_console`,
  * `get_keyword_metrics`, `discover_keywords`, `cluster_keywords`,
  * `find_keyword_cannibalization`, `find_seo_opportunities`,
- * `map_keywords_to_pages`, `find_content_gaps`, `analyze_domain`). Type-only
+ * `map_keywords_to_pages`, `find_content_gaps`, `analyze_domain`,
+ * `snapshot_crawl`, `list_crawl_snapshots`, `compare_crawls`). Type-only
  * re-exports: under `verbatimModuleSyntax`
  * this module erases entirely, so importing it (e.g. from the BFF or the
  * dashboard) pulls in zero Worker runtime code from `src/http`,
@@ -45,6 +46,18 @@ export type {
   ListSearchConsoleSnapshotsResult,
   CompareSearchConsoleResult,
 } from "../schemas/gsc-snapshots";
+export type { CrawlPageIssueChange, CrawlDiff } from "../seo/crawl-diff";
+// `StoredCrawlSnapshot` is published from the schema module rather than
+// `src/db/crawl-store.ts`, for the identical reason `StoredSnapshot` is
+// above: that module calls D1-specific APIs
+// (`D1Database.prepare/.bind/.all`) whose types come only from
+// `@cloudflare/workers-types`, absent from `bff/ui`'s DOM-only tsconfig.
+export type {
+  StoredCrawlSnapshot,
+  SnapshotCrawlResult,
+  ListCrawlSnapshotsResult,
+  CompareCrawlsResult,
+} from "../schemas/crawl-snapshots";
 export type { KeywordMetric, KeywordMetricsResult } from "../google/ads";
 export type {
   KeywordIntent,

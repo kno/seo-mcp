@@ -221,25 +221,32 @@ Record<string, number>`; rejects a payload exceeding `limit`
 
 ## Phase 11: Crawl-snapshot schemas + `history-comparison-view` (PR11) — `history-comparison-view`
 
-- [ ] 11.1 RED `test/schemas/crawl-snapshots.test.ts`: `StoredCrawlSnapshot`, `CrawlDiff`
+- [x] 11.1 RED `test/schemas/crawl-snapshots.test.ts`: `StoredCrawlSnapshot`, `CrawlDiff`
       (`newPages`, `removedPages`, `newIssues`, `resolvedIssues`, `issueCountDeltas`),
       `CrawlPageIssueChange`
-- [ ] 11.2 GREEN `src/schemas/crawl-snapshots.ts` + aliases in `src/db/crawl-store.ts`,
+- [x] 11.2 GREEN `src/schemas/crawl-snapshots.ts` + aliases in `src/db/crawl-store.ts`,
       `src/seo/crawl-diff.ts`; `outputSchema` on `snapshot_crawl`, `list_crawl_snapshots`, `compare_crawls`;
       publish types
-- [ ] 11.3 RED retention is presented as **unbounded and accumulating**; the list `limit` (1-50, default 20)
+- [x] 11.3 RED retention is presented as **unbounded and accumulating**; the list `limit` (1-50, default 20)
       is labelled a listing cap, never a retention window; no rolling-90-day claim anywhere
-- [ ] 11.4 RED crawl-snapshot capture is presented as **manual only**; the view MUST NOT imply crawl history
+- [x] 11.4 RED crawl-snapshot capture is presented as **manual only**; the view MUST NOT imply crawl history
       accumulates automatically (only the GSC cron exists, and only when `GSC_SNAPSHOT_PROPERTIES` is set)
-- [ ] 11.5 RED a comparison names both endpoints (ids, labels, `capturedAt`); diff direction is unambiguous
+- [x] 11.5 RED a comparison names both endpoints (ids, labels, `capturedAt`); diff direction is unambiguous
       for both families; each list labels its own bound at `LIMITS.maxCrawlDiffRows`
-- [ ] 11.6 RED fewer-than-two-snapshots renders a distinct actionable state per family; D1-not-configured is
+- [x] 11.6 RED fewer-than-two-snapshots renders a distinct actionable state per family; D1-not-configured is
       distinct from empty history
-- [ ] 11.7 RED the two sub-families ship and degrade **independently** — GSC history present with no crawl
+- [x] 11.7 RED the two sub-families ship and degrade **independently** — GSC history present with no crawl
       history (and the reverse) both render correctly
-- [ ] 11.8 GREEN `bff/ui/history/*` + `bff/ui/src/charts/*`: hand-rolled SVG trend/bar primitives, no
-      charting library
-- [ ] 11.9 PROOF a11y + keyboard pass; `pnpm test -- crawl-snapshots history`
+- [x] 11.8 GREEN `bff/ui/history/*` + `bff/ui/src/charts/*`: hand-rolled SVG trend/bar primitives, no
+      charting library. DEVIATION (consistent with every prior view PR): built at the established flat
+      `bff/ui/src/containers/HistoryContainer.tsx` and
+      `bff/ui/src/organisms/CrawlSnapshotListPanel.tsx`/`CrawlDiffPanel.tsx`, not a literal
+      `bff/ui/history/`/`bff/ui/src/charts/` tree — the latter does not exist as a convention anywhere
+      else in this codebase. `snapshot_crawl`/`list_crawl_snapshots`/
+      `compare_crawls` are NOT in `authenticated/registry.ts` (no Google credential/quota/reporting-lag
+      concept — same class as `cluster_keywords`/`crawl_site`), routed through `dispatch()` with a new
+      optional `classifyFailureText` parameter so D1-storage classification still applies.
+- [x] 11.9 PROOF a11y + keyboard pass; `pnpm test -- crawl-snapshots history`
 
 ## Phase 12: Sibling-spec coordination (land with or before the PRs they block)
 
@@ -258,7 +265,10 @@ Record<string, number>`; rejects a payload exceeding `limit`
       "Authenticated-Source Exports Carry As-Of Date and Bound Provenance" requirement, and
       `SearchConsoleContainer`'s JSON/CSV export wiring (`export/json.ts`'s `sourceFreshness` field,
       `export/csv.ts`'s `notes` option and `search_console_query` shape) implements it.
-- [ ] 12.4 Add navigation entries for the five new views to `dashboard-shell` incrementally, one per view PR
+- [x] 12.4 Add navigation entries for the five new views to `dashboard-shell` incrementally, one per view PR.
+      SATISFIED: all five `NAV_ITEMS` entries now present in `bff/ui/src/app/App.tsx` — `#search-console`
+      (PR4), `#search-console-insights` (PR6), `#keyword-research` (PR8), `#seo-intelligence` (PR10),
+      `#history` (PR11, this task).
 
 ## Recorded follow-ups (verified, deliberately NOT tasked here)
 

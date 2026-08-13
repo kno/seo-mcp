@@ -23,6 +23,9 @@ describe("TOOL_TIMEOUT_MS", () => {
       map_keywords_to_pages: 27000,
       find_content_gaps: 27000,
       analyze_domain: 90000,
+      snapshot_crawl: 56000,
+      list_crawl_snapshots: 10000,
+      compare_crawls: 10000,
     });
   });
 
@@ -53,6 +56,20 @@ describe("TOOL_TIMEOUT_MS", () => {
     ] as const) {
       expect(TOOL_TIMEOUT_MS[tool]).toBeLessThan(
         TOOL_TIMEOUT_MS.search_console_query,
+      );
+    }
+  });
+
+  it("gives snapshot_crawl at least crawl_site's own worst-case budget, since it calls crawlSite internally", () => {
+    expect(TOOL_TIMEOUT_MS.snapshot_crawl).toBeGreaterThanOrEqual(
+      TOOL_TIMEOUT_MS.crawl_site,
+    );
+  });
+
+  it("gives the D1-only crawl-snapshot tools a smaller timeout than snapshot_crawl, since they never crawl", () => {
+    for (const tool of ["list_crawl_snapshots", "compare_crawls"] as const) {
+      expect(TOOL_TIMEOUT_MS[tool]).toBeLessThan(
+        TOOL_TIMEOUT_MS.snapshot_crawl,
       );
     }
   });

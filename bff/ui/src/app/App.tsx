@@ -6,6 +6,7 @@ import { SearchConsoleContainer } from "../containers/SearchConsoleContainer";
 import { GscInsightsContainer } from "../containers/GscInsightsContainer";
 import { KeywordResearchContainer } from "../containers/KeywordResearchContainer";
 import { SeoIntelligenceContainer } from "../containers/SeoIntelligenceContainer";
+import { HistoryContainer } from "../containers/HistoryContainer";
 import { LoginContainer } from "../containers/LoginContainer";
 
 /**
@@ -70,6 +71,13 @@ const NAV_ITEMS = [
     description:
       "Prioritized SEO opportunities, keyword cannibalization, page-to-query mapping, content gaps, and a merged domain report (crawl + optional Search Console enrichment) for one site.",
     View: SeoIntelligenceContainer,
+  },
+  {
+    href: "#history",
+    label: "History",
+    description:
+      "Search Console and crawl snapshot history and comparison — captured manually or (for Search Console only, when configured) on a schedule. Snapshots accumulate without limit; nothing here expires automatically.",
+    View: HistoryContainer,
   },
 ] as const;
 

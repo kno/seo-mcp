@@ -63,6 +63,22 @@
  *   over that combined worst case (`src/seo/domain-report.ts#analyzeDomain`
  *   awaits `crawlSite` then, only if `gscProperty`+dates are given,
  *   `findSeoOpportunities` — never in parallel, so the two budgets add).
+ *
+ * `history-comparison-view` (PR11) adds three more tools, ALL routed
+ * through the ordinary, NON-authenticated `dispatch()` path (see
+ * `authenticated/registry.ts`'s doc comment) — unlike every PR10 entry
+ * above, these ARE each tool's real timeout budget, not an exhaustiveness
+ * placeholder:
+ * - `snapshot_crawl`: composes a real `crawlSite` call internally
+ *   (`src/server.ts`), the SAME worst-case ~40s of page fetches
+ *   `crawl_site`'s own 55s budget already covers, plus a D1 write. 56s
+ *   leaves the same kind of small write-margin `snapshot_search_console`
+ *   (28s over `search_console_query`'s 27s) leaves over its own live-call
+ *   sibling.
+ * - `list_crawl_snapshots` / `compare_crawls`: D1-only reads (the latter
+ *   also diffs), no crawl and no Google call in their own path — 10s is
+ *   generous, mirroring `list_search_console_snapshots`/
+ *   `compare_search_console`'s identical reasoning.
  */
 
 export type ToolName =
@@ -84,7 +100,10 @@ export type ToolName =
   | "find_keyword_cannibalization"
   | "map_keywords_to_pages"
   | "find_content_gaps"
-  | "analyze_domain";
+  | "analyze_domain"
+  | "snapshot_crawl"
+  | "list_crawl_snapshots"
+  | "compare_crawls";
 
 export const TOOL_TIMEOUT_MS: Record<ToolName, number> = {
   health: 5000,
@@ -106,6 +125,9 @@ export const TOOL_TIMEOUT_MS: Record<ToolName, number> = {
   map_keywords_to_pages: 27_000,
   find_content_gaps: 27_000,
   analyze_domain: 90_000,
+  snapshot_crawl: 56_000,
+  list_crawl_snapshots: 10_000,
+  compare_crawls: 10_000,
 };
 
 export type TimeoutResult<T> =

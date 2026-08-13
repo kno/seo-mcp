@@ -55,6 +55,18 @@ export const MAX_TTL_SECONDS = 86400;
  *   analysis over a fixed keyword list is deterministic, so a refetch is
  *   always byte-identical — 1h balances that against not pinning a stale
  *   result indefinitely.
+ * - `snapshot_crawl` / `list_crawl_snapshots` / `compare_crawls`
+ *   (`history-comparison-view`, PR11): 3600s (1h) — these ARE their real
+ *   TTLs, same reasoning as `crawl_page`/`crawl_site` above (not
+ *   `cluster_keywords`'s determinism argument): none of the three is
+ *   authenticated (see `authenticated/registry.ts`'s doc comment — no
+ *   Google credential, no Google quota, and crawl data has no calendar
+ *   reporting-lag concept to derive a `sourceFreshness` from), so all three
+ *   go through the ordinary `dispatch()` path, which reads this table
+ *   directly. `snapshot_crawl` caching an identical repeat request (same
+ *   `url`/`limit`/`concurrency`/`label`) rather than re-crawling mirrors
+ *   `snapshot_search_console`'s own established precedent of caching a
+ *   write action, avoiding a duplicate real crawl on a double-submit.
  *
  * ---
  *
@@ -113,6 +125,13 @@ export const CACHE_TTL_SECONDS: Record<ToolName, number> = {
   map_keywords_to_pages: 21600,
   find_content_gaps: 21600,
   analyze_domain: 21600,
+  // `history-comparison-view` (PR11): all three NOT authenticated, routed
+  // through the ordinary `dispatch()` path, which reads this table
+  // directly — this IS their real TTL, same reasoning as `crawl_page`/
+  // `crawl_site` above.
+  snapshot_crawl: 3600,
+  list_crawl_snapshots: 3600,
+  compare_crawls: 3600,
 };
 
 export function clampTtlSeconds(seconds: number): number {

@@ -1,16 +1,10 @@
+import type * as z from "zod/v4";
 import { LIMITS } from "../config";
 import type { SiteCrawlResult } from "../crawl/site";
 import type { CrawlSnapshotPage } from "../seo/crawl-diff";
+import { storedCrawlSnapshotSchema } from "../schemas/crawl-snapshots";
 
-export interface StoredCrawlSnapshot {
-  id: number;
-  url: string;
-  capturedAt: string;
-  label: string | null;
-  crawled: number;
-  failed: number;
-  issueCounts: Record<string, number>;
-}
+export type StoredCrawlSnapshot = z.infer<typeof storedCrawlSnapshotSchema>;
 
 interface CrawlSnapshotInput {
   url: string;

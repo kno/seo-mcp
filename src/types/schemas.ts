@@ -34,6 +34,14 @@ export {
   compareSearchConsoleResultSchema,
 } from "../schemas/gsc-snapshots";
 export {
+  crawlPageIssueChangeSchema,
+  crawlDiffSchema,
+  storedCrawlSnapshotSchema,
+  snapshotCrawlResultSchema,
+  listCrawlSnapshotsResultSchema,
+  compareCrawlsResultSchema,
+} from "../schemas/crawl-snapshots";
+export {
   keywordMetricSchema,
   keywordMetricsResultSchema,
   keywordIntentSchema,

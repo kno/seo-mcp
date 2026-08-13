@@ -81,15 +81,31 @@ export function classifyUpstreamFailure(text: string): BffErrorCode {
  * insufficient snapshot count are each their own actionable state, not a
  * silent empty list/diff (`gsc-insight-views` spec, "fewer than two
  * snapshots is a distinct, actionable state").
+ *
+ * `history-comparison-view` (PR11) extends the insufficient-snapshots match
+ * to `compare_crawls`' own text, `"Need at least two crawl snapshots to
+ * compare"` (`src/server.ts`) — the crawl family's `env.DB` guard already
+ * throws the IDENTICAL `D1_NOT_CONFIGURED_TEXT` string as the GSC family
+ * (same `if (!env.DB) return errorResult(new Error("D1 storage is not
+ * configured"))` guard, verified against `src/server.ts`), so only the
+ * insufficient-snapshots text needed a second literal. This classifier is
+ * used by BOTH the authenticated D1-only GSC tools (via
+ * `dispatchAuthenticated()`) and the three NON-authenticated crawl-snapshot
+ * tools (via `dispatch()`'s own `classifyFailureText` parameter,
+ * `router.ts`) — see that module's doc comment for why the crawl family is
+ * not in `authenticated/registry.ts` at all.
  */
 const D1_NOT_CONFIGURED_TEXT = "D1 storage is not configured";
-const INSUFFICIENT_SNAPSHOTS_TEXT = "Need at least two snapshots to compare";
+const INSUFFICIENT_SNAPSHOTS_TEXTS = [
+  "Need at least two snapshots to compare",
+  "Need at least two crawl snapshots to compare",
+];
 
 export function classifyStorageFailure(text: string): BffErrorCode {
   if (text === D1_NOT_CONFIGURED_TEXT) {
     return "upstream_storage_not_configured";
   }
-  if (text === INSUFFICIENT_SNAPSHOTS_TEXT) {
+  if (INSUFFICIENT_SNAPSHOTS_TEXTS.includes(text)) {
     return "insufficient_snapshots";
   }
   return "tool_failed";

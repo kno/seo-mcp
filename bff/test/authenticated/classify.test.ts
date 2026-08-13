@@ -99,6 +99,15 @@ describe("classifyStorageFailure", () => {
     ).toBe("insufficient_snapshots");
   });
 
+  // `history-comparison-view` (PR11): `compare_crawls` throws a DIFFERENT
+  // insufficient-snapshots text than `compare_search_console` — both must
+  // classify identically, distinct from `tool_failed`.
+  it("classifies compare_crawls' own fewer-than-two-snapshots text identically", () => {
+    expect(
+      classifyStorageFailure("Need at least two crawl snapshots to compare"),
+    ).toBe("insufficient_snapshots");
+  });
+
   it("does not classify a near-miss variant of either constant", () => {
     expect(classifyStorageFailure("D1 storage is NOT configured!")).not.toBe(
       "upstream_storage_not_configured",

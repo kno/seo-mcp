@@ -95,6 +95,35 @@
  * every other authenticated failure path intercepts (design.md's "Decision:
  * `analyze_domain`'s `gscError` is classified like a failure, though it
  * arrives as a success"; threat row g).
+ *
+ * `history-comparison-view` (PR11) adds NO rows here at all. `snapshot_crawl`,
+ * `list_crawl_snapshots` and `compare_crawls` are deliberately NOT in this
+ * registry — all three go through `router.ts`'s ordinary, non-authenticated
+ * `dispatch()` path instead, exactly like `cluster_keywords`/`crawl_page`/
+ * `crawl_site`. Two independent reasons, either alone sufficient:
+ *
+ * 1. Same test this module already applies to `cluster_keywords`: no Google
+ *    credential, no Google call, no Google quota, in ANY of the three
+ *    tools' own request paths. `snapshot_crawl` calls `crawlSite`
+ *    internally (`src/server.ts`) — a real site crawl, not a Search
+ *    Console or Keyword Planner call — the exact same non-Google nature
+ *    `crawl_site` itself already has on the ordinary path.
+ * 2. Unlike `list_search_console_snapshots`/`compare_search_console` (also
+ *    Google-call-free, yet STILL in this registry under `"search-console"`
+ *    because they operate on previously-fetched real Search Console data),
+ *    the crawl-snapshot family's underlying data has no Google reporting
+ *    lag concept AT ALL — a crawled page has no "Google is N days behind"
+ *    fact to state. Forcing these three through `dispatchAuthenticated()`
+ *    would require fabricating a `SourceFreshness` with no real calendar
+ *    fact behind it, which is exactly the kind of overclaim
+ *    `history-comparison-view`'s spec forbids (design.md's confirmed
+ *    finding: no retention field, no scheduled crawl-snapshot path — this
+ *    view must not manufacture facts the server does not have). D1-storage
+ *    classification (`classifyStorageFailure`, task 11.6) is still needed
+ *    for all three, so `router.ts`'s `dispatch()` gained an optional
+ *    `classifyFailureText` parameter threaded straight into `callTool` —
+ *    the same mechanism `dispatchAuthenticated()` already used, now
+ *    available to a NON-authenticated route too.
  */
 import * as publishedSchemas from "../../../src/types/schemas";
 import { resolveEffectiveCriteria, type EffectiveCriteria } from "./criteria";

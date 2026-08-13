@@ -45,6 +45,15 @@
  * `siteUrl` field): `simulate-ads-not-configured` ("Google Ads developer
  * token is not configured") — `src/google/ads.ts`'s own constant, task 8.6.
  *
+ * `history-comparison-view` (`crawl-snapshots.test.ts`, PR11) adds a fifth
+ * family, read from `url` instead of `siteUrl` (the crawl-snapshot tools
+ * have a `url` field, not `siteUrl`): `simulate-crawl-d1-not-configured`
+ * (the IDENTICAL "D1 storage is not configured" text the GSC family
+ * already uses — `src/server.ts`'s `env.DB` guard is byte-identical for
+ * both families) and `simulate-crawl-insufficient-snapshots` ("Need at
+ * least two crawl snapshots to compare" — `compare_crawls`'s OWN distinct
+ * text, `classify.ts#classifyStorageFailure`'s second literal).
+ *
  * Plain JavaScript (not TypeScript): auxiliary `miniflare.workers` entries
  * are loaded directly by workerd, without the Vite/TypeScript transform
  * `wrangler: { configPath }` applies to the primary worker under test.
@@ -345,6 +354,50 @@ const TOOL_RESULTS = {
       },
     ],
   },
+  snapshot_crawl: {
+    snapshotId: 1,
+    url: "https://example.com",
+    pageCount: 3,
+    capturedAt: "2026-07-28T00:00:00.000Z",
+  },
+  list_crawl_snapshots: {
+    url: "https://example.com",
+    count: 2,
+    snapshots: [
+      {
+        id: 2,
+        url: "https://example.com",
+        capturedAt: "2026-07-28T00:00:00.000Z",
+        label: "current",
+        crawled: 5,
+        failed: 0,
+        issueCounts: { "missing-h1": 1 },
+      },
+      {
+        id: 1,
+        url: "https://example.com",
+        capturedAt: "2026-06-28T00:00:00.000Z",
+        label: "base",
+        crawled: 4,
+        failed: 0,
+        issueCounts: { "missing-h1": 2, "thin-content": 1 },
+      },
+    ],
+  },
+  compare_crawls: {
+    url: "https://example.com",
+    baseSnapshotId: 1,
+    currentSnapshotId: 2,
+    diff: {
+      newPages: ["https://example.com/new"],
+      removedPages: ["https://example.com/gone"],
+      newIssues: [{ page: "https://example.com/about", codes: ["missing-h1"] }],
+      resolvedIssues: [
+        { page: "https://example.com/contact", codes: ["thin-content"] },
+      ],
+      issueCountDeltas: { "missing-h1": 1, "thin-content": -1 },
+    },
+  },
   analyze_domain: {
     url: "https://example.com",
     crawl: {
@@ -391,6 +444,12 @@ const GSC_ERROR_TEXTS = {
 
 const ADS_ERROR_TEXTS = {
   "simulate-ads-not-configured": "Google Ads developer token is not configured",
+};
+
+const CRAWL_SNAPSHOT_ERROR_TEXTS = {
+  "simulate-crawl-d1-not-configured": "D1 storage is not configured",
+  "simulate-crawl-insufficient-snapshots":
+    "Need at least two crawl snapshots to compare",
 };
 
 /**
@@ -456,6 +515,16 @@ export default {
 
     for (const [trigger, text] of Object.entries(ADS_ERROR_TEXTS)) {
       if (argKeywordsText.includes(trigger)) {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: "stub",
+          result: { content: [{ type: "text", text }], isError: true },
+        });
+      }
+    }
+
+    for (const [trigger, text] of Object.entries(CRAWL_SNAPSHOT_ERROR_TEXTS)) {
+      if (argUrl.includes(trigger)) {
         return Response.json({
           jsonrpc: "2.0",
           id: "stub",

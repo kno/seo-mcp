@@ -56,6 +56,11 @@ import {
   compareSearchConsoleResultSchema,
 } from "./schemas/gsc-snapshots";
 import {
+  snapshotCrawlResultSchema,
+  listCrawlSnapshotsResultSchema,
+  compareCrawlsResultSchema,
+} from "./schemas/crawl-snapshots";
+import {
   keywordMetricsResultSchema,
   clusterResultSchema,
 } from "./schemas/keywords";
@@ -79,9 +84,11 @@ import { domainReportSchema } from "./schemas/domain-report";
  *   schema surfaces as a normal tool failure rather than invalid
  *   `structuredContent`.
  * - `jsonResult(value)` — legacy single-argument form kept for the
- *   remaining tools that do not yet declare an `outputSchema`
- *   (`snapshot_crawl`, `list_crawl_snapshots`, `compare_crawls`, all six
- *   `business_*` tools); out of scope for this change.
+ *   remaining tools that do not yet declare an `outputSchema` (all six
+ *   `business_*` tools); out of scope for this change. `snapshot_crawl`,
+ *   `list_crawl_snapshots` and `compare_crawls` (`history-comparison-view`,
+ *   PR11) now use the two-argument `jsonResult(schema, value)` form like
+ *   every other reconciled tool.
  */
 function jsonResult<T extends Record<string, unknown>>(
   schema: z.ZodType<T>,
@@ -728,6 +735,7 @@ export function buildServer(env: Env): McpServer {
         concurrency: z.number().int().min(1).max(4).optional(),
         label: z.string().min(1).optional(),
       }),
+      outputSchema: snapshotCrawlResultSchema,
     },
     async ({ url, limit, concurrency, label }) => {
       if (!env.DB)
@@ -741,7 +749,12 @@ export function buildServer(env: Env): McpServer {
           label,
           site,
         });
-        return jsonResult({ snapshotId, url, pageCount, capturedAt });
+        return jsonResult(snapshotCrawlResultSchema, {
+          snapshotId,
+          url,
+          pageCount,
+          capturedAt,
+        });
       } catch (e) {
         return errorResult(e);
       }
@@ -756,13 +769,18 @@ export function buildServer(env: Env): McpServer {
         url: z.url(),
         limit: z.number().int().min(1).max(50).optional(),
       }),
+      outputSchema: listCrawlSnapshotsResultSchema,
     },
     async ({ url, limit }) => {
       if (!env.DB)
         return errorResult(new Error("D1 storage is not configured"));
       try {
         const snapshots = await listCrawlSnapshots(env.DB, url, limit);
-        return jsonResult({ url, count: snapshots.length, snapshots });
+        return jsonResult(listCrawlSnapshotsResultSchema, {
+          url,
+          count: snapshots.length,
+          snapshots,
+        });
       } catch (e) {
         return errorResult(e);
       }
@@ -779,6 +797,7 @@ export function buildServer(env: Env): McpServer {
         baseSnapshotId: z.number().int().positive().optional(),
         currentSnapshotId: z.number().int().positive().optional(),
       }),
+      outputSchema: compareCrawlsResultSchema,
     },
     async ({ url, baseSnapshotId, currentSnapshotId }) => {
       if (!env.DB)
@@ -803,7 +822,7 @@ export function buildServer(env: Env): McpServer {
           getCrawlSnapshotPages(env.DB, currentId),
         ]);
         const diff = diffCrawls(basePages, currentPages);
-        return jsonResult({
+        return jsonResult(compareCrawlsResultSchema, {
           url,
           baseSnapshotId: baseId,
           currentSnapshotId: currentId,

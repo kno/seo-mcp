@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { Bound, Cardinality } from "./bounds";
 import {
   collectBounds,
+  collectCrawlDiffBounds,
   collectDiffBounds,
   collectOpportunityBounds,
   describeCannibalGroupPagesBound,
@@ -536,6 +537,37 @@ describe("describeDiffBucket / collectDiffBounds", () => {
     expect(result.gained.state).toBe("bounded");
     expect(result.improved.state).toBe("complete");
     expect(result.lost.state).toBe("none");
+  });
+});
+
+/**
+ * `history-comparison-view` (PR11) task 11.5 — the crawl family's four
+ * array buckets label their OWN bound independently at `maxCrawlDiffRows`,
+ * a DIFFERENT limit name than the GSC family's `maxDiffRows` (both happen
+ * to be 100 in `src/config.ts`, but the label must never conflate the two
+ * limits).
+ */
+describe("collectCrawlDiffBounds", () => {
+  it("derives each bucket independently, naming maxCrawlDiffRows (not maxDiffRows)", () => {
+    const result = collectCrawlDiffBounds({
+      newPages: new Array(100).fill("https://example.com/x"),
+      removedPages: ["https://example.com/gone"],
+      newIssues: [],
+      resolvedIssues: new Array(100).fill({}),
+    });
+    expect(result.newPages).toEqual({
+      state: "bounded",
+      bound: {
+        kind: "sample_cap",
+        scope: "diff",
+        limitName: "maxCrawlDiffRows",
+        limitValue: 100,
+        shown: 100,
+      },
+    });
+    expect(result.resolvedIssues.state).toBe("bounded");
+    expect(result.removedPages).toEqual({ state: "complete", total: 1 });
+    expect(result.newIssues).toEqual({ state: "none" });
   });
 });
 

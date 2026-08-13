@@ -500,6 +500,7 @@ export type DiffBucketName = "decayed" | "improved" | "lost" | "gained";
 export function describeDiffBucket(
   bucket: readonly unknown[],
   limit: number,
+  limitName: string = "maxDiffRows",
 ): Cardinality {
   if (bucket.length === 0) return { state: "none" };
   if (bucket.length === limit) {
@@ -508,7 +509,7 @@ export function describeDiffBucket(
       bound: {
         kind: "sample_cap",
         scope: "diff",
-        limitName: "maxDiffRows",
+        limitName,
         limitValue: limit,
         shown: bucket.length,
       },
@@ -531,6 +532,46 @@ export function collectDiffBounds(diff: {
     improved: describeDiffBucket(diff.improved, LIMITS.maxDiffRows),
     lost: describeDiffBucket(diff.lost, LIMITS.maxDiffRows),
     gained: describeDiffBucket(diff.gained, LIMITS.maxDiffRows),
+  };
+}
+
+export type CrawlDiffBucketName =
+  "newPages" | "removedPages" | "newIssues" | "resolvedIssues";
+
+/**
+ * `history-comparison-view`'s (PR11) per-bucket `CrawlDiff` bound (task
+ * 11.5) — the crawl family's four array buckets (`newPages`/`removedPages`/
+ * `newIssues`/`resolvedIssues`) are truncated INDEPENDENTLY to
+ * `LIMITS.maxCrawlDiffRows` (`src/seo/crawl-diff.ts#diffCrawls`), the exact
+ * same "one bucket at the cap says nothing about any other bucket"
+ * discipline `collectDiffBounds` already establishes for `GscDiff` — reuses
+ * `describeDiffBucket` with `limitName: "maxCrawlDiffRows"` rather than a
+ * parallel implementation, since the underlying cardinality rule (bucket
+ * length vs. a fixed limit) is identical for both families; only the limit
+ * NAME differs. `issueCountDeltas` (a `Record<string, number>`, not an
+ * array) carries no bound of its own — the delta map's size is never
+ * server-truncated.
+ */
+export function collectCrawlDiffBounds(diff: {
+  readonly newPages: readonly unknown[];
+  readonly removedPages: readonly unknown[];
+  readonly newIssues: readonly unknown[];
+  readonly resolvedIssues: readonly unknown[];
+}): Readonly<Record<CrawlDiffBucketName, Cardinality>> {
+  const limit = LIMITS.maxCrawlDiffRows;
+  return {
+    newPages: describeDiffBucket(diff.newPages, limit, "maxCrawlDiffRows"),
+    removedPages: describeDiffBucket(
+      diff.removedPages,
+      limit,
+      "maxCrawlDiffRows",
+    ),
+    newIssues: describeDiffBucket(diff.newIssues, limit, "maxCrawlDiffRows"),
+    resolvedIssues: describeDiffBucket(
+      diff.resolvedIssues,
+      limit,
+      "maxCrawlDiffRows",
+    ),
   };
 }
 

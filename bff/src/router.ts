@@ -38,7 +38,7 @@
 
 import * as z from "zod/v4";
 import { authenticate, createSession } from "./gate";
-import { bffErrorResponse } from "./errors";
+import { bffErrorResponse, type BffErrorCode } from "./errors";
 import { callTool, type McpClientResult } from "./mcp-client";
 import { TOOL_TIMEOUT_MS, type ToolName } from "./timeout";
 import {
@@ -61,6 +61,11 @@ import { linkCheckResultSchema } from "../../src/schemas/links";
 import { pageSpeedResultSchema } from "../../src/schemas/pagespeed";
 import { gscDimensionSchema } from "../../src/schemas/search-console";
 import { clusterResultSchema } from "../../src/schemas/keywords";
+import {
+  snapshotCrawlResultSchema,
+  listCrawlSnapshotsResultSchema,
+  compareCrawlsResultSchema,
+} from "../../src/schemas/crawl-snapshots";
 import { getAuthenticatedRoute } from "./authenticated/registry";
 import {
   GSC_REPORTING_LAG_DAYS,
@@ -89,6 +94,33 @@ const crawlSiteInputSchema = z.object({
 
 const checkLinksInputSchema = z.object({
   url: z.url().describe("Public HTTP or HTTPS page URL"),
+});
+
+// `history-comparison-view` (PR11). Mirrors `src/server.ts`'s
+// `snapshot_crawl`/`list_crawl_snapshots`/`compare_crawls` inputSchemas
+// exactly. NOT authenticated — see `authenticated/registry.ts`'s doc
+// comment for why: `snapshot_crawl` calls `crawlSite` internally (no
+// Google credential, no Google quota, exactly like `crawl_site` itself),
+// and `list_crawl_snapshots`/`compare_crawls` only read/diff D1-stored
+// crawl data with no Google linkage at all — unlike their GSC-snapshot
+// siblings, there is no "search-console"-source freshness fact to derive
+// for this family (crawled pages have no Google reporting-lag concept).
+const snapshotCrawlInputSchema = z.object({
+  url: z.url().describe("Public HTTP or HTTPS site URL"),
+  limit: z.coerce.number().int().min(1).max(20).optional(),
+  concurrency: z.coerce.number().int().min(1).max(4).optional(),
+  label: z.string().min(1).optional(),
+});
+
+const listCrawlSnapshotsInputSchema = z.object({
+  url: z.url(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+});
+
+const compareCrawlsInputSchema = z.object({
+  url: z.url(),
+  baseSnapshotId: z.coerce.number().int().positive().optional(),
+  currentSnapshotId: z.coerce.number().int().positive().optional(),
 });
 
 const analyzePagespeedInputSchema = z.object({
@@ -350,6 +382,17 @@ async function dispatch<TInput, TResult>(
   toolName: ToolName,
   args: TInput,
   schema: z.ZodType<TResult>,
+  /**
+   * `history-comparison-view` (PR11) only. `snapshot_crawl`/
+   * `list_crawl_snapshots`/`compare_crawls` need `classifyStorageFailure`
+   * (D1-not-configured vs. insufficient-snapshots, task 11.6) despite being
+   * routed through the ordinary, NON-authenticated `dispatch()` path — see
+   * `authenticated/registry.ts`'s doc comment for why the crawl-snapshot
+   * family, unlike its GSC-snapshot sibling, is not in that allowlist at
+   * all. Every other `dispatch()` caller omits this, preserving their
+   * existing blind `tool_failed` mapping unchanged.
+   */
+  classifyFailureText?: (text: string) => BffErrorCode,
 ): Promise<Response> {
   // Computed unconditionally, even for the non-cacheable (bypass) branch:
   // this is the SAME content-hash `cacheKey()` used for KV lookups, reused
@@ -368,6 +411,7 @@ async function dispatch<TInput, TResult>(
       timeoutMs: TOOL_TIMEOUT_MS[toolName],
       validateUpstreamResults: validateUpstreamResultsFlag(env),
       keyHash: key,
+      ...(classifyFailureText ? { classifyFailureText } : {}),
     });
 
   const inputs = args as Record<string, unknown>;
@@ -938,6 +982,54 @@ export async function handleRequest(
       "cluster_keywords",
       parsed.data,
       clusterResultSchema,
+    );
+  }
+
+  // `history-comparison-view` (PR11). NOT authenticated — see this file's
+  // input-schema comment above and `authenticated/registry.ts`'s doc
+  // comment for the full reasoning. All three pass `classifyStorageFailure`
+  // so a D1-not-configured or fewer-than-two-snapshots failure still
+  // renders as its own distinct state (task 11.6), despite being routed
+  // through the ordinary, non-authenticated `dispatch()` path.
+  if (url.pathname === "/api/tools/snapshot_crawl") {
+    const parsed = parseQuery(url, snapshotCrawlInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatch(
+      request,
+      url,
+      env,
+      "snapshot_crawl",
+      parsed.data,
+      snapshotCrawlResultSchema,
+      classifyStorageFailure,
+    );
+  }
+
+  if (url.pathname === "/api/tools/list_crawl_snapshots") {
+    const parsed = parseQuery(url, listCrawlSnapshotsInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatch(
+      request,
+      url,
+      env,
+      "list_crawl_snapshots",
+      parsed.data,
+      listCrawlSnapshotsResultSchema,
+      classifyStorageFailure,
+    );
+  }
+
+  if (url.pathname === "/api/tools/compare_crawls") {
+    const parsed = parseQuery(url, compareCrawlsInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatch(
+      request,
+      url,
+      env,
+      "compare_crawls",
+      parsed.data,
+      compareCrawlsResultSchema,
+      classifyStorageFailure,
     );
   }
 
