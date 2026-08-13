@@ -92,6 +92,35 @@ describe("callTool — structuredContent re-validation", () => {
   });
 });
 
+describe("callTool — SSE-transported replies", () => {
+  it("parses a text/event-stream reply the same as a plain JSON one — the real seo-mcp SDK's legacy stateless transport always responds this way, regardless of the Accept header sent", async () => {
+    const dependencies = fakeDependencies(
+      () =>
+        new Response(
+          'event: message\ndata: {"jsonrpc":"2.0","id":"1","result":{"structuredContent":{"status":"ok","service":"seo-mcp","version":"0.1.0"}}}\n\n',
+          { status: 200, headers: { "content-type": "text/event-stream" } },
+        ),
+    );
+    const result = await callTool("health", {}, healthSchema, dependencies);
+    expect(result).toEqual({
+      ok: true,
+      data: { status: "ok", service: "seo-mcp", version: "0.1.0" },
+    });
+  });
+
+  it("maps a malformed text/event-stream body (no data: line) to upstream_protocol", async () => {
+    const dependencies = fakeDependencies(
+      () =>
+        new Response("event: message\n\n", {
+          status: 200,
+          headers: { "content-type": "text/event-stream" },
+        }),
+    );
+    const result = await callTool("health", {}, healthSchema, dependencies);
+    expect(result).toEqual({ ok: false, code: "upstream_protocol" });
+  });
+});
+
 describe("callTool — malformed upstream replies", () => {
   it("maps a non-JSON body to upstream_protocol", async () => {
     const dependencies = fakeDependencies(

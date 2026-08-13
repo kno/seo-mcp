@@ -118,6 +118,26 @@ function isJsonRpcReply(value: unknown): value is JsonRpcReply {
 }
 
 /**
+ * The real `seo-mcp` SDK's legacy stateless transport (a one-shot
+ * `tools/call` with no prior `initialize` handshake — exactly what this
+ * client sends) always responds over SSE, regardless of the `Accept`
+ * header: only the "modern", session-based era path respects
+ * `createMcpHandler`'s `responseMode: "json"` option. For a single-shot
+ * call there is exactly one `event: message` block; its `data:` line(s)
+ * carry the JSON-RPC reply this function extracts and parses.
+ */
+function parseSseJsonRpc(text: string): unknown {
+  const dataLines = text
+    .split("\n")
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trim());
+  if (dataLines.length === 0) {
+    throw new Error("SSE body contained no data: line");
+  }
+  return JSON.parse(dataLines.join("\n"));
+}
+
+/**
  * Sends a single JSON-RPC `tools/call` request over `dependencies.seoMcp`,
  * validates and normalizes the reply, and returns a typed result — never
  * throwing on an upstream failure. Every call is counted in `usage.ts`'s
@@ -153,7 +173,7 @@ async function performCall<T>(
           method: "POST",
           headers: {
             "content-type": "application/json",
-            accept: "application/json",
+            accept: "application/json, text/event-stream",
             authorization: `Bearer ${dependencies.token}`,
           },
           body: JSON.stringify({
@@ -185,7 +205,11 @@ async function performCall<T>(
 
   let payload: unknown;
   try {
-    payload = await response.json();
+    payload = response.headers
+      .get("content-type")
+      ?.includes("text/event-stream")
+      ? parseSseJsonRpc(await response.text())
+      : await response.json();
   } catch {
     return { ok: false, code: "upstream_protocol" };
   }
