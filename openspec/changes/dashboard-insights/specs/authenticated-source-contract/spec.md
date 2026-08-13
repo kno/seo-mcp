@@ -53,6 +53,44 @@ authenticated source, not only `analyze_pagespeed`.
 - THEN it MUST NOT contain any Google credential or `MCP_AUTH_TOKEN`, extending the
   `result-export` no-secret-material requirement to authenticated sources
 
+### Requirement: The Authenticated Registry Is an Explicit Allowlist
+
+The authenticated registry (`bff/src/authenticated/registry.ts`'s `AUTHENTICATED_REGISTRY`) MUST be an
+explicit allowlist of read-only tool routes, not an incidental list that happens to omit write tools today. No
+`business_*` tool (`business_reply_review`, `business_update_info`, `business_create_post`, or any future
+Business Profile write tool) and no other write-capable MCP tool MUST be reachable through the BFF's
+authenticated dispatch path. This exclusion MUST be structural, not merely a matter of no one having added
+such a row yet: the registry's `schema` field MUST be typed as the union of published `outputSchema` literals
+from the schema map (`src/types/schemas.ts`), so that adding a row for a tool that publishes no `outputSchema`
+— which includes every write tool, by construction, since a write tool publishes no queryable output shape —
+is a compile-time type error, not a silent runtime addition. A tool absent from the registry MUST return 404
+from its `/api/tools/{tool}` path rather than being silently dispatched through the ordinary (non-authenticated)
+tool-call path.
+
+#### Scenario: No `business_*` tool is reachable through the BFF
+
+- GIVEN the authenticated registry as it exists in `bff/src/authenticated/registry.ts`
+- WHEN the registry's keys are enumerated
+- THEN no key MUST start with `business_`, and each of `business_reply_review`,
+  `business_update_info`, and `business_create_post` MUST report `isAuthenticatedTool === false` and
+  `getAuthenticatedRoute === undefined`
+
+#### Scenario: An unschemad write tool cannot be added to the registry without a type error
+
+- GIVEN a future contributor attempts to add a registry row for a tool that publishes no
+  `outputSchema` (as every write tool does today)
+- WHEN the code is typechecked
+- THEN the addition MUST fail to typecheck, because the registry's `schema` field only accepts the
+  published schema-map union, not an arbitrary or absent schema
+
+#### Scenario: A write tool's route returns 404, not a dispatched write
+
+- GIVEN a request is made to `/api/tools/business_reply_review` (or any other unregistered write
+  tool's path) through the BFF
+- WHEN the BFF handles the request
+- THEN it MUST respond 404 without dispatching the call upstream, rather than falling through to
+  the ordinary (non-authenticated) tool-call path
+
 ### Requirement: Two Distinct Staleness Axes Are Always Presented Separately
 
 Every authenticated-source result MUST carry and display two distinct staleness facts that
@@ -195,11 +233,11 @@ tool output is a contract violation of this requirement, not merely a quality is
 
 #### Scenario: A provisional spec names its blocking tool
 
-- GIVEN a view is specified for `find_striking_distance_keywords`, which does not yet exist as a
-  registered MCP tool
+- GIVEN a view is specified for a hypothetical tool that does not yet exist as a registered MCP
+  tool
 - WHEN the spec is read
-- THEN it MUST state inline that it is provisional and MUST name
-  `find_striking_distance_keywords` as the tool whose published output schema must reconcile it
+- THEN it MUST state inline that it is provisional and MUST name that hypothetical tool as the one
+  whose published output schema must reconcile it
 
 #### Scenario: Implementation is blocked until reconciliation
 

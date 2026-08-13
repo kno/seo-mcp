@@ -76,7 +76,7 @@ more than one currency, and the single-tenant Ads account has one billing curren
 - THEN it MUST display the operator-configured currency label alongside it
 - AND MUST NOT display a bare number
 
-#### Scenario: Submission is blocked until a currency label is configured
+#### Scenario: A missing currency label surfaces an explicit configuration-needed state
 
 - GIVEN the operator has not configured a currency label
 - WHEN the view would otherwise render a bid value

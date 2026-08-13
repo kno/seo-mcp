@@ -494,6 +494,154 @@ describe("GscInsightsContainer — D1-specific distinct error states (task 6.7)"
   });
 });
 
+describe("GscInsightsContainer — comparison entry point requires two snapshots first (task 6.4 / gsc-insight-views)", () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it("shows a capture-first onboarding state and no Compare button when zero snapshots exist", async () => {
+    global.fetch = routedFetch({
+      list_search_console_snapshots: {
+        data: { siteUrl: "sc-domain:example.com", count: 0, snapshots: [] },
+        cacheStatus: "miss",
+        resultAge: 0,
+        sourceFreshness: FRESHNESS,
+      },
+    });
+    const user = await openSnapshotsTab();
+    await user.click(
+      screen.getByRole("button", { name: /refresh snapshot list/i }),
+    );
+
+    expect(await screen.findByTestId("snapshot-onboarding")).toHaveTextContent(
+      /no snapshots stored yet/i,
+    );
+    expect(
+      screen.queryByRole("button", { name: /^compare/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("still shows the capture-more onboarding state and no Compare button with exactly one snapshot", async () => {
+    global.fetch = routedFetch({
+      list_search_console_snapshots: {
+        data: {
+          siteUrl: "sc-domain:example.com",
+          count: 1,
+          snapshots: [SNAPSHOTS[0]],
+        },
+        cacheStatus: "miss",
+        resultAge: 0,
+        sourceFreshness: FRESHNESS,
+      },
+    });
+    const user = await openSnapshotsTab();
+    await user.click(
+      screen.getByRole("button", { name: /refresh snapshot list/i }),
+    );
+
+    expect(await screen.findByTestId("snapshot-onboarding")).toHaveTextContent(
+      /one more snapshot is needed/i,
+    );
+    expect(
+      screen.queryByRole("button", { name: /^compare/i }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+const SNAPSHOTS_THREE = [
+  {
+    id: 3,
+    siteUrl: "sc-domain:example.com",
+    capturedAt: "2026-07-28T00:00:00.000Z",
+    startDate: "2026-07-01",
+    endDate: "2026-07-28",
+    label: "newest",
+  },
+  {
+    id: 2,
+    siteUrl: "sc-domain:example.com",
+    capturedAt: "2026-06-28T00:00:00.000Z",
+    startDate: "2026-06-01",
+    endDate: "2026-06-28",
+    label: "middle",
+  },
+  {
+    id: 1,
+    siteUrl: "sc-domain:example.com",
+    capturedAt: "2026-05-28T00:00:00.000Z",
+    startDate: "2026-05-01",
+    endDate: "2026-05-28",
+    label: "oldest",
+  },
+];
+
+describe("GscInsightsContainer — an explicit snapshot pair overrides the two-most-recent default (gsc-insight-views)", () => {
+  const originalFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it("sends the explicitly-selected base/current ids, not the two most recent", async () => {
+    global.fetch = routedFetch({
+      list_search_console_snapshots: {
+        data: {
+          siteUrl: "sc-domain:example.com",
+          count: 3,
+          snapshots: SNAPSHOTS_THREE,
+        },
+        cacheStatus: "miss",
+        resultAge: 0,
+        sourceFreshness: FRESHNESS,
+      },
+      compare_search_console: {
+        data: {
+          ...COMPARE_RESULT,
+          baseSnapshotId: 1,
+          currentSnapshotId: 3,
+        },
+        cacheStatus: "miss",
+        resultAge: 0,
+        sourceFreshness: FRESHNESS,
+      },
+    });
+    const user = await openSnapshotsTab();
+    await user.click(
+      screen.getByRole("button", { name: /refresh snapshot list/i }),
+    );
+    await screen.findByText("#3");
+
+    // Explicitly pick the oldest (#1) as base and the newest (#3) as
+    // current — the two-most-recent default would have been #2 and #3.
+    await user.click(
+      screen.getByRole("radio", { name: /use snapshot #1 as base/i }),
+    );
+    await user.click(
+      screen.getByRole("radio", { name: /use snapshot #3 as current/i }),
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /compare snapshot #1 vs #3/i }),
+    );
+
+    await screen.findByTestId("diff-endpoints");
+
+    const compareCall = (
+      global.fetch as ReturnType<typeof vi.fn>
+    ).mock.calls.find((call: unknown[]) =>
+      (call[0] as RequestInfo | URL)
+        .toString()
+        .includes("compare_search_console"),
+    );
+    expect(compareCall).toBeDefined();
+    const requestedUrl = (compareCall![0] as RequestInfo | URL).toString();
+    expect(requestedUrl).toContain("baseSnapshotId=1");
+    expect(requestedUrl).toContain("currentSnapshotId=3");
+    // Never silently substitutes the two-most-recent default (#2, #3).
+    expect(requestedUrl).not.toContain("baseSnapshotId=2");
+  });
+});
+
 describe("GscInsightsContainer — reporting-lag freshness for every GSC-backed tool (task 6.8)", () => {
   const originalFetch = global.fetch;
   afterEach(() => {

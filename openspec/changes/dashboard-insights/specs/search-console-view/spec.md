@@ -12,14 +12,14 @@ contract, keyboard reachability, no polling), `quota-visibility`, and `result-ex
 
 ### Verified real shape (cited from source, re-read at spec time)
 
-- Tool registration and input schema: `src/server.ts:126-153`. Real inputs, exactly:
+- Tool registration and input schema: `src/server.ts:240-283`. Real inputs, exactly:
   - `siteUrl: string, min length 1` — a Search Console property, e.g.
-    `sc-domain:example.com` or `https://example.com/` (`src/server.ts:131-136`).
-  - `startDate: string` matching `/^\d{4}-\d{2}-\d{2}$/` (`src/server.ts:137`).
-  - `endDate: string` matching `/^\d{4}-\d{2}-\d{2}$/` (`src/server.ts:138`).
+    `sc-domain:example.com` or `https://example.com/` (`src/server.ts:246-251`).
+  - `startDate: string` matching `/^\d{4}-\d{2}-\d{2}$/` (`src/server.ts:252`).
+  - `endDate: string` matching `/^\d{4}-\d{2}-\d{2}$/` (`src/server.ts:253`).
   - `dimensions: optional array` of `"query" | "page" | "country" | "device" | "date" |
-"searchAppearance"` (`src/server.ts:139-150`).
-  - `rowLimit: optional integer, 1 to 250` (`src/server.ts:151`).
+"searchAppearance"` (`src/server.ts:254-265`).
+  - `rowLimit: optional integer, 1 to 250` (`src/server.ts:266`).
   - The tool accepts **no** other input — no comparison-period parameter, no metric selector, no
     property-list input. There is no list-properties tool; `siteUrl` is supplied per call
     (confirmed in `proposal.md`'s Open Decisions table).

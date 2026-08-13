@@ -233,6 +233,17 @@ if GSC data were attempted at all (no error, no empty-result placeholder implyin
 query). When `search` is present, the view MUST render `search.opportunities` using the opportunity
 requirements above.
 
+The view never actually receives the raw `gscError` string that reaches state (c) at the tool layer. The BFF's
+`classifyDomainReportGscError` transform (`bff/src/authenticated/domain-report.ts`) runs unconditionally on
+every successful `analyze_domain` response, destructures `gscError` out of the payload before it is returned
+to the caller, classifies it via `classifyUpstreamFailure`, and substitutes a new `enrichmentError: { code }`
+field in its place. The raw `gscError` string is not present in the response the view's code ever parses — the
+view's state (c) MUST therefore be implemented as "`enrichmentError` is present and `search` is absent", never
+as a check against a `gscError` field, because that field does not exist by the time a response reaches the
+browser. This classify-and-discard step is the security mechanism `authenticated-source-contract`'s credential-
+containment requirements rely on for this specific tool — the raw upstream error text (which MAY embed
+credential-adjacent material, e.g. an OAuth error body) never crosses the BFF boundary.
+
 #### Scenario: Enrichment not requested renders no GSC section and no error
 
 - GIVEN an `analyze_domain` call omitted `gscProperty`, `startDate`, or `endDate`
@@ -247,13 +258,84 @@ requirements above.
 - THEN it MUST render `search.opportunities` using the opportunity-list requirements this spec defines,
   labeled with `search.startDate`/`search.endDate`
 
-#### Scenario: Enrichment requested and failed renders a distinct failure state
+#### Scenario: Enrichment requested and failed renders a distinct failure state, from a field the view never sees raw
 
-- GIVEN an `analyze_domain` result has `gscError` present (and `search` absent)
+- GIVEN an `analyze_domain` result reaches the view with `enrichmentError: { code }` present (and `search`
+  absent) — the BFF has already destructured the raw `gscError` string out of the response and substituted
+  this classified field before the view's code ever runs
 - WHEN the view renders the result
 - THEN it MUST render a GSC-enrichment failure state distinct from both the "not requested" state and a
-  successful-but-empty opportunities list, and MUST route that failure through the failure-classification
-  requirements `authenticated-source-contract` defines
+  successful-but-empty opportunities list, based on `enrichmentError`, and MUST route that failure through the
+  failure-classification requirements `authenticated-source-contract` defines; it MUST NOT reference or expect
+  a raw `gscError` field, since the BFF never forwards one
+
+### Requirement: Effective Request Criteria Are Echoed By the BFF
+
+ADDED — none of the five tools this capability covers (`find_seo_opportunities`, `find_keyword_cannibalization`,
+`map_keywords_to_pages`, `find_content_gaps`, `analyze_domain`) echoes any criteria field in its own result: each
+applies its own `?? <default>` fallback internally (`src/seo/intelligence.ts`, `src/seo/keyword-pages.ts`,
+`src/seo/domain-report.ts`) and returns no field recording which value — the request's or the default's — was
+actually used for a given call. Because a request that omits a limit-shaped field still needs a correct bound
+label (e.g. "not necessarily exhaustive at N" requires knowing the real effective N), the BFF itself resolves
+and echoes the effective, post-default-resolution criteria via `resolveEffectiveCriteria`
+(`bff/src/authenticated/criteria.ts`), attached to the response as an `EffectiveCriteria` object carrying
+`basis: "request"`. Every default `resolveEffectiveCriteria` applies is verified to mirror the exact fallback
+the corresponding `src/seo/*` synthesis function itself uses, so the echoed criteria can never disagree with
+what the tool actually did.
+
+The view MUST render the echoed effective criteria for each of the five tools' results (the `EffectiveCriteriaPanel`
+organism), MUST NOT compute or guess an effective value itself when a request field was omitted, and MUST NOT
+confuse this BFF-derived `basis: "request"` criteria object with `OpportunityResult.criteria` — the
+tool-echoed criteria field `find_striking_distance_keywords`/`find_low_ctr_opportunities` (`gsc-insight-views`)
+carry natively. The two `criteria`-shaped fields belong to different tool families and MUST NOT be merged,
+compared, or rendered as if they were the same mechanism.
+
+#### Scenario: An omitted criteria field still renders its real effective value
+
+- GIVEN a request to one of the five tools omits a criteria-shaped field the tool defaults internally (e.g.
+  `limit`)
+- WHEN the BFF returns the response
+- THEN the response MUST carry the BFF-resolved effective value for that field (matching the tool's own
+  default), and the view MUST render that effective value rather than treating the field as absent or unknown
+
+#### Scenario: The BFF-echoed criteria is never confused with a tool-echoed criteria field
+
+- GIVEN a view renders both a `seo-intelligence-view` result and a `gsc-insight-views` opportunity result in
+  the same session
+- WHEN each result's criteria is displayed
+- THEN the `seo-intelligence-view` result's `EffectiveCriteria` (`basis: "request"`) and the `gsc-insight-views`
+  result's tool-echoed `criteria` MUST be rendered as visibly distinct mechanisms, never presented as
+  interchangeable or merged into one criteria object
+
+### Requirement: The 250-Row Search Console Pull Is Disclosed Unconditionally
+
+ADDED — every one of the five tools this capability covers synthesizes its result over a hardcoded
+`maxGscRows` pull of at most 250 raw Search Console rows (`LIMITS.maxGscRows`, `src/config.ts`) before any
+filter, threshold, or limit is applied. No field in any of the five tools' output records this pull size, so
+the caveat can never be inferred from a response — it must be stated unconditionally by the view itself,
+independent of any particular result's `count`, `limit`, or bound. `GSC_PULL_CAVEAT`
+(`bff/src/authenticated/criteria.ts`) is exported as a single shared string specifically so no view can drift
+from another's wording of this caveat.
+
+The view MUST render this caveat for every one of the five tools' results, regardless of whether the result is
+empty, below any shown limit, or at the bound — the caveat is about the underlying Search Console pull, not
+about whether the tool's own output looks exhaustive. The view MUST NOT render this caveat conditionally on
+`count`, `limit`, or any other result-shaped field, since the 250-row pull happens on every call regardless of
+what the result ultimately contains.
+
+#### Scenario: The 250-row caveat renders even for a small, apparently-complete result
+
+- GIVEN a `find_seo_opportunities`, `find_keyword_cannibalization`, `map_keywords_to_pages`,
+  `find_content_gaps`, or `analyze_domain` result has a `count` well below any configured limit
+- WHEN the view renders that result
+- THEN it MUST still render the unconditional 250-Search-Console-row caveat, not only when a bound is reached
+
+#### Scenario: The 250-row caveat renders identically across all five tools
+
+- GIVEN results from two or more of the five tools this capability covers are rendered in the same session
+- WHEN each result's caveat is displayed
+- THEN the caveat text MUST be the same shared wording for every one of the five tools, not a per-tool
+  reimplementation that could drift
 
 ### Requirement: Drill-Down Into the Existing Page and Site Views
 

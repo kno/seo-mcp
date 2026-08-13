@@ -29,7 +29,7 @@ snapshotId, siteUrl, rowCount, capturedAt }`.
 snapshots: StoredSnapshot[] }`. `StoredSnapshot` (`src/db/gsc-store.ts:4-11`): `{ id, siteUrl, capturedAt,
 startDate, endDate, label: string | null }`. `listSnapshots` defaults to 20 when `limit` is omitted
   (`src/db/gsc-store.ts:93`) and orders most-recent-first; this is a LISTING cap, not a retention cap — see
-  the "Snapshot Retention Is Unbounded, Not a Rolling Window" requirement below.
+  `history-comparison-view`'s "Snapshot Retention Is Unbounded, Not a Rolling Window" requirement.
 - `compare_search_console` — inputs `{ siteUrl, baseSnapshotId?, currentSnapshotId? }`. If either snapshot
   ID is omitted, both default to the two most recent snapshots for that site (`twoMostRecent`,
   `src/db/gsc-store.ts:124-131`, where the more recent of the pair becomes `current` and the older becomes

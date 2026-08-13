@@ -20,7 +20,7 @@ interface StubEnv {
 
 const stubEnv = env as unknown as StubEnv;
 
-const DECOY_CREDENTIAL = "Bearer decoy-token-xyz";
+const DECOY_CREDENTIAL = "DECOY_REFRESH_TOKEN_xyz789";
 
 async function authenticatedRequest(path: string): Promise<Request> {
   const cookie = await createSessionCookie(
