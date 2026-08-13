@@ -1,7 +1,8 @@
 /**
- * Published compile-time result types for all five MCP tools this change
- * scopes (`health`, `crawl_page`, `crawl_site`, `check_links`,
- * `analyze_pagespeed`). Type-only re-exports: under `verbatimModuleSyntax`
+ * Published compile-time result types for the MCP tools with a published
+ * output schema (`health`, `crawl_page`, `crawl_site`, `check_links`,
+ * `analyze_pagespeed`, `search_console_query`). Type-only re-exports: under
+ * `verbatimModuleSyntax`
  * this module erases entirely, so importing it (e.g. from the BFF or the
  * dashboard) pulls in zero Worker runtime code from `src/http`,
  * `src/crawl`, `src/seo`, or `src/pagespeed`.
@@ -22,3 +23,4 @@ export type {
 } from "../crawl/site";
 export type { LinkCheckResult, LinkProbe } from "../crawl/links";
 export type { PageSpeedResult, Strategy } from "../pagespeed/types";
+export type { GscQueryResult, GscRow } from "../google/search-console";

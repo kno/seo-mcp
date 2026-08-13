@@ -42,10 +42,11 @@ This is the load-bearing honesty constraint of the change.
 | `get_keyword_metrics`                                      | **SHIPPED, RECONCILED** (commit `1044d82`)                           | Field-level requirements from the real `KeywordMetric[]` shape (`keyword-research-view` spec)                                 |
 | `discover_keywords`                                        | **SHIPPED, RECONCILED** (commit `1044d82`)                           | Field-level requirements from the real `KeywordMetric[]` shape (`keyword-research-view` spec)                                 |
 | `cluster_keywords`                                         | **SHIPPED, RECONCILED** (commit `ef5b0d2`)                           | Field-level requirements from the real `ClusterResult` shape — not in this proposal's original scope, added on reconciliation |
-| `analyze_domain`                                           | **SHIPPED, RECONCILED** (commit `e8fe45f`)                           | Field-level requirements from the real `DomainReport` shape (`seo-intelligence-view` spec)                                    |
-| `find_seo_opportunities`, `find_keyword_cannibalization`   | **SHIPPED, RECONCILED** (commit `b24d66d`)                           | Field-level requirements from the real `Opportunity`/`CannibalGroup` shapes (`seo-intelligence-view` spec)                    |
-| `map_keywords_to_pages`, `find_content_gaps`               | **SHIPPED, RECONCILED** (commit `1b82926`)                           | Field-level requirements from the real `PageKeywords`/`ContentGap` shapes (`seo-intelligence-view` spec)                      |
+| `analyze_domain`                                           | **SHIPPED, RECONCILED** (commit `e8fe45f`; re-verified 4th pass)     | Field-level requirements from the real `DomainReport` shape (`seo-intelligence-view` spec)                                    |
+| `find_seo_opportunities`, `find_keyword_cannibalization`   | **SHIPPED, RECONCILED** (commit `b24d66d`; re-verified 4th pass)     | Field-level requirements from the real `Opportunity`/`CannibalGroup` shapes (`seo-intelligence-view` spec)                    |
+| `map_keywords_to_pages`, `find_content_gaps`               | **SHIPPED, RECONCILED** (commit `1b82926`; re-verified 4th pass)     | Field-level requirements from the real `PageKeywords`/`ContentGap` shapes (`seo-intelligence-view` spec)                      |
 | `snapshot_crawl`, `list_crawl_snapshots`, `compare_crawls` | **SHIPPED, RECONCILED** (commit `28d8066`)                           | Field-level requirements from the real `CrawlDiff` shape, D1-backed (`history-comparison-view` spec)                          |
+| 6 × `business_*` (Google Business Profile)                 | **SHIPPED — DELIBERATELY OUT OF SCOPE** (user decision, 4th pass)    | Nothing. No spec, no view, no task, no BFF route here. A future SDD change owns this domain — see Out of Scope.               |
 | internal-linking recommendations                           | UNBUILT — verified, not just undecided                               | No tool derives a recommendation from `linkGraph`; stays PROVISIONAL inside `seo-intelligence-view`                           |
 
 **Reconciliation history.** Across three rebases of this session's worktree, this change was caught out
@@ -56,6 +57,51 @@ content decay), the full D1-backed snapshot/history family for both GSC and craw
 `seo-intelligence-view` tools. Every capability this change names is now reconciled against a real, shipped
 tool EXCEPT internal-linking recommendations, which is verified genuinely unbuilt (no synthesis function
 touches the crawl's link graph) rather than merely undecided.
+
+**Reconciliation, fourth pass (tool inventory + `seo-intelligence-view` shapes re-read from source).** The
+server now registers **28 tools** (`grep 'server.registerTool(' src/server.ts`), not the ~15 the third pass
+covered. Findings, each read from source this pass rather than carried forward:
+
+1. **Tool inventory**: 22 in-scope tools + 6 `business_*` tools. Every in-scope tool this change names is
+   accounted for; nothing else is registered.
+2. **The five `seo-intelligence-view` tools verified field-by-field** against
+   `src/seo/intelligence.ts:12-40, 48-167, 173-263`, `src/seo/keyword-pages.ts:8-29, 35-218`, and
+   `src/seo/domain-report.ts:7-102`. Every shape claim in `seo-intelligence-view/spec.md` holds exactly
+   (`Opportunity`, `CannibalGroup`/`CannibalPage`, `PageKeywords`/`PageQuery`, `ContentGap`, `DomainReport`,
+   the fixed `effort` 1/2/3 constants, `MAX_PAGES_PER_GROUP = 10` at `intelligence.ts:46, 93`, and
+   `page: null` on every cannibalization opportunity). Only the `src/server.ts` line citations had drifted
+   (~7 lines); corrected registration ranges are `find_keyword_cannibalization` 348-373,
+   `find_seo_opportunities` 375-399, `map_keywords_to_pages` 401-426, `find_content_gaps` 428-461,
+   `analyze_domain` 774-829. Input schemas are unchanged from what the spec asserts.
+3. **NEW — no `criteria` echo on any of the five.** Unlike `OpportunityResult`, which returns
+   `criteria: Record<string, number>` (`src/google/opportunities.ts:79, 136, 190`), these five return only
+   `{ …, count, <array> }`. Their thresholds and limits are resolved **inside** the synthesis helpers and
+   never surface: `limit ?? LIMITS.maxOpportunities` (10), `?? maxCannibalizationGroups` (50),
+   `?? maxKeywordPages` (100), `?? maxContentGaps` (100), `minPosition ?? 21`, `minImpressions ?? 10`,
+   `topQueriesPerPage ?? 10`. So `gsc-insight-views`' "applied criteria shown alongside results" pattern
+   **cannot be satisfied the same way here** — the BFF must echo the _effective request_ criteria (omitted
+   inputs resolved against a documented default table), labelled as request-side, and bound detection must
+   compare `count` against that effective limit rather than a returned `criteria.limit`.
+4. **NEW — a fixed, invisible 250-row pre-truncation bound.** All five synthesize over a hardcoded
+   `dimensions: ["query","page"], rowLimit: LIMITS.maxGscRows` GSC pull
+   (`intelligence.ts:193-204, 239-250`; `keyword-pages.ts:144-155, 192-203`). No output field records it, so
+   no result can ever be claimed complete — the caveat must be stated by the view unconditionally, not
+   derived from a field.
+5. **NEW — `analyze_domain` reports GSC failure inside a _success_ payload.** `gscError` is a raw upstream
+   `Error.message` set on a 200-OK `DomainReport` (`domain-report.ts:95-98`), not an `isError` tool failure.
+   The BFF classifier designed for `isError` text therefore does **not** see it. Credential containment and
+   the classify-and-discard rule must extend to this nested field, or upstream Google text reaches the
+   browser through a success response.
+6. **NEW — the reconciliation gate's real cost.** Only 5 tools declare an `outputSchema` today (`health`,
+   `crawl_page`, `crawl_site`, `check_links`, `analyze_pagespeed` — `src/server.ts:113, 131, 152, 174, 201`).
+   All 17 remaining in-scope tools have none, so the schema-derived registry gate means every view in this
+   change carries its family's output schemas as a prerequisite slice. This, not the UI, dominates the task
+   breakdown.
+7. **NEW — the MCP is no longer read-only.** `business_reply_review`, `business_update_info` and
+   `business_create_post` are live writes to a public Business Profile, gated only by a `confirm: true`
+   input (`src/server.ts:899-982`). This falsifies the "MCP is read-only analysis" premise of this
+   proposal's write-path non-goal at the _server_ level. It does not change this change's scope — but the
+   BFF's authenticated registry MUST be allowlist-shaped, so no write tool is ever reachable by omission.
 
 **Verified defect carried forward, not fixed here**: no retention enforcement exists for D1-stored
 snapshots (`ROADMAP.md`'s "rolling 90-day retention" decision has no corresponding deletion/expiry code in
@@ -92,24 +138,26 @@ this change (`authenticated-source-contract`), not a footnote.
    sixth tool that `dashboard-bff-foundations` skipped.
 2. Search Console view over the verified tool, with property/date-range/dimension controls, the 250-row bound
    badge, and the reporting-delay display.
-3. Provisional views for the GSC insight tools, keyword research, and SEO intelligence, written against
-   roadmap intent plus shape-independent invariants.
+3. Output schemas + published types for the remaining 17 in-scope tools that have none, and views for the GSC
+   insight tools, keyword research, SEO intelligence and snapshot history — all now written against real,
+   re-verified shapes rather than roadmap intent.
 4. A cross-cutting contract for authenticated sources: secret containment, delayed-data caching and staleness
    class, Google-side quota accounting, and mandatory schema reconciliation on tool arrival.
-5. A blocked-by-design `history-comparison-view` spec that names its blocker precisely and asserts only what
-   is knowable now.
+5. `history-comparison-view` over both shipped snapshot families, stating unbounded retention and manual-only
+   crawl capture as facts rather than implying a rolling window or automatic history.
 
 ### Out of Scope (non-goals, with rationale)
 
-| Deferred                                                                                                      | Rationale                                                                                                                                                |
-| ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Implementing any MCP tool.** No new server tool, no Google Ads client, no D1 schema, no history endpoint.   | These are `ROADMAP.md` server items. They are **dependencies of this change, not deliverables of it.** Only item 1 above touches `src/`.                 |
-| Google Trends, Bing Webmaster Tools, Google Business Profile, structured-data validation, permitted SERP data | `ROADMAP.md:74` lists these as _evaluate_: no tool chosen, no committed shape. A view for an unevaluated source would be invention, not planning.        |
-| Scheduled jobs / cron-driven refresh                                                                          | `ROADMAP.md:64` marks these conditional ("if the data justifies them"). No polling or auto-refresh anywhere, per `dashboard-views` decision 3.           |
-| Multi-tenant dashboard auth, per-client MCP credentials, per-property authorization                           | Resolved single-tenant: one owner, one Google account. Conditional future work (`DASHBOARD_ROADMAP.md` Phase 7), not a scheduled phase.                  |
-| A user-facing Google OAuth flow, consent screen, or token revocation UI                                       | Resolved: one-time offline consent produces a refresh token stored as a Worker secret. There is no authorization server and no per-user Google identity. |
-| Anything owned by `dashboard-views` or `dashboard-bff-foundations`                                            | Shell, error envelope, gate, cache mechanism, export mechanism, crawl-tool views. Consumed here, never redefined. Drift into them is a scope escalation. |
-| Write paths to the MCP                                                                                        | The MCP is read-only analysis.                                                                                                                           |
+| Deferred                                                                                                                                                                                                          | Rationale                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Implementing any MCP tool.** No new server tool, no Google Ads client, no D1 schema, no history endpoint, no retention enforcement, no crawl-snapshot cron.                                                     | These are `ROADMAP.md` server items and verified gaps. They are **dependencies or follow-ups of this change, not deliverables of it.** The only `src/` edits are additive `outputSchema` declarations and their schema modules (In Scope items 1 and 3) — no tool behavior changes.                                                                                                                                                                               |
+| **Google Business Profile — all six `business_*` tools.** `business_list_locations`, `business_get_reviews`, `business_get_performance`, `business_reply_review`, `business_update_info`, `business_create_post`. | **Explicit user decision (fourth reconciliation pass): out of scope for this change, entirely.** They ship on the server (`src/server.ts:831-982`, `GOOGLE_BUSINESS_ACCOUNT`/`GOOGLE_BUSINESS_LOCATION` in `src/config.ts:12-13`) but are a genuinely different domain — local presence, not search analytics — and three of them are **live public writes**. **A future SDD change owns them.** Not specced, not tasked, no BFF route, no navigation entry here. |
+| Google Trends, Bing Webmaster Tools, structured-data validation, permitted SERP data                                                                                                                              | `ROADMAP.md:74` lists these as _evaluate_: no tool chosen, no committed shape. A view for an unevaluated source would be invention, not planning.                                                                                                                                                                                                                                                                                                                 |
+| Scheduled jobs / cron-driven refresh                                                                                                                                                                              | `ROADMAP.md:64` marks these conditional ("if the data justifies them"). No polling or auto-refresh anywhere, per `dashboard-views` decision 3.                                                                                                                                                                                                                                                                                                                    |
+| Multi-tenant dashboard auth, per-client MCP credentials, per-property authorization                                                                                                                               | Resolved single-tenant: one owner, one Google account. Conditional future work (`DASHBOARD_ROADMAP.md` Phase 7), not a scheduled phase.                                                                                                                                                                                                                                                                                                                           |
+| A user-facing Google OAuth flow, consent screen, or token revocation UI                                                                                                                                           | Resolved: one-time offline consent produces a refresh token stored as a Worker secret. There is no authorization server and no per-user Google identity.                                                                                                                                                                                                                                                                                                          |
+| Anything owned by `dashboard-views` or `dashboard-bff-foundations`                                                                                                                                                | Shell, error envelope, gate, cache mechanism, export mechanism, crawl-tool views. Consumed here, never redefined. Drift into them is a scope escalation.                                                                                                                                                                                                                                                                                                          |
+| Write paths to the MCP                                                                                                                                                                                            | The dashboard is read-only analysis. The **server** no longer is (the three `business_*` writes exist), so the BFF's authenticated registry MUST be an explicit allowlist: a write tool must be unreachable by omission, never merely un-navigated.                                                                                                                                                                                                               |
 
 ## Capabilities
 
@@ -122,14 +170,15 @@ this change (`authenticated-source-contract`), not a footnote.
   a provisional view before its tool's real output schema is published.
 - `search-console-view`: the verified `search_console_query` report — property, date range, dimension
   selection, clicks/impressions/CTR/position table, 250-row bound badge, reporting-delay and as-of display.
-- `gsc-insight-views`: `find_striking_distance_keywords`, `find_low_ctr_opportunities`, and content
-  decay / period-over-period comparison. Provisional.
-- `keyword-research-view`: `get_keyword_metrics` first, then `discover_keywords` — volume, CPC, competition,
-  intent, clustering. Provisional.
-- `seo-intelligence-view`: `analyze_domain`, `find_seo_opportunities`, keyword-to-page mapping, content gaps,
-  cannibalizations, internal-linking recommendations, impact/effort prioritization. Provisional.
-- `history-comparison-view`: D1-backed snapshots, period-over-period diffs, trend charts. **Blocked**; spec
-  asserts the blocker and the invariants, nothing about shape.
+- `gsc-insight-views`: `find_striking_distance_keywords`, `find_low_ctr_opportunities`, and content decay via
+  `snapshot_search_console`/`list_search_console_snapshots`/`compare_search_console`. Reconciled.
+- `keyword-research-view`: `get_keyword_metrics`, `discover_keywords`, `cluster_keywords` — volume, bids,
+  competition, intent, clustering. Reconciled.
+- `seo-intelligence-view`: `analyze_domain`, `find_seo_opportunities`, `find_keyword_cannibalization`,
+  `map_keywords_to_pages`, `find_content_gaps` — impact/effort prioritization with per-opportunity provenance.
+  Reconciled (fourth pass). Internal-linking recommendations remain the one PROVISIONAL sub-requirement.
+- `history-comparison-view`: D1-backed snapshots and diffs for both the GSC and crawl families, hand-rolled
+  SVG trends. Reconciled; retention is unbounded and crawl capture is manual — both stated, neither fixed here.
 
 ### Decomposition rationale
 
@@ -243,23 +292,31 @@ Operational prerequisite for every authenticated view: `GOOGLE_CLIENT_ID`, `GOOG
 an Ads developer token before keyword research. Absent credentials must render a distinct "not configured"
 state, never an empty result.
 
-## Open Decisions (need the human — listed, not assumed)
+## Decisions (resolved — no open rows remain)
 
-| Decision                                                                                                              | Status                                                                                                                                                                                                  |
-| --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Is the slicing in Decision 1 accepted — ship the GSC view now, hold the other three views until their tools exist?    | **Recommended**, needs confirmation. The alternative is deferring this change entirely until the tools land.                                                                                            |
-| Cache TTL for authenticated reads                                                                                     | **Open.** Recommended: hours, with explicit refresh. Needs a product answer on acceptable staleness.                                                                                                    |
-| Which Search Console properties the owner actually manages, and whether the property list is configured or discovered | **Open.** `search_console_query` takes `siteUrl` per call; there is no list-properties tool. Affects whether the UI needs a configured allowlist.                                                       |
-| Default date range and comparison window for the GSC view                                                             | **Open.** Recommended: last 28 days vs. previous 28. Needs confirmation.                                                                                                                                |
-| Distinguishing Google credential failure from Google quota exhaustion                                                 | **Open.** Needs either new error codes (server change) or an agreed text-classification rule. Safe default: do not retry.                                                                               |
-| Google-side quota accounting source                                                                                   | **Open.** Google returns no remaining-count header, so it is BFF-side accounting with the same approximate semantics `dashboard-views` accepted for the MCP bucket. Needs agreement on display wording. |
-| Whether `search_console_query`'s `outputSchema` belongs here or folded back into `dashboard-bff-foundations`          | **Open.** Recommended: here, since foundations explicitly deferred it. Folding back is acceptable if that change has not archived.                                                                      |
-| Charting mechanism for trend lines                                                                                    | **Open**, inherited. Recommended: hand-rolled SVG, per `dashboard-views`.                                                                                                                               |
+Every row below was resolved before the tasks phase. The user's instruction was explicit: adopt each row's
+already-stated **Recommended** value rather than re-asking. `tasks.md` is written against these values.
 
-## Proposal question round
+| Decision                                                                          | Resolution                                                                                                                                                                                                                                      |
+| --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Is the slicing in Decision 1 accepted?                                            | **RESOLVED — accepted, and now moot in its original form.** Every capability is reconciled against a shipped tool, so slicing is by review budget, not by tool availability: schema slice → view slice, per capability family.                  |
+| Cache TTL for authenticated reads                                                 | **RESOLVED: hours, with explicit user refresh.** `AUTH_SOURCE_TTL_SECONDS[source].closed` at the top of the existing `[60, 86400]` clamp; `.open` short. `?refresh=1` only — no timer, no revalidate-on-focus.                                  |
+| Which Search Console properties the owner manages; configured vs. discovered list | **RESOLVED: free-text `siteUrl`.** No list-properties tool exists, and this is the only option needing no new tool. An operator-configured allowlist stays a later refinement, not a prerequisite.                                              |
+| Default date range and comparison window for the GSC view                         | **RESOLVED: last 28 days vs. the previous 28.**                                                                                                                                                                                                 |
+| Distinguishing Google credential failure from Google quota exhaustion             | **RESOLVED: BFF-side text classification with a safe default — an unclassifiable failure is non-retryable and operator-facing.** Never a retry loop. Server-side error codes stay a recommended follow-up `seo-mcp` change (design option (c)). |
+| Google-side quota accounting source                                               | **RESOLVED: BFF-side approximate accounting, identical semantics to the MCP bucket `dashboard-views` accepted.** Wording is "at least N calls used in this window", never a remaining count, carrying `basis: "bff-observed"`.                  |
+| Whether `search_console_query`'s `outputSchema` belongs here                      | **RESOLVED: here.** `dashboard-bff-foundations` is archived (`openspec/changes/archive/2026-08-12-dashboard-bff-foundations/`), so folding back is no longer possible.                                                                          |
+| Charting mechanism for trend lines                                                | **RESOLVED: hand-rolled SVG, per `dashboard-views`.** No charting library dependency. Specs stay mechanism-agnostic; the implementation does not.                                                                                               |
+| Google Business Profile tools (raised by the fourth reconciliation pass)          | **RESOLVED: out of scope for this change, entirely — a future SDD change owns the domain.** See Out of Scope.                                                                                                                                   |
 
-Execution mode is `auto`, so these were not asked interactively. They need the user's review before the specs
-phase, and each maps to a row above.
+## Proposal question round — closed
+
+These five product questions are **closed**: the user resolved the decision table above by adopting each
+Recommended value, and answered the Business Profile scope question directly. Question 1 resolves to "ship what
+is reconciled, sliced by review budget"; 2 to hours-long staleness with explicit refresh; 3 to a free-text
+property field; 4 to a loud operator-facing credential state; 5 to prioritization included (impact, effort and
+priorityScore are already real fields on every `Opportunity`, so it is display work, not synthesis work).
+Retained verbatim below for the record.
 
 1. **Business urgency**: is the driver "I already have GSC data I cannot read" (favours shipping the GSC view
    alone, now) or "I want the full insight panel" (favours holding this change until the tools land)?
@@ -272,8 +329,9 @@ phase, and each maps to a row above.
 5. **Overbuild boundary**: for `seo-intelligence-view`, is prioritization (impact/effort) part of the first
    product slice, or a later refinement once the underlying analyses are trusted?
 
-Assumptions taken in the absence of answers: single owner, small fixed property set, hours-long acceptable
-staleness, loud operator-facing credential failure, prioritization included but last.
+Assumptions taken in the absence of answers, now confirmed by the resolutions above: single owner, hours-long
+acceptable staleness, loud operator-facing credential failure, prioritization included but last. One assumption
+was corrected rather than confirmed: the property list is **free-text**, not a configured allowlist.
 
 ## Success Criteria
 

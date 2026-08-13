@@ -48,6 +48,7 @@ import { pageAnalysisSchema } from "./schemas/page";
 import { siteCrawlResultSchema } from "./schemas/site";
 import { linkCheckResultSchema } from "./schemas/links";
 import { pageSpeedResultSchema } from "./schemas/pagespeed";
+import { gscQueryResultSchema } from "./schemas/search-console";
 
 /**
  * Builds the `structuredContent` payload for a tool response.
@@ -61,9 +62,9 @@ import { pageSpeedResultSchema } from "./schemas/pagespeed";
  *   surfaces as a normal tool failure rather than invalid `structuredContent`.
  * - `jsonResult(value)` — legacy single-argument form kept for the
  *   Google/Ads tools that do not yet declare an `outputSchema`
- *   (`search_console_query`, `find_striking_distance_keywords`,
- *   `find_low_ctr_opportunities`, `get_keyword_metrics`,
- *   `discover_keywords`, `cluster_keywords`); out of scope for this change.
+ *   (`find_striking_distance_keywords`, `find_low_ctr_opportunities`,
+ *   `get_keyword_metrics`, `discover_keywords`, `cluster_keywords`); out of
+ *   scope for this change.
  */
 function jsonResult<T extends Record<string, unknown>>(
   schema: z.ZodType<T>,
@@ -240,10 +241,12 @@ export function buildServer(env: Env): McpServer {
           .optional(),
         rowLimit: z.number().int().min(1).max(250).optional(),
       }),
+      outputSchema: gscQueryResultSchema,
     },
     async ({ siteUrl, startDate, endDate, dimensions, rowLimit }) => {
       try {
         return jsonResult(
+          gscQueryResultSchema,
           await searchConsoleQuery(
             { siteUrl, startDate, endDate, dimensions, rowLimit },
             env,

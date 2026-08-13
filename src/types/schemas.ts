@@ -1,6 +1,6 @@
 /**
- * Published runtime Zod schemas for all five MCP tools this change scopes.
- * Depends only on `zod` — never on `src/http`, `src/crawl`, `src/seo`, or
+ * Published runtime Zod schemas for the MCP tools with a published output
+ * schema. Depends only on `zod` — never on `src/http`, `src/crawl`, `src/seo`, or
  * `src/pagespeed` runtime modules — so a consumer that wants to validate a
  * result at runtime (rather than only type-check it) can import from here
  * without pulling in Worker-specific code.
@@ -18,3 +18,8 @@ export {
 } from "../schemas/site";
 export { linkCheckResultSchema, linkProbeSchema } from "../schemas/links";
 export { pageSpeedResultSchema, strategySchema } from "../schemas/pagespeed";
+export {
+  gscQueryResultSchema,
+  gscRowSchema,
+  gscDimensionSchema,
+} from "../schemas/search-console";

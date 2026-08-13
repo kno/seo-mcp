@@ -128,3 +128,60 @@ notes: |
   scheduled path for snapshot_crawl. test/telemetry.test.ts covers only per-request logging
   (logRequestMetrics), unrelated to snapshot capture or retention. Crawl-snapshot capture is manual
   only today.
+
+  RECONCILED (fourth pass, tool inventory + seo-intelligence-view shapes, before re-running sdd-tasks):
+  src/server.ts now registers 28 tools (grep 'server.registerTool('), not the ~15 the third pass covered.
+  22 are in scope; 6 are Google Business Profile (business_list_locations, business_get_reviews,
+  business_get_performance, business_reply_review, business_update_info, business_create_post).
+
+  The five seo-intelligence tools (find_keyword_cannibalization, find_seo_opportunities,
+  map_keywords_to_pages, find_content_gaps, analyze_domain) were re-read field-by-field from
+  src/seo/intelligence.ts, src/seo/keyword-pages.ts and src/seo/domain-report.ts. Every shape claim already
+  in seo-intelligence-view/spec.md holds exactly (Opportunity, CannibalGroup/CannibalPage,
+  PageKeywords/PageQuery, ContentGap, DomainReport, fixed effort 1/2/3, MAX_PAGES_PER_GROUP=10 applied AFTER
+  pageCount/totals, page:null on every cannibalization opportunity). Only the src/server.ts line citations
+  had drifted ~7 lines; corrected: cannibalization 348-373, seo_opportunities 375-399, keywords_to_pages
+  401-426, content_gaps 428-461, analyze_domain 774-829. Input schemas unchanged. No re-categorization was
+  needed — all five belong to seo-intelligence-view as already declared.
+
+  FOUR NEW findings no prior pass had, each now folded into proposal.md and design.md:
+  (1) None of the five returns a `criteria` echo, unlike OpportunityResult's criteria:Record<string,number>
+  (src/google/opportunities.ts:79,136,190). They return only `count`, and resolve thresholds INSIDE the
+  synthesis helpers (maxOpportunities 10, maxCannibalizationGroups 50, maxKeywordPages 100, maxContentGaps
+  100, minPosition??21, minImpressions??10, topQueriesPerPage??10) where the client cannot see them. So
+  gsc-insight-views' "applied criteria shown alongside results" needs a SECOND mechanism here: the BFF echoes
+  the effective request criteria with basis:"request", and bound detection compares count to the effective
+  limit rather than a returned criteria.limit. Adding a real criteria field to the five tools is a
+  recommended src/seo/* follow-up, outside this change's additive-only boundary.
+  (2) All five synthesize over a HARDCODED dimensions:["query","page"], rowLimit:maxGscRows (250) GSC pull
+  (intelligence.ts:193-204,239-250; keyword-pages.ts:144-155,192-203). No output field records it, so the
+  "at most 250 rows" caveat must be stated unconditionally by the view, never inferred from a field.
+  (3) analyze_domain reports GSC failure INSIDE a 200-OK success payload: gscError is a raw upstream
+  Error.message on DomainReport (domain-report.ts:34-48,95-98), never an isError result. The BFF classifier
+  designed for isError text does not see it, so upstream Google text would reach the browser through a
+  success envelope. Design now requires classifying the nested field, discarding the raw string, surfacing a
+  classified enrichmentError code, and caching an enrichment-failed report at the `open` TTL.
+  (4) Only 5 tools declare an outputSchema (health, crawl_page, crawl_site, check_links, analyze_pagespeed;
+  src/server.ts:113,131,152,174,201). The other 17 in-scope tools have none. Since the registry is typed from
+  the published schema map, 7 new schema modules covering 18 tools are prerequisites — this, not the UI,
+  dominates the task breakdown and is why tasks.md is 11 PRs.
+
+  SCOPE DECISION (explicit user answer, not an inference): the 6 Google Business Profile tools are OUT OF
+  SCOPE for dashboard-insights entirely — no spec, no view, no BFF route, no registry row, no navigation
+  entry, no task. A FUTURE SDD change owns that domain. Related safety finding: business_reply_review,
+  business_update_info and business_create_post are LIVE PUBLIC WRITES gated only by a confirm:true input
+  (src/server.ts:899-982), which falsifies the "MCP is read-only analysis" premise at the SERVER level. The
+  read-only property is now a BFF property, so the authenticated registry MUST be an explicit allowlist with
+  a RED test asserting no business_* name is present — a write tool must be unreachable by omission.
+
+  DECISIONS CLOSED (user instruction: adopt each row's already-stated Recommended value, do not re-ask).
+  Cache TTL = hours with explicit ?refresh=1; default GSC range = last 28 days vs previous 28; credential-vs-
+  quota = BFF-side text classification, safe default non-retryable/operator-facing; quota accounting =
+  BFF-side approximate, "at least N calls used", basis:"bff-observed"; charting = hand-rolled SVG per
+  dashboard-views; property list = free-text siteUrl; outputSchema ownership = here (foundations is archived
+  so folding back is impossible). proposal.md's "Open Decisions" table is renamed "Decisions" with zero open
+  rows; design.md carries a matching "Decisions Resolved Before Tasks" section.
+
+  TASKS RE-RUN (fourth pass): tasks.md is fully rewritten and now covers all SIX capabilities across 11
+  stacked-to-main PRs (Phase 7's "Blocked — re-run sdd-tasks once reconciled" placeholder is gone). Pattern
+  per family: additive schema slice, then view slice. Business Profile appears nowhere in it.

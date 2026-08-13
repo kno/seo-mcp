@@ -1,22 +1,17 @@
+import type * as z from "zod/v4";
 import { LIMITS, type Env } from "../config";
 import { getGoogleAccessToken } from "./auth";
+import {
+  gscDimensionSchema,
+  gscQueryResultSchema,
+  gscRowSchema,
+} from "../schemas/search-console";
 
-export interface GscRow {
-  keys: string[];
-  clicks: number;
-  impressions: number;
-  ctr: number;
-  position: number;
-}
+export type GscRow = z.infer<typeof gscRowSchema>;
 
-interface GscQueryResult {
-  siteUrl: string;
-  startDate: string;
-  endDate: string;
-  dimensions: string[];
-  rowCount: number;
-  rows: GscRow[];
-}
+export type GscQueryResult = z.infer<typeof gscQueryResultSchema>;
+
+type GscDimension = z.infer<typeof gscDimensionSchema>;
 
 interface GscQueryParams {
   siteUrl: string;
@@ -93,7 +88,10 @@ export async function searchConsoleQuery(
       siteUrl: params.siteUrl,
       startDate: params.startDate,
       endDate: params.endDate,
-      dimensions,
+      // `dimensions` is always either the caller's enum-validated input
+      // (`inputSchema` at the MCP boundary) or the server default above, so
+      // this narrowing to `GscDimension[]` is safe.
+      dimensions: dimensions as GscDimension[],
       rowCount: rows.length,
       rows,
     };

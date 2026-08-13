@@ -28,12 +28,12 @@ describe("buildServer tool registration", () => {
     "crawl_site",
     "check_links",
     "analyze_pagespeed",
+    "search_console_query",
   ])("declares an outputSchema for the in-scope tool %s", (name) => {
     expect(registeredTool(name).outputSchema).toBeDefined();
   });
 
   it.each([
-    "search_console_query",
     "find_striking_distance_keywords",
     "find_low_ctr_opportunities",
     "get_keyword_metrics",
