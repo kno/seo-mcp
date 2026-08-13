@@ -34,16 +34,12 @@ describe("buildServer tool registration", () => {
     "snapshot_search_console",
     "list_search_console_snapshots",
     "compare_search_console",
+    "get_keyword_metrics",
+    "discover_keywords",
+    "cluster_keywords",
   ])("declares an outputSchema for the in-scope tool %s", (name) => {
     expect(registeredTool(name).outputSchema).toBeDefined();
   });
-
-  it.each(["get_keyword_metrics", "discover_keywords", "cluster_keywords"])(
-    "leaves the deferred tool %s without an outputSchema",
-    (name) => {
-      expect(registeredTool(name).outputSchema).toBeUndefined();
-    },
-  );
 
   it("surfaces a result violating its own output schema as a tool failure instead of a thrown error", async () => {
     vi.mocked(crawlPage).mockResolvedValue({

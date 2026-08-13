@@ -1,19 +1,18 @@
+import type * as z from "zod/v4";
 import { LIMITS, type Env } from "../config";
 import { getGoogleAccessToken } from "./auth";
+import {
+  keywordMetricSchema,
+  keywordMetricsResultSchema,
+} from "../schemas/keywords";
 
 const ADS_API_VERSION = "v23";
 const ADS_BASE = "https://googleads.googleapis.com";
 const DEFAULT_GEO_TARGET = "2724";
 const DEFAULT_LANGUAGE = "1003";
 
-export interface KeywordMetric {
-  keyword: string;
-  avgMonthlySearches: number;
-  competition: string;
-  competitionIndex: number;
-  lowTopOfPageBid: number;
-  highTopOfPageBid: number;
-}
+export type KeywordMetric = z.infer<typeof keywordMetricSchema>;
+export type KeywordMetricsResult = z.infer<typeof keywordMetricsResultSchema>;
 
 interface AdsMetrics {
   competition?: string;
@@ -137,7 +136,7 @@ export async function getKeywordMetrics(
   env: Env,
   fetcher: typeof fetch = fetch,
   now?: () => number,
-): Promise<{ customerId: string; count: number; keywords: KeywordMetric[] }> {
+): Promise<KeywordMetricsResult> {
   const geoTargetConstants = (params.geoTargetIds ?? [DEFAULT_GEO_TARGET]).map(
     (id) => `geoTargetConstants/${id}`,
   );
@@ -179,7 +178,7 @@ export async function discoverKeywords(
   env: Env,
   fetcher: typeof fetch = fetch,
   now?: () => number,
-): Promise<{ customerId: string; count: number; keywords: KeywordMetric[] }> {
+): Promise<KeywordMetricsResult> {
   const hasKeywords = !!params.seedKeywords && params.seedKeywords.length > 0;
   const hasUrl = !!params.seedUrl;
   if (!hasKeywords && !hasUrl) {

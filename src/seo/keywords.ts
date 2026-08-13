@@ -1,29 +1,20 @@
+import type * as z from "zod/v4";
 import { LIMITS } from "../config";
+import {
+  keywordIntentSchema,
+  classifiedKeywordSchema,
+  keywordClusterSchema,
+  clusterResultSchema,
+} from "../schemas/keywords";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type KeywordIntent =
-  "transactional" | "commercial" | "informational" | "local";
-
-export interface ClassifiedKeyword {
-  keyword: string;
-  intent: KeywordIntent;
-  tokens: string[];
-}
-
-export interface KeywordCluster {
-  label: string;
-  keywords: string[];
-}
-
-export interface ClusterResult {
-  count: number;
-  intents: Record<string, number>;
-  clusters: KeywordCluster[];
-  keywords: ClassifiedKeyword[];
-}
+export type KeywordIntent = z.infer<typeof keywordIntentSchema>;
+export type ClassifiedKeyword = z.infer<typeof classifiedKeywordSchema>;
+export type KeywordCluster = z.infer<typeof keywordClusterSchema>;
+export type ClusterResult = z.infer<typeof clusterResultSchema>;
 
 // ---------------------------------------------------------------------------
 // Normalization

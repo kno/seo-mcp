@@ -33,3 +33,11 @@ export {
   listSearchConsoleSnapshotsResultSchema,
   compareSearchConsoleResultSchema,
 } from "../schemas/gsc-snapshots";
+export {
+  keywordMetricSchema,
+  keywordMetricsResultSchema,
+  keywordIntentSchema,
+  classifiedKeywordSchema,
+  keywordClusterSchema,
+  clusterResultSchema,
+} from "../schemas/keywords";

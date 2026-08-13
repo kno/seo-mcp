@@ -3,7 +3,8 @@
  * output schema (`health`, `crawl_page`, `crawl_site`, `check_links`,
  * `analyze_pagespeed`, `search_console_query`, `find_striking_distance_keywords`,
  * `find_low_ctr_opportunities`, `snapshot_search_console`,
- * `list_search_console_snapshots`, `compare_search_console`). Type-only
+ * `list_search_console_snapshots`, `compare_search_console`,
+ * `get_keyword_metrics`, `discover_keywords`, `cluster_keywords`). Type-only
  * re-exports: under `verbatimModuleSyntax`
  * this module erases entirely, so importing it (e.g. from the BFF or the
  * dashboard) pulls in zero Worker runtime code from `src/http`,
@@ -42,3 +43,10 @@ export type {
   ListSearchConsoleSnapshotsResult,
   CompareSearchConsoleResult,
 } from "../schemas/gsc-snapshots";
+export type { KeywordMetric, KeywordMetricsResult } from "../google/ads";
+export type {
+  KeywordIntent,
+  ClassifiedKeyword,
+  KeywordCluster,
+  ClusterResult,
+} from "../seo/keywords";

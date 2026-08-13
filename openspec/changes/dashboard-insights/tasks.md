@@ -146,14 +146,14 @@ Record<string, number>`; rejects a payload exceeding `limit`
 
 ## Phase 7: Keyword schemas (PR7) — `keyword-research-view`, `mcp-result-contract`
 
-- [ ] 7.1 RED `test/schemas/keywords.test.ts`: `{ customerId, count, keywords: KeywordMetric[] }` for both
+- [x] 7.1 RED `test/schemas/keywords.test.ts`: `{ customerId, count, keywords: KeywordMetric[] }` for both
       Ads tools; `KeywordMetric` bids are bare numbers with **no** currency field
-- [ ] 7.2 RED `ClusterResult`: `count`, `intents`, `clusters[{ label, keywords }]`,
+- [x] 7.2 RED `ClusterResult`: `count`, `intents`, `clusters[{ label, keywords }]`,
       `keywords[{ keyword, intent, tokens }]`
-- [ ] 7.3 GREEN `src/schemas/keywords.ts` + `z.infer` aliases in `src/google/ads.ts`, `src/seo/keywords.ts`
-- [ ] 7.4 GREEN `src/server.ts`: `outputSchema` on `get_keyword_metrics`, `discover_keywords`,
+- [x] 7.3 GREEN `src/schemas/keywords.ts` + `z.infer` aliases in `src/google/ads.ts`, `src/seo/keywords.ts`
+- [x] 7.4 GREEN `src/server.ts`: `outputSchema` on `get_keyword_metrics`, `discover_keywords`,
       `cluster_keywords`; publish types
-- [ ] 7.5 PROOF `test/integration/` round-trip for all three registrations
+- [x] 7.5 PROOF `test/integration/` round-trip for all three registrations
 
 ## Phase 8: `keyword-research-view` UI (PR8) — `keyword-research-view`
 

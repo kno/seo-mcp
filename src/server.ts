@@ -55,6 +55,10 @@ import {
   listSearchConsoleSnapshotsResultSchema,
   compareSearchConsoleResultSchema,
 } from "./schemas/gsc-snapshots";
+import {
+  keywordMetricsResultSchema,
+  clusterResultSchema,
+} from "./schemas/keywords";
 
 /**
  * Builds the `structuredContent` payload for a tool response.
@@ -484,10 +488,12 @@ export function buildServer(env: Env): McpServer {
         languageId: z.string().optional(),
         customerId: z.string().optional(),
       }),
+      outputSchema: keywordMetricsResultSchema,
     },
     async ({ keywords, geoTargetIds, languageId, customerId }) => {
       try {
         return jsonResult(
+          keywordMetricsResultSchema,
           await getKeywordMetrics(
             { keywords, geoTargetIds, languageId, customerId },
             env,
@@ -512,6 +518,7 @@ export function buildServer(env: Env): McpServer {
         limit: z.number().int().min(1).max(200).optional(),
         customerId: z.string().optional(),
       }),
+      outputSchema: keywordMetricsResultSchema,
     },
     async ({
       seedKeywords,
@@ -523,6 +530,7 @@ export function buildServer(env: Env): McpServer {
     }) => {
       try {
         return jsonResult(
+          keywordMetricsResultSchema,
           await discoverKeywords(
             {
               seedKeywords,
@@ -549,10 +557,11 @@ export function buildServer(env: Env): McpServer {
       inputSchema: z.object({
         keywords: z.array(z.string().min(1)).min(1).max(500),
       }),
+      outputSchema: clusterResultSchema,
     },
     async ({ keywords }) => {
       try {
-        return jsonResult(clusterKeywords(keywords));
+        return jsonResult(clusterResultSchema, clusterKeywords(keywords));
       } catch (e) {
         return errorResult(e);
       }
