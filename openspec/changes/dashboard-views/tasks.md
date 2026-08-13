@@ -78,5 +78,5 @@ Chain strategy: stacked-to-main
 `GET /api/usage` route already exist and are archived/verified — do NOT recreate them. This phase
 builds only the UI layer consuming the existing route.
 
-- [ ] 7.1 RED: JSON fidelity + freshness; CSV golden/stability/`columns ∪ omitted` coverage; truncation/sample markers present only when bounded; no secret in either export; a jsdom test asserting the UI calls the existing `GET /api/usage` route and renders its `estimate`/`note` fields without claiming an authoritative count.
-- [ ] 7.2 GREEN: `export/json.ts`, `export/csv.ts` + `CSV_SHAPES`, `ExportMenu`, `HeadroomIndicator`, `FreshnessBadge`, `UsageContainer` (consumes the existing `bff/src/usage.ts` backend, no new backend file).
+- [x] 7.1 RED: JSON fidelity + freshness; CSV golden/stability/`columns ∪ omitted` coverage; truncation/sample markers present only when bounded; no secret in either export; a jsdom test asserting the UI calls the existing `GET /api/usage` route and renders its `estimate`/`note` fields without claiming an authoritative count.
+- [x] 7.2 GREEN: `export/json.ts`, `export/csv.ts` + `CSV_SHAPES`, `ExportMenu`, `HeadroomIndicator`, `FreshnessBadge`, `UsageContainer` (consumes the existing `bff/src/usage.ts` backend, no new backend file).

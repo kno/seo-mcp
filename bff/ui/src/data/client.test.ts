@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { requestTool, userIntent } from "./client";
+import { fetchUsage, requestTool, userIntent } from "./client";
 import { SecretCell } from "./secret";
 
 describe("userIntent", () => {
@@ -172,5 +172,38 @@ describe("requestTool", () => {
 
     const requestUrl = String(vi.mocked(global.fetch).mock.calls[0]?.[0]);
     expect(requestUrl).not.toContain("apiKey");
+  });
+});
+
+describe("fetchUsage", () => {
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    global.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it("issues a GET request to the distinct /api/usage route, never /api/tools/*", async () => {
+    const snapshot = {
+      callCount: 3,
+      windowSeconds: 3600,
+      windowElapsedSeconds: 120,
+      estimate: true as const,
+      note: "estimate only",
+    };
+    vi.mocked(global.fetch).mockResolvedValue({
+      json: () => Promise.resolve(snapshot),
+    } as Response);
+
+    const result = await fetchUsage();
+
+    expect(global.fetch).toHaveBeenCalledWith("/api/usage", {
+      method: "GET",
+      signal: undefined,
+    });
+    expect(result).toEqual(snapshot);
   });
 });

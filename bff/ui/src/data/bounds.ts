@@ -9,6 +9,8 @@
  * (Phase 3 onward), per `design.md`'s "Bound-Versus-Empty Mechanism".
  */
 
+import { LIMITS } from "../../../../src/config";
+
 export type BoundKind =
   "output_bytes" | "sample_cap" | "group_cap" | "probe_cap";
 
@@ -171,4 +173,216 @@ export function describeOutputBytes(
     shown: processed,
     total: result.requested,
   };
+}
+
+function pushIfBounded(bounds: Bound[], cardinality: Cardinality): void {
+  if (isBounded(cardinality)) bounds.push(cardinality.bound);
+}
+
+interface SiteCrawlBoundsInput {
+  readonly outputBytes: number;
+  readonly requested: number;
+  readonly crawled: number;
+  readonly failed: number;
+  readonly crawlPolicy: {
+    readonly sitemapsDeclared: readonly unknown[];
+    readonly disallowedSkipped: {
+      readonly count: number;
+      readonly sample: readonly string[];
+    };
+  };
+  readonly summary: {
+    readonly missingH1: {
+      readonly count: number;
+      readonly sample: readonly string[];
+    };
+    readonly multipleH1: {
+      readonly count: number;
+      readonly sample: readonly string[];
+    };
+    readonly thinContent: {
+      readonly count: number;
+      readonly sample: readonly string[];
+    };
+    readonly nonIndexable: {
+      readonly count: number;
+      readonly sample: readonly string[];
+    };
+    readonly duplicateTitles: ReadonlyArray<{
+      readonly count: number;
+      readonly sample: readonly string[];
+    }>;
+    readonly duplicateDescriptions: ReadonlyArray<{
+      readonly count: number;
+      readonly sample: readonly string[];
+    }>;
+  };
+  readonly linkGraph: {
+    readonly orphanPages: {
+      readonly count: number;
+      readonly sample: readonly string[];
+    };
+    readonly topLinkedPages: readonly unknown[];
+  };
+}
+
+/**
+ * `result-export`'s "bounded/truncated results carry provenance" requirement
+ * calls for exactly the same derivations the panels already render — see
+ * `design.md`'s "Bound-Versus-Empty Mechanism": "export calls the SAME
+ * `collectBounds` for provenance. There is no second badge implementation to
+ * drift." One `Bound[]` per tool result, empty when nothing was capped.
+ */
+export function collectSiteCrawlBounds(result: SiteCrawlBoundsInput): Bound[] {
+  const bounds: Bound[] = [];
+
+  const outputBytesBound = describeOutputBytes(
+    result,
+    LIMITS.maxSiteOutputBytes,
+  );
+  if (outputBytesBound) bounds.push(outputBytesBound);
+
+  pushIfBounded(
+    bounds,
+    describeCategory(
+      result.summary.missingH1,
+      "DomainCategory.sample",
+      25,
+      "summary.missingH1.sample",
+    ),
+  );
+  pushIfBounded(
+    bounds,
+    describeCategory(
+      result.summary.multipleH1,
+      "DomainCategory.sample",
+      25,
+      "summary.multipleH1.sample",
+    ),
+  );
+  pushIfBounded(
+    bounds,
+    describeCategory(
+      result.summary.thinContent,
+      "DomainCategory.sample",
+      25,
+      "summary.thinContent.sample",
+    ),
+  );
+  pushIfBounded(
+    bounds,
+    describeCategory(
+      result.summary.nonIndexable,
+      "DomainCategory.sample",
+      25,
+      "summary.nonIndexable.sample",
+    ),
+  );
+  pushIfBounded(
+    bounds,
+    describeCategory(
+      result.crawlPolicy.disallowedSkipped,
+      "CrawlPolicy.disallowedSkipped.sample",
+      25,
+      "crawlPolicy.disallowedSkipped.sample",
+    ),
+  );
+  pushIfBounded(
+    bounds,
+    describeCategory(
+      result.linkGraph.orphanPages,
+      "LinkGraphSummary.orphanPages.sample",
+      25,
+      "linkGraph.orphanPages.sample",
+    ),
+  );
+
+  result.summary.duplicateTitles.forEach((group, index) => {
+    pushIfBounded(
+      bounds,
+      describeCategory(
+        group,
+        "DuplicateGroup.sample",
+        10,
+        `summary.duplicateTitles[${index}].sample`,
+      ),
+    );
+  });
+  result.summary.duplicateDescriptions.forEach((group, index) => {
+    pushIfBounded(
+      bounds,
+      describeCategory(
+        group,
+        "DuplicateGroup.sample",
+        10,
+        `summary.duplicateDescriptions[${index}].sample`,
+      ),
+    );
+  });
+
+  pushIfBounded(
+    bounds,
+    describeCappedList(
+      result.crawlPolicy.sitemapsDeclared,
+      "sitemapsDeclared",
+      20,
+      "crawlPolicy.sitemapsDeclared",
+    ),
+  );
+  pushIfBounded(
+    bounds,
+    describeCappedList(
+      result.summary.duplicateTitles,
+      "duplicateTitles",
+      20,
+      "summary.duplicateTitles",
+    ),
+  );
+  pushIfBounded(
+    bounds,
+    describeCappedList(
+      result.summary.duplicateDescriptions,
+      "duplicateDescriptions",
+      20,
+      "summary.duplicateDescriptions",
+    ),
+  );
+  pushIfBounded(
+    bounds,
+    describeCappedList(
+      result.linkGraph.topLinkedPages,
+      "topLinkedPages",
+      10,
+      "linkGraph.topLinkedPages",
+    ),
+  );
+
+  return bounds;
+}
+
+/** `check_links`' single probe-cap bound, wrapped for `collectBounds`. */
+export function collectLinkCheckBounds(result: {
+  readonly checked: number;
+}): Bound[] {
+  const cardinality = describeProbeSet(result.checked, LIMITS.maxLinkChecks);
+  return isBounded(cardinality) ? [cardinality.bound] : [];
+}
+
+/**
+ * Single entry point `export/json.ts` and `export/csv.ts` both call for
+ * provenance — `crawl_page` and `analyze_pagespeed` results carry no known
+ * bound (single-page/single-analysis results, no sample-capped fields), so
+ * they always return `[]`.
+ */
+export function collectBounds(
+  tool: "crawl_page" | "crawl_site" | "check_links" | "analyze_pagespeed",
+  result: unknown,
+): Bound[] {
+  if (tool === "crawl_site") {
+    return collectSiteCrawlBounds(result as SiteCrawlBoundsInput);
+  }
+  if (tool === "check_links") {
+    return collectLinkCheckBounds(result as { readonly checked: number });
+  }
+  return [];
 }

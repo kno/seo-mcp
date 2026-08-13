@@ -15,6 +15,7 @@
 
 import type { BffError, BffOk } from "../../../src/errors";
 import type { ToolName } from "../../../src/timeout";
+import type { UsageSnapshot } from "../../../src/usage";
 import type { SecretCell } from "./secret";
 
 declare const brand: unique symbol;
@@ -109,4 +110,21 @@ export async function requestTool<T>(
   );
 
   return (await response.json()) as BffOk<T> | { error: BffError };
+}
+
+/**
+ * `quota-visibility`'s read-only usage source. `GET /api/usage` is a
+ * distinct route from `/api/tools/{tool}` — it returns the BFF's own
+ * `UsageSnapshot` envelope directly (`{ callCount, windowSeconds,
+ * windowElapsedSeconds, estimate: true, note }`), never a `BffOk<T>`
+ * wrapper, and never spends the shared MCP rate-limit bucket (`bff/src/
+ * usage.ts`'s own doc comment: it reads the BFF's own accounting, not an
+ * upstream call). No `UserIntent` is required: this route makes no upstream
+ * call at all, so there is nothing here for the no-polling guard to gate —
+ * `UsageContainer` calls it once on mount (a real user navigation) and
+ * again only on an explicit user action, never on a timer.
+ */
+export async function fetchUsage(signal?: AbortSignal): Promise<UsageSnapshot> {
+  const response = await fetch("/api/usage", { method: "GET", signal });
+  return (await response.json()) as UsageSnapshot;
 }

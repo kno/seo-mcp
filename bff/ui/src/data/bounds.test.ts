@@ -1,12 +1,81 @@
 import { describe, expect, it } from "vitest";
 import type { Bound, Cardinality } from "./bounds";
 import {
+  collectBounds,
   describeCappedList,
   describeCategory,
   describeOutputBytes,
   describeProbeSet,
   isBounded,
 } from "./bounds";
+import type { LinkCheckResult, SiteCrawlResult } from "../../../../src/types";
+
+function emptyCategory() {
+  return { count: 0, sample: [] as string[] };
+}
+
+function completeSiteCrawlResult(): SiteCrawlResult {
+  return {
+    site: "https://example.com",
+    sitemap: "https://example.com/sitemap.xml",
+    sitemapFound: true,
+    crawlPolicy: {
+      robotsUrl: "https://example.com/robots.txt",
+      robotsFound: true,
+      userAgent: "seo-mcp",
+      sitemapsDeclared: ["https://example.com/sitemap.xml"],
+      disallowedSkipped: emptyCategory(),
+    },
+    requested: 2,
+    crawled: 2,
+    failed: 0,
+    documentsRead: 2,
+    subrequests: 4,
+    bytesRead: 1000,
+    outputBytes: 1000,
+    pages: [
+      {
+        url: "https://example.com/a",
+        result: {
+          url: "https://example.com/a",
+          status: 200,
+          bytesRead: 500,
+          title: "A",
+          description: "",
+          h1: ["A"],
+          h2: [],
+          h3: [],
+          linkCount: 1,
+          internalLinks: 1,
+          externalLinks: 0,
+          imageCount: 0,
+          imagesMissingAlt: 0,
+          openGraph: {},
+          jsonLd: { blocks: 0, types: [], invalid: 0 },
+          wordCount: 100,
+          indexable: true,
+          issues: [],
+        },
+      },
+    ],
+    issueCounts: {},
+    summary: {
+      pagesAnalyzed: 1,
+      duplicateTitles: [],
+      duplicateDescriptions: [],
+      missingH1: emptyCategory(),
+      multipleH1: emptyCategory(),
+      thinContent: emptyCategory(),
+      nonIndexable: emptyCategory(),
+      imagesMissingAlt: { pages: 0, images: 0 },
+    },
+    linkGraph: {
+      crawledPages: 1,
+      orphanPages: emptyCategory(),
+      topLinkedPages: [],
+    },
+  };
+}
 
 describe("Cardinality discrimination", () => {
   it("distinguishes 'none' from 'bounded' via isBounded, not raw counts", () => {
@@ -201,5 +270,107 @@ describe("describeOutputBytes", () => {
       shown: 13,
       total: 20,
     });
+  });
+});
+
+describe("collectBounds", () => {
+  it("returns an empty array for a complete, unbounded crawl_site result", () => {
+    expect(collectBounds("crawl_site", completeSiteCrawlResult())).toEqual([]);
+  });
+
+  it("collects the output_bytes bound when the crawl was truncated at the cap", () => {
+    const result: SiteCrawlResult = {
+      ...completeSiteCrawlResult(),
+      outputBytes: 256_000,
+      requested: 5,
+      crawled: 3,
+      failed: 0,
+    };
+    const bounds = collectBounds("crawl_site", result);
+    expect(bounds.some((bound) => bound.kind === "output_bytes")).toBe(true);
+  });
+
+  it("collects a sample_cap bound for a truncated domain category", () => {
+    const sample = Array.from(
+      { length: 25 },
+      (_, i) => `https://example.com/${i}`,
+    );
+    const result: SiteCrawlResult = {
+      ...completeSiteCrawlResult(),
+      summary: {
+        ...completeSiteCrawlResult().summary,
+        missingH1: { count: 40, sample },
+      },
+    };
+    const bounds = collectBounds("crawl_site", result);
+    expect(
+      bounds.some(
+        (bound) =>
+          bound.kind === "sample_cap" &&
+          bound.scope === "summary.missingH1.sample",
+      ),
+    ).toBe(true);
+  });
+
+  it("collects a group_cap bound for a capped duplicate-group list with no total", () => {
+    const groups = Array.from({ length: 20 }, (_, i) => ({
+      value: `title-${i}`,
+      count: 1,
+      sample: [`https://example.com/${i}`],
+    }));
+    const result: SiteCrawlResult = {
+      ...completeSiteCrawlResult(),
+      summary: {
+        ...completeSiteCrawlResult().summary,
+        duplicateTitles: groups,
+      },
+    };
+    const bounds = collectBounds("crawl_site", result);
+    expect(
+      bounds.some(
+        (bound) =>
+          bound.kind === "group_cap" &&
+          bound.scope === "summary.duplicateTitles",
+      ),
+    ).toBe(true);
+  });
+
+  it("collects the probe_cap bound for check_links at the checked cap", () => {
+    const result: LinkCheckResult = {
+      url: "https://example.com",
+      pageStatus: 200,
+      checked: 50,
+      ok: 40,
+      broken: 5,
+      errors: 5,
+      results: [],
+    };
+    expect(collectBounds("check_links", result)).toEqual([
+      {
+        kind: "probe_cap",
+        scope: "checked",
+        limitName: "maxLinkChecks",
+        limitValue: 50,
+        shown: 50,
+      },
+    ]);
+  });
+
+  it("returns an empty array for check_links below the probe cap", () => {
+    const result: LinkCheckResult = {
+      url: "https://example.com",
+      pageStatus: 200,
+      checked: 10,
+      ok: 10,
+      broken: 0,
+      errors: 0,
+      results: [],
+    };
+    expect(collectBounds("check_links", result)).toEqual([]);
+  });
+
+  it("returns an empty array for crawl_page and analyze_pagespeed (no known bound)", () => {
+    expect(collectBounds("crawl_page", { anything: true })).toEqual([]);
+    expect(collectBounds("analyze_pagespeed", { anything: true })).toEqual([]);
   });
 });
