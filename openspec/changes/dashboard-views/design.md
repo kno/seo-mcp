@@ -4,9 +4,18 @@
 
 A React SPA lives at `bff/ui/`, is built by Vite into `bff/ui/dist/`, and is served by the **existing BFF
 Worker** through an `assets` binding with `run_worker_first: true`, so the gate (`bff/src/gate.ts`) runs before
-any byte of any asset is served. The SPA consumes only the foundations contract — `POST /api/tools/{tool}`
-returning `BffOk<T> | { error: BffError }`, plus a new read-only `GET /api/usage` — and imports result types
-from `src/types/index.ts`. It re-derives nothing and duplicates no shape.
+any byte of any asset is served. The SPA consumes only the foundations contract — **`GET /api/tools/{tool}`**
+with inputs as query-string parameters, matching `bff/src/router.ts`'s real, frozen contract — returning
+`BffOk<T> | { error: BffError }`, plus a new read-only `GET /api/usage`, and imports result types from
+`src/types/index.ts`. It re-derives nothing and duplicates no shape.
+
+**One documented exception**: `analyze_pagespeed` accepts `POST` with a JSON body specifically for calls
+carrying the secret `apiKey` input, and REJECTS `apiKey` supplied over `GET` as a query-string parameter —
+a security fix added during `pagespeed-view`'s own implementation (a query string is visible in DevTools'
+Network tab and any access log; a POST body is not). `GET` remains available on that same route for the
+no-`apiKey` case, and no other route accepts anything but `GET`. See
+`openspec/specs/dashboard-bff/spec.md`'s "A Secret-Bearing Input Never Travels as a Query-String Parameter"
+requirement for the merged, authoritative record.
 
 Four correctness mechanisms carry the specs, each a single module rather than a per-view convention:
 
@@ -218,14 +227,14 @@ sequenceDiagram
   participant U as User
   participant C as SiteCrawlContainer
   participant W as CrawlForm (+ confirm)
-  participant B as BFF POST /api/tools/crawl_site
+  participant B as BFF GET /api/tools/crawl_site
   participant M as seo-mcp crawl_site
   U->>W: limit 5 / concurrency 2 (defaults), Submit
   W->>W: limit 20 or concurrency 4? -> warned confirm step (~40s, shared bucket)
   W->>C: userIntent(event) + validated input
   C->>C: abort previous controller, requestId++, submit DISABLED, in-flight state
   alt Resolution A — bounded JSON response (today)
-    C->>B: fetch(body, signal) — Accept: application/json
+    C->>B: fetch(?url&limit&concurrency, signal) — GET, query-string input, no body
     B->>M: service binding, AbortSignal.timeout(55s)
     Note over C,B: view shows an explicit indeterminate "crawl in progress" state, never a frozen UI
     M-->>B: SiteCrawlResult (~40s worst case)
@@ -319,8 +328,12 @@ The PageSpeed `apiKey` is never a value the application holds.
    can re-read it — not a cache key, not a log line, not a retry.
 3. The container's state type `PageSpeedViewState` has **no** `apiKey` field, so retaining the key is a
    compile error rather than a review finding.
-4. Transport is the POST body only. The router path/query and any history state carry `{ url, strategy }` only;
-   `stripSecrets()` is applied at the one boundary that constructs navigation state.
+4. Transport is the POST body only, matching the real implementation exactly: `requestTool()` sends the
+   whole request as `POST` with a JSON body whenever `opts.secrets` is present, never appending anything to
+   the query string. There is no separate `stripSecrets()` function — that speculative mechanism was never
+   built, and isn't needed: `PageSpeedViewState` simply has no `apiKey` field (point 3 above) and nothing
+   else in the UI constructs navigation state from form input, so there is no boundary left for a key to
+   leak through.
 5. The key input is cleared after submit; there is no client-side result cache to key on (see the decision
    above), and foundations already bypasses KV caching for keyed requests.
 6. The UI renders only fields declared by `PageSpeedResult`. An echoing response therefore cannot surface the
