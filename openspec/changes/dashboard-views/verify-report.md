@@ -456,3 +456,201 @@ own before Phase 4 starts.
 None blocking. Carried forward unchanged: the `/api/*` 404 guard test gap (SUGGESTION) and the
 `design.md` route-contract/secret-transport documentation staleness (WARNINGs) — neither originates in or
 is affected by PR3.
+
+# Verify Report — dashboard-views, Phase 4 / PR4
+
+Scope: this pass verifies only Phase 4 (tasks 4.1-4.2, commit 62ce3e6 on
+feat/dashboard-views-build-wiring) — the broken-links-view: BrokenLinksContainer,
+BrokenLinksPanel, ProbeRow, plus the additive Badge/bounds.ts extensions. Phases 1-3
+were previously verified PASS (with minor non-blocking carried-forward items, not re-litigated
+here). Phases 5-7 are correctly [ ] in tasks.md and out of scope.
+
+## Verdict: PASS WITH WARNINGS
+
+## Command evidence (executed fresh, this session)
+
+- pnpm test -> 70 test files, 620 tests passed, 0 failed — matches the apply session's own
+  reported final count exactly (baseline 594 at end of Phase 3, +26 this phase).
+- pnpm typecheck -> clean (exit 0; tsc --noEmit && tsc --noEmit -p bff/ui).
+- pnpm format:check -> clean (exit 0; prettier --check . — "All matched files use Prettier
+  code style!").
+
+## Task completion
+
+tasks.md Phase 4: 4.1-4.2 both [x]. Phases 1-3 remain [x] (previously verified). Phases 5-7
+remain [ ], correctly untouched. No unchecked task in the in-scope phase.
+
+## Spec compliance — broken-links-view/spec.md
+
+### Requirement: Broken-Links Check Runs Only on Explicit User Action
+
+Re-read BrokenLinksContainer.tsx fresh: zero useEffect calls exist in the file; the component's
+only side-effecting code path is handleCheckLinks, wired exclusively to the button's onClick.
+no-polling.test.ts is a real filesystem walk (not a fixed file list, confirmed by reading its
+collectSourceFiles implementation) and its "no useEffect body calling requestTool directly"
+assertion runs against this file automatically. BrokenLinksContainer.test.tsx's first test asserts
+expect(global.fetch).not.toHaveBeenCalled() immediately after render() with zero interaction —
+ran it as part of the full suite, passing.
+
+Confirmed this is a genuinely separate container from PageReportContainer, not a hidden
+auto-trigger: read both files fresh side by side. PageReportContainer owns its own
+state/analysis/controllerRef/requestIdRef and its own <form onSubmit> gesture; nothing in
+either file references the other, and BrokenLinksContainer takes only a pageUrl: string prop —
+no shared lifecycle, no shared effect, no prop-driven auto-fetch on pageUrl changing. Confirmed.
+
+### Requirement: Checked, OK, Broken, and Errors Counts Are Always Visible
+
+BrokenLinksPanel.tsx renders all four counts unconditionally in one <dl>
+(links-checked/links-ok/links-broken/links-errors), never behind a subset conditional.
+BrokenLinksContainer.test.tsx's "renders all four counts..." test asserts all four
+data-testids with non-zero values (4, 2, 1, 1) are present simultaneously — ran it, passing.
+
+Gap (WARNING, untested edge case, already flagged by the apply agent as a documented
+deviation): describeProbeSet(checked, limit) maps checked === 0 to Cardinality.state: "none",
+and StateRegion's "none" branch renders a generic "No broken links found." message instead of
+rendering BrokenLinksPanel at all — so when checked === 0 the four counts (0, 0, 0, 0)
+are NOT rendered as distinct figures. The spec's own "Whenever a LinkCheckResult is rendered..."
+requirement text is unconditional and its one covering scenario uses checked: 12, not checked: 0,
+so this exact corner case is genuinely untested against the spec's literal wording. This is a
+plausible real state (a page with zero discoverable links) and the current behavior is a
+defensible design choice (treated as "nothing to check" rather than "a result with zero of
+everything"), but it is not proven compliant by any passing test and the requirement text does not
+carve out this exception. Not CRITICAL — no spec scenario covers checked: 0 — but blocks a
+"proven-compliant on all rendered LinkCheckResult" claim.
+
+### Requirement: Broken and Error States Render Distinctly
+
+ProbeRow.tsx's variantFor() maps "broken" -> Badge variant="broken" (renders status via
+data-testid="probe-status") and "error" -> Badge variant="error" (renders error via
+data-testid="probe-error") — mutually exclusive per the if/if/return shape, never both
+rendered for one probe. ProbeRow.test.tsx and BrokenLinksPanel.test.tsx both assert
+badge-broken/badge-error render as distinct data-testids. BrokenLinksContainer.test.tsx's
+"renders all four counts..." test additionally asserts both badge-broken and badge-error are
+simultaneously present in one rendered list (from RESULT.results containing one of each state) —
+ran it, passing, proving both states coexist in the same list without collapsing into one bucket.
+Confirmed.
+
+### Requirement: Bounded Probe Set Is Named, Not Implied Exhaustive
+
+describeProbeSet(checked, limit): checked === limit -> state bounded, bound with limitName
+maxLinkChecks, limitValue limit; checked strictly below limit -> state complete (no bound
+branch). StateRegion's bounded branch renders data-testid bound-indicator naming both the shown
+count and limitName/limitValue; the complete branch renders no such element.
+BrokenLinksContainer.test.tsx tests both directions: checked 50 (equal to the passed limit of 50)
+asserts bound-indicator is present and contains "50"; a separate test using checked 4 (below 50)
+asserts screen.queryByTestId("bound-indicator") is absent. Both ran as part of the full suite,
+passing. Confirmed both directions are tested, not just the positive case, per the assignment's
+explicit ask.
+
+WARNING (drift risk, not a correctness bug): BrokenLinksContainer.tsx calls
+describeProbeSet(response.data.checked, 50) — the 50 is a literal duplicated from
+src/config.ts's LIMITS.maxLinkChecks: 50 rather than importing the constant. PageReportContainer
+and other containers do already cross-import server-side types (src/types), so importing
+LIMITS from src/config was a technically available option. If maxLinkChecks is ever
+changed server-side, this UI literal will silently drift out of sync and the bound indicator will
+report the wrong limit value without any test catching it (no test asserts the UI's 50 traces back
+to the config constant).
+
+### Requirement: Upstream Platform Failure Surfaces as an Error, Never as Zero Broken Links
+
+Re-read the assertions directly (not just the test name): BrokenLinksContainer.test.tsx's "shows
+the shared error-state contract..." test mocks an error response with code upstream_unavailable
+and message "Subrequest ceiling reached" (confirmed upstream_unavailable is a real member of the
+BFF's BffErrorCode union in bff/src/errors.ts line 20 and maps to "The upstream service is
+temporarily unavailable." in both bff/src/errors.ts line 67 and the UI's bff/ui/src/data/errors.ts
+line 88, so this is not a fabricated code). The test asserts screen.findByRole("alert") renders
+with matching text "temporarily unavailable", and two explicit negative assertions:
+queryByTestId("links-checked") and queryByTestId("links-broken") are both absent. Ran it as
+part of the full suite, passing — this is a genuine role=alert plus negative-DOM-assertion pair,
+not merely a passing test with a plausible name. Confirmed.
+
+## Exactly-one-fetch / rapid double-click (assignment item 3)
+
+Located and read the specific test: BrokenLinksContainer.test.tsx's last test, named "aborts a
+stale in-flight request and issues only one fetch on a rapid double-click". It does simulate two
+rapid clicks (two awaited user.click(button) calls with no intervening await-for-completion), and
+does use the AbortController plus requestId-staleness pattern (confirmed by reading
+handleCheckLinks: controllerRef.current abort() runs on every invocation, and the
+requestId !== requestIdRef.current guard discards a stale resolution). However, the assertion is
+toHaveBeenCalledTimes(2), not 1 — the test's own name ("issues only one fetch") contradicts its
+assertion (asserts two). Read this as intentional, correct behavior for the spec as written: each
+click is its own "explicit action" per the spec's "exactly one check_links request MUST be issued
+as a direct result of that action" wording, so two clicks correctly produce two requests, with the
+first response discarded via the staleness guard rather than the second click's fetch being
+suppressed. This is compliant with the letter of the spec (no requirement text asks for
+click-level dedup/debounce), but it does not demonstrate "exactly one fetch" in the sense the
+assignment's phrasing implied, and there is no dedup/debounce guard protecting this expensive,
+subrequest-heavy tool from a genuine accidental double-click firing two full check_links
+invocations. SUGGESTION: rename the test to match its actual assertion (e.g. "issues one fetch per
+click, aborting the stale one" instead of "issues only one fetch"), and consider whether
+check_links — the tool explicitly called out in both this spec and the dashboard-bff spec as the
+most subrequest-hungry — warrants an in-flight guard that suppresses a second click while the
+first is still pending, rather than firing-and-aborting. Not CRITICAL: no spec scenario requires
+this, and firing two full requests on two full clicks does not violate the "exactly one request
+per action" wording.
+
+## Regression / scope check
+
+A diff-stat comparison between commits af5952a and 62ce3e6 (PR3 to PR4): 12 files changed, all
+under bff/ui/src (atoms, containers, data, molecules, organisms subfolders) plus tasks.md and
+verify-report.md. A diff-stat comparison between commit da55a7d and HEAD, scoped to src/http,
+src/security, wrangler.jsonc, src/schemas, src/types, and bff/src, returns no output — zero drift
+into any frozen file across the entire PR2-to-PR4 range. No Google/Ads/D1 path appears anywhere in
+the diff.
+
+Badge.tsx's diff (af5952a to 62ce3e6) is additive-only: +8/-3, and the 3 deletions are a
+doc-comment rewording plus the union-type line replaced by itself with two new members appended
+(warning, info, unmapped becomes warning, info, unmapped, broken, error) — no existing variant
+removed or renamed, Badge's rendering logic (data-testid/data-variant) unchanged. bounds.ts's diff
+is a pure addition (describeProbeSet, +27 lines, 0 deletions) — isBounded, Bound, and Cardinality
+are untouched. Confirmed additive.
+
+## Issues
+
+CRITICAL: None.
+
+WARNING:
+
+1. describeProbeSet's checked-equals-zero to "none" branch hides all four counts instead of
+   rendering them as zeroes; untested against the spec's unconditional "whenever rendered" wording
+   (no scenario covers checked: 0).
+2. The 50 passed to describeProbeSet in BrokenLinksContainer.tsx is a literal duplicate of
+   LIMITS.maxLinkChecks, not an import — a future config change would silently desync the UI's
+   bound indicator with no test catching it.
+
+SUGGESTION:
+
+1. Rename the "aborts a stale in-flight request and issues only one fetch on a rapid double-click"
+   test to match its actual toHaveBeenCalledTimes(2) assertion; the current name overstates what
+   it proves.
+2. Consider an in-flight guard (disable the button, or ignore a click while a request is pending)
+   for check_links specifically, given both specs single it out as the platform's most
+   subrequest-hungry tool.
+
+Carried forward, unchanged (out of PR4's scope, no action required this pass):
+
+- SUGGESTION (PR1): missing /api/* 404 guard test.
+- WARNING (PR2): design.md route-contract (POST vs. real GET) and secret-transport
+  documentation staleness.
+
+## Files inspected
+
+BrokenLinksContainer.tsx and its test file, BrokenLinksPanel.tsx and its test file, ProbeRow.tsx
+and its test file, Badge.tsx and its test file, bounds.ts and its test file, StateRegion.tsx,
+PageReportContainer.tsx (comparison), no-polling.test.ts, bff/src/errors.ts, bff/ui/src/data/
+errors.ts, src/config.ts (LIMITS.maxLinkChecks, LIMITS.linkCheckSubrequestBudget),
+openspec/changes/dashboard-views/tasks.md, openspec/changes/dashboard-views/specs/
+broken-links-view/spec.md, openspec/specs/dashboard-bff/spec.md, plus fresh pnpm test, pnpm
+typecheck, and pnpm format:check execution and diff-stat regression checks.
+
+## Next recommended
+
+sdd-apply for Phase 5 (Site Crawl) once this PR4 slice is reviewed and merged. PR4 is a
+self-contained, independently revertible slice per the work-unit table's stated rollback boundary
+(revert the panel, shell falls back to the disabled-view state) and is safe to merge on its own.
+
+## Risks
+
+None blocking. Two WARNINGs are non-blocking correctness/drift risks (untested checked-equals-zero
+corner case, hardcoded bound literal) that should be tracked but do not require reverting or
+blocking this PR. Carried-forward items from PR1/PR2 remain unaffected by PR4.
