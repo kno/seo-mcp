@@ -92,4 +92,23 @@ describe("PageReportContainer", () => {
     expect(screen.queryByTestId("onpage-canonical")).not.toBeInTheDocument();
     expect(screen.queryByText(/no issues detected/i)).not.toBeInTheDocument();
   });
+
+  it("offers the broken-links check for the submitted URL as soon as it is submitted, per broken-links-view's spec, even before crawl_page resolves", async () => {
+    vi.mocked(global.fetch).mockImplementation(
+      () => new Promise(() => {}), // crawl_page never resolves in this test
+    );
+
+    const user = userEvent.setup();
+    render(<PageReportContainer />);
+
+    await user.type(screen.getByLabelText(/page url/i), "https://example.com");
+    await user.click(screen.getByRole("button", { name: /get report/i }));
+
+    // The check-links control exists independent of crawl_page's outcome —
+    // opening the report must not itself issue a check_links request.
+    expect(
+      screen.getByRole("button", { name: /check links/i }),
+    ).toBeInTheDocument();
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
 });

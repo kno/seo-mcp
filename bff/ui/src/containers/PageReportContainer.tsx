@@ -9,6 +9,7 @@ import { HeadingsPanel } from "../organisms/HeadingsPanel";
 import { OpenGraphPanel } from "../organisms/OpenGraphPanel";
 import { JsonLdPanel } from "../organisms/JsonLdPanel";
 import { IssuesList } from "../organisms/IssuesList";
+import { BrokenLinksContainer } from "./BrokenLinksContainer";
 
 /**
  * Container for `page-report-view`. Owns the `crawl_page` request lifecycle
@@ -22,10 +23,18 @@ import { IssuesList } from "../organisms/IssuesList";
  * `state` starts `null` (no request has ever been made) rather than a
  * synthetic "idle" `RegionState` phase, because `StateRegion` only models
  * loading/error/ready — the pre-submission form itself IS the idle state.
+ *
+ * `broken-links-view`'s spec requires the check-links control to exist "for
+ * a URL that has never been link-checked" as soon as a page report is being
+ * viewed for it — independent of whether `crawl_page` itself succeeds — so
+ * `BrokenLinksContainer` renders once a URL has been submitted, keyed on
+ * that URL so a new submission starts it fresh rather than reusing stale
+ * state from a previous target.
  */
 export function PageReportContainer() {
   const [state, setState] = useState<RegionState | null>(null);
   const [analysis, setAnalysis] = useState<PageAnalysis | null>(null);
+  const [pageUrl, setPageUrl] = useState<string | null>(null);
   const controllerRef = useRef<AbortController | null>(null);
   const requestIdRef = useRef(0);
 
@@ -33,6 +42,7 @@ export function PageReportContainer() {
     event.preventDefault();
     const intent = userIntent(event);
     const url = String(new FormData(event.currentTarget).get("url") ?? "");
+    setPageUrl(url);
 
     controllerRef.current?.abort();
     const controller = new AbortController();
@@ -101,6 +111,8 @@ export function PageReportContainer() {
           )}
         </StateRegion>
       )}
+
+      {pageUrl && <BrokenLinksContainer key={pageUrl} pageUrl={pageUrl} />}
     </div>
   );
 }
