@@ -9,10 +9,19 @@
  * `wrangler.jsonc` var: these are fixed design decisions, not a
  * per-deployment tuning knob, and a flat numeric record is simpler to keep
  * correct than a JSON-encoded Cloudflare `vars` entry.
+ *
+ * `search_console_query` (authenticated-source-contract, PR2) gets 27s —
+ * above `src/config.ts`'s `gscTimeoutMs` (15s) + `googleTokenTimeoutMs`
+ * (10s) with a margin, per design.md's timeout table.
  */
 
 export type ToolName =
-  "health" | "crawl_page" | "crawl_site" | "check_links" | "analyze_pagespeed";
+  | "health"
+  | "crawl_page"
+  | "crawl_site"
+  | "check_links"
+  | "analyze_pagespeed"
+  | "search_console_query";
 
 export const TOOL_TIMEOUT_MS: Record<ToolName, number> = {
   health: 5000,
@@ -20,6 +29,7 @@ export const TOOL_TIMEOUT_MS: Record<ToolName, number> = {
   analyze_pagespeed: 30000,
   crawl_site: 55000,
   check_links: 55000,
+  search_console_query: 27_000,
 };
 
 export type TimeoutResult<T> =

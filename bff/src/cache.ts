@@ -39,6 +39,12 @@ export const MAX_TTL_SECONDS = 86400;
  *   external API call and its score does not meaningfully change within
  *   a few hours; requests carrying an explicit `apiKey` bypass caching
  *   entirely regardless of this value (see `isCacheable`).
+ * - `search_console_query`: 21600s (6h), a TEMPORARY placeholder at the
+ *   crawl-tool clamp's upper range. `authenticated-source-contract`'s real
+ *   `authenticated-delayed` cache class (per-source TTL split by
+ *   closed/open range-state, per design.md) lands in PR3
+ *   (`bff/src/authenticated/quota-ledger.ts`); this value is superseded
+ *   there, not a considered final answer.
  */
 export const CACHE_TTL_SECONDS: Record<ToolName, number> = {
   health: 60,
@@ -46,6 +52,7 @@ export const CACHE_TTL_SECONDS: Record<ToolName, number> = {
   crawl_site: 3600,
   check_links: 1800,
   analyze_pagespeed: 21600,
+  search_console_query: 21600,
 };
 
 export function clampTtlSeconds(seconds: number): number {

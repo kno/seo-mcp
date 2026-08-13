@@ -9,7 +9,14 @@ describe("TOOL_TIMEOUT_MS", () => {
       analyze_pagespeed: 30000,
       crawl_site: 55000,
       check_links: 55000,
+      search_console_query: 27000,
     });
+  });
+
+  it("gives search_console_query a timeout above gscTimeoutMs + googleTokenTimeoutMs (15s + 10s), per design.md", () => {
+    expect(TOOL_TIMEOUT_MS.search_console_query).toBeGreaterThan(
+      15_000 + 10_000,
+    );
   });
 });
 

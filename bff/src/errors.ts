@@ -22,7 +22,10 @@ export type BffErrorCode =
   | "upstream_protocol"
   | "tool_failed"
   | "result_invalid"
-  | "bff_timeout";
+  | "bff_timeout"
+  | "upstream_source_not_configured"
+  | "upstream_credential_failure"
+  | "upstream_source_quota";
 
 export interface BffError {
   code: BffErrorCode;
@@ -85,6 +88,25 @@ export const ERROR_TABLE: Record<BffErrorCode, ErrorTableEntry> = {
   bff_timeout: {
     status: 504,
     message: "Timed out waiting for the upstream result.",
+  },
+  // The following three codes are specific to authenticated/analytical
+  // sources (`authenticated-source-contract`): classified from upstream
+  // Google failure text by `bff/src/authenticated/classify.ts`, which
+  // discards the original text before it ever reaches this table.
+  upstream_source_not_configured: {
+    status: 503,
+    message:
+      "The Google credentials required for this data source are not configured.",
+  },
+  upstream_credential_failure: {
+    status: 502,
+    message:
+      "The upstream Google credential was rejected. This requires operator action — retrying will not help.",
+  },
+  upstream_source_quota: {
+    status: 429,
+    message:
+      "The upstream Google service's own quota has been exhausted for this window.",
   },
 };
 

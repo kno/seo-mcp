@@ -61,25 +61,25 @@ PROOF = `pnpm test` green plus the unit's focused command and runtime harness.
 
 ## Phase 2: Authenticated route class (PR2) — `authenticated-source-contract`
 
-- [ ] 2.1 RED `bff/test/authenticated/containment.test.ts`: no Google credential binding exists anywhere in
+- [x] 2.1 RED `bff/test/authenticated/containment.test.ts`: no Google credential binding exists anywhere in
       `bff/` (threat row b)
-- [ ] 2.2 RED registry allowlist: no `business_*` name is present; a request naming one is rejected before
+- [x] 2.2 RED registry allowlist: no `business_*` name is present; a request naming one is rejected before
       any upstream call (threat row f)
-- [ ] 2.3 RED freshness: `asOf = min(endDate, today − GSC_REPORTING_LAG_DAYS)`, `lagDays`,
+- [x] 2.3 RED freshness: `asOf = min(endDate, today − GSC_REPORTING_LAG_DAYS)`, `lagDays`,
       `basis: "assumed"`; default range = last 28 days
-- [ ] 2.4 GREEN `bff/src/authenticated/freshness.ts`: `SourceFreshness`, `AuthenticatedOk<T>` with
+- [x] 2.4 GREEN `bff/src/authenticated/freshness.ts`: `SourceFreshness`, `AuthenticatedOk<T>` with
       **required** `sourceFreshness`
-- [ ] 2.5 RED classifier: exact `"Google credentials are not configured"`; OAuth `invalid_grant`/
+- [x] 2.5 RED classifier: exact `"Google credentials are not configured"`; OAuth `invalid_grant`/
       `invalid_client`/`unauthorized_client`; `quota`/`rateLimitExceeded`/`userRateLimitExceeded`;
       unmatched → non-retryable (threat row d)
-- [ ] 2.6 GREEN `bff/src/authenticated/classify.ts`: 4-class classifier that **discards** upstream text
-- [ ] 2.7 GREEN `bff/src/errors.ts`: `upstream_source_not_configured` (503),
+- [x] 2.6 GREEN `bff/src/authenticated/classify.ts`: 4-class classifier that **discards** upstream text
+- [x] 2.7 GREEN `bff/src/errors.ts`: `upstream_source_not_configured` (503),
       `upstream_credential_failure` (502, no retry), `upstream_source_quota` (429, no `retryAfter`)
-- [ ] 2.8 RED integration: unauthenticated request to every authenticated route reaches neither Google nor
+- [x] 2.8 RED integration: unauthenticated request to every authenticated route reaches neither Google nor
       the ledger (threat row a); stub-env decoy credentials absent from body/header/cache/export/log
-- [ ] 2.9 GREEN `bff/src/authenticated/registry.ts` (typed from the published schema map) +
+- [x] 2.9 GREEN `bff/src/authenticated/registry.ts` (typed from the published schema map) +
       `bff/src/router.ts`: wire `search_console_query`, timeout `27_000`
-- [ ] 2.10 PROOF `pnpm test -- authenticated classify` and full `pnpm test` green
+- [x] 2.10 PROOF `pnpm test -- authenticated classify` and full `pnpm test` green
 
 ## Phase 3: Quota ledger + delayed cache class (PR3) — `authenticated-source-contract`, `quota-visibility`
 

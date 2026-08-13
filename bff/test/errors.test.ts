@@ -19,6 +19,9 @@ const ALL_CODES: BffErrorCode[] = [
   "tool_failed",
   "result_invalid",
   "bff_timeout",
+  "upstream_source_not_configured",
+  "upstream_credential_failure",
+  "upstream_source_quota",
 ];
 
 describe("BFF error code table", () => {
@@ -80,6 +83,31 @@ describe("BFF error code table", () => {
     const response = bffErrorResponse("upstream_rate_limited", 60);
     const body = (await response.json()) as { error: { retryAfter?: number } };
     expect(body.error.retryAfter).toBe(60);
+  });
+});
+
+describe("authenticated-source error codes (authenticated-source-contract)", () => {
+  it("maps upstream_source_not_configured to 503", () => {
+    expect(ERROR_TABLE.upstream_source_not_configured.status).toBe(503);
+  });
+
+  it("maps upstream_credential_failure to 502 with no retry affordance by default", () => {
+    expect(ERROR_TABLE.upstream_credential_failure.status).toBe(502);
+    expect(bffError("upstream_credential_failure").retryAfter).toBeUndefined();
+  });
+
+  it("maps upstream_source_quota to 429 with no fabricated retryAfter", () => {
+    expect(ERROR_TABLE.upstream_source_quota.status).toBe(429);
+    expect(bffError("upstream_source_quota").retryAfter).toBeUndefined();
+  });
+
+  it("distinguishes the three new codes from each other and from existing upstream codes", () => {
+    const statuses = new Set([
+      ERROR_TABLE.upstream_source_not_configured.status,
+      ERROR_TABLE.upstream_credential_failure.status,
+      ERROR_TABLE.upstream_source_quota.status,
+    ]);
+    expect(statuses.size).toBe(3);
   });
 });
 

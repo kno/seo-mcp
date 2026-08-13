@@ -23,7 +23,12 @@
  * - A tool result with `isError: true` (the shape `src/server.ts`'s
  *   `errorResult` produces, including the `check_links` platform
  *   subrequest-ceiling failure) -> tool_failed. This is a normalized
- *   error, never reported as an empty success.
+ *   error, never reported as an empty success. An authenticated tool's
+ *   caller may supply `dependencies.classifyFailureText` (see
+ *   `bff/src/authenticated/classify.ts`) to further classify this text
+ *   into `upstream_source_not_configured` / `upstream_credential_failure`
+ *   / `upstream_source_quota` before it is discarded — the raw upstream
+ *   text is NEVER retained past this call, classified or not.
  * - `structuredContent` failing re-validation against the shared schema
  *   -> result_invalid.
  * - The `AbortSignal.timeout(TOOL_TIMEOUT_MS[tool])` race aborting before
@@ -60,6 +65,15 @@ export interface McpClientDependencies {
    * `keyHash` — never independently re-derived here.
    */
   keyHash?: string;
+  /**
+   * Authenticated-tool only. When provided, an `isError: true` result's
+   * text is passed through this function and the RETURNED CODE is used
+   * instead of the blind `tool_failed` default — the matched text itself
+   * is discarded immediately after, never stored, logged, or returned.
+   * Absent for every non-authenticated tool, which keeps their existing
+   * `tool_failed` mapping unchanged.
+   */
+  classifyFailureText?: (text: string) => BffErrorCode;
 }
 
 /** Emits one structured `bff.upstream` log line per upstream call — the
@@ -223,6 +237,13 @@ async function performCall<T>(
 
   const result = payload.result as JsonRpcSuccessResult;
   if (result.isError) {
+    if (dependencies.classifyFailureText) {
+      // The raw text lives only in this local variable, for the duration
+      // of this one function call, and is never assigned anywhere else —
+      // the classifier returns a code, discarding the text by construction.
+      const text = result.content?.[0]?.text ?? "";
+      return { ok: false, code: dependencies.classifyFailureText(text) };
+    }
     return { ok: false, code: "tool_failed" };
   }
 

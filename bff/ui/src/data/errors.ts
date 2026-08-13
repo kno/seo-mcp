@@ -136,6 +136,44 @@ export const ERROR_PRESENTATION: Record<BffErrorCode, ErrorPresentation> = {
     retry: { kind: "manual" },
     operatorActionRequired: false,
   },
+  // The three entries below satisfy this table's own exhaustiveness
+  // contract for the `authenticated-source-contract` codes PR2 adds to
+  // `BffErrorCode`. Full UI wiring (which view renders each state, and the
+  // "rate-limited without a known retry delay" `RetryAffordance` variant
+  // `design.md`'s amendments section calls for) is `tasks.md` 12.1/12.2 and
+  // PR4 — deliberately out of Phase 2/PR2's scope. These minimal entries
+  // exist only so this exhaustive `Record` compiles once the union grows.
+  upstream_source_not_configured: {
+    code: "upstream_source_not_configured",
+    title: "Not configured",
+    description:
+      "The Google credentials required for this data source are not configured. This requires operator action.",
+    placement: "panel",
+    retry: { kind: "disabled-permanent" },
+    operatorActionRequired: true,
+  },
+  upstream_credential_failure: {
+    code: "upstream_credential_failure",
+    title: "Google credential rejected",
+    description:
+      "The upstream Google credential was rejected. This requires operator action; retrying will not help.",
+    placement: "panel",
+    retry: { kind: "disabled-permanent" },
+    operatorActionRequired: true,
+  },
+  upstream_source_quota: {
+    code: "upstream_source_quota",
+    title: "Google quota exhausted",
+    description:
+      "The upstream Google service's own quota has been exhausted for this window. Google provides no retry delay for this failure.",
+    placement: "panel",
+    // Provisional: Google gives no retry-after signal for quota rejections
+    // (design.md's Required Amendments, item 2). `retryAfterSeconds: 0`
+    // here is a placeholder, not a claimed delay — task 12.2 replaces this
+    // with a "rate-limited without a known retry delay" affordance.
+    retry: { kind: "disabled-until-elapsed", retryAfterSeconds: 0 },
+    operatorActionRequired: false,
+  },
 };
 
 function unmappedPresentation(error: BffError): ErrorPresentation {

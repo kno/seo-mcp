@@ -47,6 +47,10 @@ import { pageAnalysisSchema } from "../../src/schemas/page";
 import { siteCrawlResultSchema } from "../../src/schemas/site";
 import { linkCheckResultSchema } from "../../src/schemas/links";
 import { pageSpeedResultSchema } from "../../src/schemas/pagespeed";
+import { gscDimensionSchema } from "../../src/schemas/search-console";
+import { getAuthenticatedRoute } from "./authenticated/registry";
+import { deriveSourceFreshness } from "./authenticated/freshness";
+import { classifyUpstreamFailure } from "./authenticated/classify";
 
 const crawlPageInputSchema = z.object({
   url: z.url().describe("Public HTTP or HTTPS page URL"),
@@ -66,6 +70,29 @@ const analyzePagespeedInputSchema = z.object({
   url: z.url().describe("Public HTTP or HTTPS page URL"),
   strategy: z.enum(["mobile", "desktop"]).default("mobile"),
   apiKey: z.string().min(1).optional(),
+});
+
+// Mirrors `src/server.ts`'s `search_console_query` inputSchema exactly:
+// `siteUrl` free-text (no list-properties tool exists), `startDate`/
+// `endDate` as `YYYY-MM-DD`, optional `dimensions` (comma-separated on the
+// query string since a GET route carries no repeated-key array support
+// here), optional `rowLimit` 1-250.
+const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+const searchConsoleQueryInputSchema = z.object({
+  siteUrl: z.string().min(1),
+  startDate: dateOnlySchema,
+  endDate: dateOnlySchema,
+  dimensions: z
+    .string()
+    .optional()
+    .transform((value) =>
+      value === undefined
+        ? undefined
+        : value.split(",").filter((part) => part.length > 0),
+    )
+    .pipe(z.array(gscDimensionSchema).optional()),
+  rowLimit: z.coerce.number().int().min(1).max(250).optional(),
 });
 
 function parseQuery<T>(
@@ -182,6 +209,101 @@ async function dispatch<TInput, TResult>(
   return toolResponse(result, cacheStatus, 0);
 }
 
+/**
+ * Authenticated-route response helper — same envelope shape as
+ * `toolResponse`, plus the REQUIRED `sourceFreshness` field
+ * (`authenticated-source-contract`). `sourceFreshness` is always
+ * recomputed at request time, even on a cache hit — it must never be
+ * treated as a cached fact about "when we fetched this" (that is
+ * `resultAge`'s job), only about how stale the upstream data itself is.
+ */
+function authenticatedToolResponse<T>(
+  result: McpClientResult<T>,
+  cacheStatus: BffOk<T>["cacheStatus"],
+  resultAge: number,
+  sourceFreshness: ReturnType<typeof deriveSourceFreshness>,
+): Response {
+  if (!result.ok) return bffErrorResponse(result.code, result.retryAfter);
+  return Response.json({
+    data: result.data,
+    cacheStatus,
+    resultAge,
+    sourceFreshness,
+  });
+}
+
+/**
+ * Dispatches an authenticated route. Differs from `dispatch()` in three
+ * ways required by `authenticated-source-contract`:
+ * (1) the tool MUST be present in `authenticated/registry.ts`'s allowlist
+ * — a `business_*` or otherwise unregistered name is rejected with a 404
+ * before any cache read or upstream call (threat row f);
+ * (2) upstream `isError` text is classified via `classify.ts` instead of
+ * collapsing to a blind `tool_failed`, and the matched text is discarded
+ * (threat row d);
+ * (3) every response — hit, miss, or error — carries a freshly-derived
+ * `sourceFreshness`, never merged with `resultAge`.
+ *
+ * Caching here reuses the same crawl-tool cache mechanism as `dispatch()`
+ * (`CACHE_TTL_SECONDS[toolName]`) as a temporary placeholder;
+ * `authenticated-source-contract`'s real `authenticated-delayed` cache
+ * class (per-source TTL split by closed/open range-state) lands in PR3.
+ */
+async function dispatchAuthenticated(
+  request: Request,
+  url: URL,
+  env: Env,
+  toolName: ToolName,
+  args: Record<string, unknown> & { endDate: string },
+): Promise<Response> {
+  const route = getAuthenticatedRoute(toolName);
+  if (!route) return new Response("Not found", { status: 404 });
+
+  const key = await cacheKey(toolName, args);
+  const sourceFreshness = deriveSourceFreshness(route.source, args.endDate);
+
+  // `route.schema` is typed as the UNION of every published schema (so the
+  // registry can only ever hold a schema literal imported from
+  // `src/types/schemas.ts`, per `registry.ts`'s doc comment) — narrowing it
+  // back to `callTool`'s single-schema generic requires this cast. Runtime
+  // behavior is unaffected: `callTool` still re-validates the real
+  // `structuredContent` against this exact schema value.
+  const callUpstream = () =>
+    callTool(toolName, args, route.schema as z.ZodType<unknown>, {
+      seoMcp: env.SEO_MCP,
+      mcpOrigin: env.MCP_ORIGIN,
+      token: env.MCP_AUTH_TOKEN,
+      timeoutMs: route.timeoutMs,
+      validateUpstreamResults: validateUpstreamResultsFlag(env),
+      classifyFailureText: classifyUpstreamFailure,
+      keyHash: key,
+    });
+
+  if (!shouldBypassCacheRead(request, url)) {
+    const cached = await getCached(env.RESULT_CACHE, key);
+    if (cached.status === "hit") {
+      return authenticatedToolResponse(
+        { ok: true, data: cached.data },
+        "hit",
+        cached.resultAge,
+        sourceFreshness,
+      );
+    }
+  }
+
+  const result = await withSingleFlight(key, callUpstream);
+  if (result.ok) {
+    await putCached(
+      env.RESULT_CACHE,
+      key,
+      toolName,
+      result.data,
+      CACHE_TTL_SECONDS[toolName],
+    );
+  }
+  return authenticatedToolResponse(result, "miss", 0, sourceFreshness);
+}
+
 export async function handleRequest(
   request: Request,
   env: Env,
@@ -287,8 +409,23 @@ export async function handleRequest(
     );
   }
 
+  if (url.pathname === "/api/tools/search_console_query") {
+    const parsed = parseQuery(url, searchConsoleQueryInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatchAuthenticated(
+      request,
+      url,
+      env,
+      "search_console_query",
+      parsed.data as Record<string, unknown> & { endDate: string },
+    );
+  }
+
   // An unmatched `/api/*` path is a bad API call, not a page — return 404
-  // rather than silently falling back to the SPA shell.
+  // rather than silently falling back to the SPA shell. This is also the
+  // rejection path for every `business_*` tool name and any other tool the
+  // authenticated registry does not name (threat row f): no route below
+  // ever dispatches to `SEO_MCP` for an unrecognized tool name.
   if (url.pathname.startsWith("/api/")) {
     return new Response("Not found", { status: 404 });
   }

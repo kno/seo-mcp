@@ -22,6 +22,15 @@
  * forward arbitrary incoming headers to the upstream call — only the
  * `Authorization` header it injects itself.
  *
+ * `search_console_query` (`authenticated-search-console.test.ts`) adds a
+ * second family of `isError` triggers, read from `siteUrl` instead of
+ * `url`, that simulate the four `classify.ts` outcomes with Google-shaped
+ * error text — including a decoy credential literal
+ * (`DECOY_REFRESH_TOKEN_xyz789`) in the not-configured/credential/quota
+ * texts, so the containment sweep has something real to assert is
+ * discarded: `simulate-gsc-not-configured`, `simulate-gsc-credential-
+ * failure`, `simulate-gsc-quota`, `simulate-gsc-unknown-failure`.
+ *
  * Plain JavaScript (not TypeScript): auxiliary `miniflare.workers` entries
  * are loaded directly by workerd, without the Vite/TypeScript transform
  * `wrangler: { configPath }` applies to the primary worker under test.
@@ -76,6 +85,31 @@ const TOOL_RESULTS = {
     labMetrics: {},
     opportunities: [],
   },
+  search_console_query: {
+    siteUrl: "https://example.com",
+    startDate: "2026-07-01",
+    endDate: "2026-07-28",
+    dimensions: ["query", "page"],
+    rowCount: 1,
+    rows: [
+      {
+        keys: ["seo mcp", "/"],
+        clicks: 10,
+        impressions: 100,
+        ctr: 0.1,
+        position: 5.2,
+      },
+    ],
+  },
+};
+
+const DECOY_CREDENTIAL = "DECOY_REFRESH_TOKEN_xyz789";
+
+const GSC_ERROR_TEXTS = {
+  "simulate-gsc-not-configured": "Google credentials are not configured",
+  "simulate-gsc-credential-failure": `OAuth token exchange failed: invalid_grant ${DECOY_CREDENTIAL}`,
+  "simulate-gsc-quota": `Search Analytics API error: quota exceeded ${DECOY_CREDENTIAL}`,
+  "simulate-gsc-unknown-failure": `Unexpected upstream failure ${DECOY_CREDENTIAL}`,
 };
 
 export default {
@@ -91,6 +125,17 @@ export default {
     const body = await request.json();
     const toolName = body?.params?.name;
     const argUrl = body?.params?.arguments?.url ?? "";
+    const argSiteUrl = body?.params?.arguments?.siteUrl ?? "";
+
+    for (const [trigger, text] of Object.entries(GSC_ERROR_TEXTS)) {
+      if (argSiteUrl.includes(trigger)) {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: "stub",
+          result: { content: [{ type: "text", text }], isError: true },
+        });
+      }
+    }
 
     if (argUrl.includes("simulate-401")) {
       return new Response("Unauthorized", {
