@@ -64,8 +64,8 @@ Chain strategy: stacked-to-main
 
 ## Phase 5: Site Crawl (PR5)
 
-- [ ] 5.1 RED: defaults 5/2; out-of-range blocked; max-value warned confirm; per-panel sample labeling incl. `outputBytes` bound; drill-down reuses in-memory page data (no new `crawl_page` call); duplicate-submit blocked in flight.
-- [ ] 5.2 GREEN: `CrawlForm`, `DomainSummaryPanel`, `CrawlPolicyPanel`, `LinkGraphPanel`, `BarChart`, `PerPageTable`, `SiteCrawlContainer`, `readToolResponse` seam.
+- [x] 5.1 RED: defaults 5/2; out-of-range blocked; max-value warned confirm; per-panel sample labeling incl. `outputBytes` bound; drill-down reuses in-memory page data (no new `crawl_page` call); duplicate-submit blocked in flight.
+- [x] 5.2 GREEN: `CrawlForm`, `DomainSummaryPanel`, `CrawlPolicyPanel`, `LinkGraphPanel`, `BarChart`, `PerPageTable`, `SiteCrawlContainer`, `readToolResponse` seam.
 
 ## Phase 6: PageSpeed (PR6)
 

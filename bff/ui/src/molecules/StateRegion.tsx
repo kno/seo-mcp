@@ -7,7 +7,16 @@ import { Countdown } from "../atoms/Countdown";
 import { Spinner } from "../atoms/Spinner";
 
 export type RegionState =
-  | { readonly phase: "loading" }
+  | {
+      readonly phase: "loading";
+      /**
+       * Overrides the generic "Loading {label}…" text. `site-crawl-view`'s
+       * long-running-crawl requirement needs an explicit "crawl in
+       * progress" wording distinct from a short-lived fetch, without every
+       * other view's loading text changing.
+       */
+      readonly detail?: string;
+    }
   | { readonly phase: "error"; readonly error: BffError }
   | { readonly phase: "ready"; readonly cardinality: Cardinality };
 
@@ -44,7 +53,7 @@ export function StateRegion({ label, state, children }: StateRegionProps) {
           {label}
         </h2>
         <p role="status">
-          <Spinner /> Loading {label}…
+          <Spinner /> {state.detail ?? `Loading ${label}…`}
         </p>
       </section>
     );

@@ -22,6 +22,20 @@ describe("StateRegion — loading/empty/bound-reached distinction", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("renders a caller-supplied loading detail instead of the generic 'Loading {label}…' text", () => {
+    render(
+      <StateRegion
+        label="Site crawl"
+        state={{ phase: "loading", detail: "Crawl in progress…" }}
+      />,
+    );
+
+    expect(screen.getByRole("status")).toHaveTextContent("Crawl in progress…");
+    expect(screen.getByRole("status")).not.toHaveTextContent(
+      /loading site crawl/i,
+    );
+  });
+
   it("renders an explicit empty-state message distinct from loading and bound-reached", () => {
     render(
       <StateRegion
