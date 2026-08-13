@@ -23,3 +23,13 @@ export {
   gscRowSchema,
   gscDimensionSchema,
 } from "../schemas/search-console";
+export { opportunityResultSchema } from "../schemas/opportunities";
+export {
+  storedSnapshotSchema,
+  gscMetricsSchema,
+  gscDiffRowSchema,
+  gscDiffSchema,
+  snapshotSearchConsoleResultSchema,
+  listSearchConsoleSnapshotsResultSchema,
+  compareSearchConsoleResultSchema,
+} from "../schemas/gsc-snapshots";

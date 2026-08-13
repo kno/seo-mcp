@@ -1,5 +1,7 @@
+import type * as z from "zod/v4";
 import { LIMITS, type Env } from "../config";
 import { searchConsoleQuery, type GscRow } from "./search-console";
+import { opportunityResultSchema } from "../schemas/opportunities";
 
 // ---------------------------------------------------------------------------
 // Pure filter/rank helpers
@@ -71,15 +73,7 @@ export function lowCtrOpportunities(
 // Result type
 // ---------------------------------------------------------------------------
 
-export interface OpportunityResult {
-  siteUrl: string;
-  startDate: string;
-  endDate: string;
-  dimensions: string[];
-  criteria: Record<string, number>;
-  rowCount: number;
-  rows: GscRow[];
-}
+export type OpportunityResult = z.infer<typeof opportunityResultSchema>;
 
 // ---------------------------------------------------------------------------
 // Fetch + filter wrappers

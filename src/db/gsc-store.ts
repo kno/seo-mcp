@@ -1,14 +1,9 @@
+import type * as z from "zod/v4";
 import { LIMITS } from "../config";
 import type { GscRow } from "../google/search-console";
+import { storedSnapshotSchema } from "../schemas/gsc-snapshots";
 
-export interface StoredSnapshot {
-  id: number;
-  siteUrl: string;
-  capturedAt: string;
-  startDate: string;
-  endDate: string;
-  label: string | null;
-}
+export type StoredSnapshot = z.infer<typeof storedSnapshotSchema>;
 
 interface SnapshotInput {
   siteUrl: string;

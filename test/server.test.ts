@@ -29,19 +29,21 @@ describe("buildServer tool registration", () => {
     "check_links",
     "analyze_pagespeed",
     "search_console_query",
+    "find_striking_distance_keywords",
+    "find_low_ctr_opportunities",
+    "snapshot_search_console",
+    "list_search_console_snapshots",
+    "compare_search_console",
   ])("declares an outputSchema for the in-scope tool %s", (name) => {
     expect(registeredTool(name).outputSchema).toBeDefined();
   });
 
-  it.each([
-    "find_striking_distance_keywords",
-    "find_low_ctr_opportunities",
-    "get_keyword_metrics",
-    "discover_keywords",
-    "cluster_keywords",
-  ])("leaves the deferred tool %s without an outputSchema", (name) => {
-    expect(registeredTool(name).outputSchema).toBeUndefined();
-  });
+  it.each(["get_keyword_metrics", "discover_keywords", "cluster_keywords"])(
+    "leaves the deferred tool %s without an outputSchema",
+    (name) => {
+      expect(registeredTool(name).outputSchema).toBeUndefined();
+    },
+  );
 
   it("surfaces a result violating its own output schema as a tool failure instead of a thrown error", async () => {
     vi.mocked(crawlPage).mockResolvedValue({

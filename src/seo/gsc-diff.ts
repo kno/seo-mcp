@@ -1,31 +1,17 @@
+import type * as z from "zod/v4";
 import { LIMITS } from "../config";
 import type { GscRow } from "../google/search-console";
+import {
+  gscMetricsSchema,
+  gscDiffRowSchema,
+  gscDiffSchema,
+} from "../schemas/gsc-snapshots";
 
-export interface GscMetrics {
-  clicks: number;
-  impressions: number;
-  ctr: number;
-  position: number;
-}
+export type GscMetrics = z.infer<typeof gscMetricsSchema>;
 
-export interface GscDiffRow {
-  query: string;
-  page: string;
-  base: GscMetrics | null;
-  current: GscMetrics | null;
-  clicksDelta: number;
-  impressionsDelta: number;
-  positionDelta: number;
-}
+export type GscDiffRow = z.infer<typeof gscDiffRowSchema>;
 
-export interface GscDiff {
-  baseCount: number;
-  currentCount: number;
-  decayed: GscDiffRow[];
-  improved: GscDiffRow[];
-  lost: GscDiffRow[];
-  gained: GscDiffRow[];
-}
+export type GscDiff = z.infer<typeof gscDiffSchema>;
 
 function keyOf(row: GscRow): string {
   return `${row.keys[0] ?? ""} ${row.keys[1] ?? ""}`;

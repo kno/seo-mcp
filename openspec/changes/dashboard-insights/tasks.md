@@ -113,17 +113,17 @@ PROOF = `pnpm test` green plus the unit's focused command and runtime harness.
 
 ## Phase 5: Opportunity + GSC-snapshot schemas (PR5) — `gsc-insight-views`, `mcp-result-contract`
 
-- [ ] 5.1 RED `test/schemas/opportunities.test.ts`: `OpportunityResult` incl. `criteria:
+- [x] 5.1 RED `test/schemas/opportunities.test.ts`: `OpportunityResult` incl. `criteria:
 Record<string, number>`; rejects a payload exceeding `limit`
-- [ ] 5.2 GREEN `src/schemas/opportunities.ts` + `z.infer` aliases in `src/google/opportunities.ts`
-- [ ] 5.3 RED `test/schemas/gsc-snapshots.test.ts`: `StoredSnapshot`, `GscDiff` four buckets,
+- [x] 5.2 GREEN `src/schemas/opportunities.ts` + `z.infer` aliases in `src/google/opportunities.ts`
+- [x] 5.3 RED `test/schemas/gsc-snapshots.test.ts`: `StoredSnapshot`, `GscDiff` four buckets,
       `GscDiffRow` with nullable `base`/`current`, `GscMetrics`
-- [ ] 5.4 GREEN `src/schemas/gsc-snapshots.ts` + aliases in `src/db/gsc-store.ts`, `src/seo/gsc-diff.ts`
-- [ ] 5.5 GREEN `src/server.ts`: `outputSchema` on `find_striking_distance_keywords`,
+- [x] 5.4 GREEN `src/schemas/gsc-snapshots.ts` + aliases in `src/db/gsc-store.ts`, `src/seo/gsc-diff.ts`
+- [x] 5.5 GREEN `src/server.ts`: `outputSchema` on `find_striking_distance_keywords`,
       `find_low_ctr_opportunities`, `snapshot_search_console`, `list_search_console_snapshots`,
       `compare_search_console` — **higher-risk MCP tool surface**, additive only
-- [ ] 5.6 GREEN publish all five types/schemas from `src/types/*`
-- [ ] 5.7 PROOF `test/integration/`: all five registrations expose `outputSchema` and round-trip
+- [x] 5.6 GREEN publish all five types/schemas from `src/types/*`
+- [x] 5.7 PROOF `test/integration/`: all five registrations expose `outputSchema` and round-trip
 
 ## Phase 6: `gsc-insight-views` UI (PR6) — `gsc-insight-views`
 

@@ -49,6 +49,12 @@ import { siteCrawlResultSchema } from "./schemas/site";
 import { linkCheckResultSchema } from "./schemas/links";
 import { pageSpeedResultSchema } from "./schemas/pagespeed";
 import { gscQueryResultSchema } from "./schemas/search-console";
+import { opportunityResultSchema } from "./schemas/opportunities";
+import {
+  snapshotSearchConsoleResultSchema,
+  listSearchConsoleSnapshotsResultSchema,
+  compareSearchConsoleResultSchema,
+} from "./schemas/gsc-snapshots";
 
 /**
  * Builds the `structuredContent` payload for a tool response.
@@ -272,6 +278,7 @@ export function buildServer(env: Env): McpServer {
         minImpressions: z.number().int().min(0).optional(),
         limit: z.number().int().min(1).max(250).optional(),
       }),
+      outputSchema: opportunityResultSchema,
     },
     async ({
       siteUrl,
@@ -284,6 +291,7 @@ export function buildServer(env: Env): McpServer {
     }) => {
       try {
         return jsonResult(
+          opportunityResultSchema,
           await findStrikingDistanceKeywords(
             {
               siteUrl,
@@ -317,6 +325,7 @@ export function buildServer(env: Env): McpServer {
         maxCtr: z.number().min(0).max(1).optional(),
         limit: z.number().int().min(1).max(250).optional(),
       }),
+      outputSchema: opportunityResultSchema,
     },
     async ({
       siteUrl,
@@ -329,6 +338,7 @@ export function buildServer(env: Env): McpServer {
     }) => {
       try {
         return jsonResult(
+          opportunityResultSchema,
           await findLowCtrOpportunities(
             {
               siteUrl,
@@ -572,6 +582,7 @@ export function buildServer(env: Env): McpServer {
           .optional(),
         label: z.string().min(1).optional(),
       }),
+      outputSchema: snapshotSearchConsoleResultSchema,
     },
     async ({ siteUrl, startDate, endDate, dimensions, label }) => {
       if (!env.DB)
@@ -596,7 +607,7 @@ export function buildServer(env: Env): McpServer {
           capturedAt,
           rows: result.rows,
         });
-        return jsonResult({
+        return jsonResult(snapshotSearchConsoleResultSchema, {
           snapshotId,
           siteUrl: result.siteUrl,
           rowCount,
@@ -617,13 +628,18 @@ export function buildServer(env: Env): McpServer {
         siteUrl: z.string().min(1),
         limit: z.number().int().min(1).max(50).optional(),
       }),
+      outputSchema: listSearchConsoleSnapshotsResultSchema,
     },
     async ({ siteUrl, limit }) => {
       if (!env.DB)
         return errorResult(new Error("D1 storage is not configured"));
       try {
         const snapshots = await listSnapshots(env.DB, siteUrl, limit);
-        return jsonResult({ siteUrl, count: snapshots.length, snapshots });
+        return jsonResult(listSearchConsoleSnapshotsResultSchema, {
+          siteUrl,
+          count: snapshots.length,
+          snapshots,
+        });
       } catch (e) {
         return errorResult(e);
       }
@@ -640,6 +656,7 @@ export function buildServer(env: Env): McpServer {
         baseSnapshotId: z.number().int().positive().optional(),
         currentSnapshotId: z.number().int().positive().optional(),
       }),
+      outputSchema: compareSearchConsoleResultSchema,
     },
     async ({ siteUrl, baseSnapshotId, currentSnapshotId }) => {
       if (!env.DB)
@@ -664,7 +681,7 @@ export function buildServer(env: Env): McpServer {
           getSnapshotRows(env.DB, currentId),
         ]);
         const diff = diffGscRows(baseRows, currentRows);
-        return jsonResult({
+        return jsonResult(compareSearchConsoleResultSchema, {
           siteUrl,
           baseSnapshotId: baseId,
           currentSnapshotId: currentId,
