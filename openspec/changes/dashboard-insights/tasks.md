@@ -83,17 +83,17 @@ PROOF = `pnpm test` green plus the unit's focused command and runtime harness.
 
 ## Phase 3: Quota ledger + delayed cache class (PR3) — `authenticated-source-contract`, `quota-visibility`
 
-- [ ] 3.1 RED ledger: increments on upstream **attempt**, never on success-only, never on a cache hit, never
+- [x] 3.1 RED ledger: increments on upstream **attempt**, never on success-only, never on a cache hit, never
       on a gate rejection or invalid input
-- [ ] 3.2 RED KV absent/throwing serves a live result with an `unavailable` estimate, not a closed failure
+- [x] 3.2 RED KV absent/throwing serves a live result with an `unavailable` estimate, not a closed failure
       (threat row e)
-- [ ] 3.3 GREEN `bff/src/authenticated/quota-ledger.ts`: `q1:{source}:{windowStart}` counter via
+- [x] 3.3 GREEN `bff/src/authenticated/quota-ledger.ts`: `q1:{source}:{windowStart}` counter via
       `ctx.waitUntil`, `basis: "bff-observed"`, wording "at least N calls used in this window"
-- [ ] 3.4 RED cache TTL by range-state: `closed` → hours (clamp ceiling), `open` → short, zero-row result
+- [x] 3.4 RED cache TTL by range-state: `closed` → hours (clamp ceiling), `open` → short, zero-row result
       cached at `open`, `?refresh=1` bypass, no timer/focus revalidation
-- [ ] 3.5 GREEN `bff/src/cache.ts` + `bff/wrangler.jsonc`: `authenticated-delayed` class,
+- [x] 3.5 GREEN `bff/src/cache.ts` + `bff/wrangler.jsonc`: `authenticated-delayed` class,
       `AUTH_SOURCE_TTL_SECONDS`, `AUTH_SOURCE_BUDGET`, `GSC_REPORTING_LAG_DAYS`
-- [ ] 3.6 PROOF `pnpm test -- quota-ledger cache`; `wrangler types` regenerated after the binding change
+- [x] 3.6 PROOF `pnpm test -- quota-ledger cache`; `wrangler types` regenerated after the binding change
 
 ## Phase 4: `search-console-view` UI (PR4) — `search-console-view`
 

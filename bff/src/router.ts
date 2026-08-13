@@ -24,6 +24,16 @@
  * are wrapped by `cache.ts` itself so a missing/throwing KV binding never
  * fails the request — it degrades to a direct upstream call and reports
  * `cacheStatus: "unavailable"`.
+ *
+ * `handleRequest`'s optional third parameter, `ctx` (the Worker's
+ * `ExecutionContext`), exists solely so `dispatchAuthenticated()` can fire
+ * its upstream-quota-ledger increment via `ctx.waitUntil` — fire-and-
+ * forget, never adding latency to the response. `bff/src/index.ts` always
+ * supplies it in production; it is optional here only so existing unit
+ * tests that call `handleRequest(request, env)` directly, without a
+ * Workers runtime, keep compiling (see
+ * `authenticated/quota-ledger.ts#recordUpstreamAttempt` for the inline-
+ * await fallback that keeps those tests deterministic).
  */
 
 import * as z from "zod/v4";
@@ -33,6 +43,8 @@ import { callTool, type McpClientResult } from "./mcp-client";
 import { TOOL_TIMEOUT_MS, type ToolName } from "./timeout";
 import {
   CACHE_TTL_SECONDS,
+  authRangeState,
+  authenticatedTtlSeconds,
   cacheKey,
   getCached,
   isCacheable,
@@ -49,8 +61,16 @@ import { linkCheckResultSchema } from "../../src/schemas/links";
 import { pageSpeedResultSchema } from "../../src/schemas/pagespeed";
 import { gscDimensionSchema } from "../../src/schemas/search-console";
 import { getAuthenticatedRoute } from "./authenticated/registry";
-import { deriveSourceFreshness } from "./authenticated/freshness";
+import {
+  GSC_REPORTING_LAG_DAYS,
+  deriveSourceFreshness,
+} from "./authenticated/freshness";
 import { classifyUpstreamFailure } from "./authenticated/classify";
+import {
+  getQuotaEstimate,
+  recordUpstreamAttempt,
+  type QuotaEstimate,
+} from "./authenticated/quota-ledger";
 
 const crawlPageInputSchema = z.object({
   url: z.url().describe("Public HTTP or HTTPS page URL"),
@@ -211,17 +231,24 @@ async function dispatch<TInput, TResult>(
 
 /**
  * Authenticated-route response helper — same envelope shape as
- * `toolResponse`, plus the REQUIRED `sourceFreshness` field
- * (`authenticated-source-contract`). `sourceFreshness` is always
- * recomputed at request time, even on a cache hit — it must never be
- * treated as a cached fact about "when we fetched this" (that is
- * `resultAge`'s job), only about how stale the upstream data itself is.
+ * `toolResponse`, plus:
+ * - the REQUIRED `sourceFreshness` field (`authenticated-source-contract`).
+ *   Always recomputed at request time, even on a cache hit — it must never
+ *   be treated as a cached fact about "when we fetched this" (that is
+ *   `resultAge`'s job), only about how stale the upstream data itself is.
+ * - `quota`, the BFF-observed Google-side call-volume estimate
+ *   (`authenticated/quota-ledger.ts`), independent of and never merged
+ *   with the MCP bucket's `usage.ts` figure. Present on every successful
+ *   response — hit or miss — including when its own `basis` is
+ *   `"unavailable"` (threat matrix row e: a KV failure degrades the
+ *   ESTIMATE, never the request).
  */
 function authenticatedToolResponse<T>(
   result: McpClientResult<T>,
   cacheStatus: BffOk<T>["cacheStatus"],
   resultAge: number,
   sourceFreshness: ReturnType<typeof deriveSourceFreshness>,
+  quota: QuotaEstimate,
 ): Response {
   if (!result.ok) return bffErrorResponse(result.code, result.retryAfter);
   return Response.json({
@@ -229,11 +256,12 @@ function authenticatedToolResponse<T>(
     cacheStatus,
     resultAge,
     sourceFreshness,
+    quota,
   });
 }
 
 /**
- * Dispatches an authenticated route. Differs from `dispatch()` in three
+ * Dispatches an authenticated route. Differs from `dispatch()` in four
  * ways required by `authenticated-source-contract`:
  * (1) the tool MUST be present in `authenticated/registry.ts`'s allowlist
  * — a `business_*` or otherwise unregistered name is rejected with a 404
@@ -242,17 +270,23 @@ function authenticatedToolResponse<T>(
  * collapsing to a blind `tool_failed`, and the matched text is discarded
  * (threat row d);
  * (3) every response — hit, miss, or error — carries a freshly-derived
- * `sourceFreshness`, never merged with `resultAge`.
+ * `sourceFreshness`, never merged with `resultAge`;
+ * (4) caching uses the `authenticated-delayed` class (`cache.ts`), TTL
+ * selected per-source and per-range-state rather than per-tool, and the
+ * upstream quota ledger is incremented exactly once per real upstream
+ * ATTEMPT — never on a cache hit, a gate rejection, or an input-validation
+ * failure (`authenticated/quota-ledger.ts`).
  *
- * Caching here reuses the same crawl-tool cache mechanism as `dispatch()`
- * (`CACHE_TTL_SECONDS[toolName]`) as a temporary placeholder;
- * `authenticated-source-contract`'s real `authenticated-delayed` cache
- * class (per-source TTL split by closed/open range-state) lands in PR3.
+ * `ctx` (the Worker's `ExecutionContext`) is threaded through so the
+ * ledger increment can run via `ctx.waitUntil` — see
+ * `quota-ledger.ts#recordUpstreamAttempt` for what happens when it is
+ * absent (test-only fallback, never a production path).
  */
 async function dispatchAuthenticated(
   request: Request,
   url: URL,
   env: Env,
+  ctx: ExecutionContext | undefined,
   toolName: ToolName,
   args: Record<string, unknown> & { endDate: string },
 ): Promise<Response> {
@@ -261,6 +295,11 @@ async function dispatchAuthenticated(
 
   const key = await cacheKey(toolName, args);
   const sourceFreshness = deriveSourceFreshness(route.source, args.endDate);
+  const rangeState = authRangeState(args.endDate, GSC_REPORTING_LAG_DAYS);
+  const budget = env.AUTH_SOURCE_BUDGET[route.source] ?? 0;
+
+  const readQuotaEstimate = () =>
+    getQuotaEstimate(env.RESULT_CACHE, route.source, budget);
 
   // `route.schema` is typed as the UNION of every published schema (so the
   // registry can only ever hold a schema literal imported from
@@ -279,6 +318,17 @@ async function dispatchAuthenticated(
       keyHash: key,
     });
 
+  // Records the ledger increment IMMEDIATELY BEFORE the real upstream
+  // call, and only here — this is the single call site that runs exactly
+  // when `withSingleFlight` invokes it as the leader (never for a
+  // follower awaiting the same in-flight promise, and never when a cache
+  // hit or an earlier validation failure returns before reaching this
+  // line).
+  const trackedCallUpstream = async () => {
+    await recordUpstreamAttempt(ctx, env.RESULT_CACHE, route.source);
+    return callUpstream();
+  };
+
   if (!shouldBypassCacheRead(request, url)) {
     const cached = await getCached(env.RESULT_CACHE, key);
     if (cached.status === "hit") {
@@ -287,26 +337,41 @@ async function dispatchAuthenticated(
         "hit",
         cached.resultAge,
         sourceFreshness,
+        await readQuotaEstimate(),
       );
     }
   }
 
-  const result = await withSingleFlight(key, callUpstream);
+  const result = await withSingleFlight(key, trackedCallUpstream);
   if (result.ok) {
+    const isZeroRowResult =
+      (result.data as { rowCount?: number }).rowCount === 0;
     await putCached(
       env.RESULT_CACHE,
       key,
       toolName,
       result.data,
-      CACHE_TTL_SECONDS[toolName],
+      authenticatedTtlSeconds(
+        env.AUTH_SOURCE_TTL_SECONDS,
+        route.source,
+        rangeState,
+        isZeroRowResult,
+      ),
     );
   }
-  return authenticatedToolResponse(result, "miss", 0, sourceFreshness);
+  return authenticatedToolResponse(
+    result,
+    "miss",
+    0,
+    sourceFreshness,
+    await readQuotaEstimate(),
+  );
 }
 
 export async function handleRequest(
   request: Request,
   env: Env,
+  ctx?: ExecutionContext,
 ): Promise<Response> {
   const url = new URL(request.url);
 
@@ -416,6 +481,7 @@ export async function handleRequest(
       request,
       url,
       env,
+      ctx,
       "search_console_query",
       parsed.data as Record<string, unknown> & { endDate: string },
     );

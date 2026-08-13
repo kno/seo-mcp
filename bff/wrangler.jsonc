@@ -22,6 +22,35 @@
     "GATE_STRATEGY": "shared-secret-cookie",
     "MCP_ORIGIN": "https://seo-mcp.internal",
     "VALIDATE_UPSTREAM_RESULTS": "true",
+    // `authenticated-source-contract`'s `authenticated-delayed` cache class
+    // (`bff/src/cache.ts#authenticatedTtlSeconds`), keyed by
+    // `AuthenticatedSource`. Concrete numbers were an open decision in
+    // design.md ("deferred to apply time as a config constant"); resolved
+    // here, per-deployment tunable rather than hardcoded:
+    // - `closed` 21600s (6h) — near the top of the inherited [60, 86400]
+    //   clamp. A closed GSC date range's data has definitely landed and is
+    //   very unlikely to change; re-fetching it before Google's own backfill
+    //   window elapses would spend both the MCP bucket and Google's quota
+    //   for an answer that cannot differ.
+    // - `open` 900s (15min) — short, because data inside the reporting-lag
+    //   window may still be arriving; a stale answer here is more likely to
+    //   be wrong than a stale answer for a closed range.
+    "AUTH_SOURCE_TTL_SECONDS": {
+      "search-console": { "closed": 21600, "open": 900 },
+    },
+    // `authenticated-source-contract`'s BFF-observed quota ledger
+    // (`bff/src/authenticated/quota-ledger.ts`), keyed by
+    // `AuthenticatedSource`. This is the BFF's OWN soft accounting
+    // threshold for display purposes ONLY — it is NOT Google's real API
+    // quota, which is far higher (Search Console's default is tens of
+    // thousands of queries/day). 300/day is chosen as a conservative,
+    // round, easy-to-reason-about "you are calling this a lot" signal for a
+    // single-owner dashboard that issues no automatic/background requests
+    // (per the "no polling" rule, every call here is a deliberate user
+    // action), not a hard technical ceiling.
+    "AUTH_SOURCE_BUDGET": {
+      "search-console": 300,
+    },
   },
   // `run_worker_first: true` is load-bearing, not decorative: without it
   // the Asset Worker answers matching paths BEFORE the User Worker, so

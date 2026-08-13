@@ -39,12 +39,45 @@ export const MAX_TTL_SECONDS = 86400;
  *   external API call and its score does not meaningfully change within
  *   a few hours; requests carrying an explicit `apiKey` bypass caching
  *   entirely regardless of this value (see `isCacheable`).
- * - `search_console_query`: 21600s (6h), a TEMPORARY placeholder at the
- *   crawl-tool clamp's upper range. `authenticated-source-contract`'s real
- *   `authenticated-delayed` cache class (per-source TTL split by
- *   closed/open range-state, per design.md) lands in PR3
- *   (`bff/src/authenticated/quota-ledger.ts`); this value is superseded
- *   there, not a considered final answer.
+ * - `search_console_query`: 21600s (6h) here ONLY to satisfy this
+ *   `Record<ToolName, number>`'s exhaustiveness — `ToolName` (`timeout.ts`)
+ *   includes every authenticated tool too, but `dispatchAuthenticated()`
+ *   (`router.ts`) never reads this value. Its real TTL comes from the
+ *   `authenticated-delayed` cache class below (`authenticatedTtlSeconds`),
+ *   selected per-source and per-range-state rather than per-tool.
+ *
+ * ---
+ *
+ * ## The `authenticated-delayed` cache class (design.md, "Decision: a
+ * caching class for upstream-delayed data, distinct from the crawl class")
+ *
+ * Authenticated/analytical sources (currently just `search-console`) get a
+ * SEPARATE, source-keyed-and-range-state-keyed TTL mechanism, because a
+ * refetch of a closed Google Search Console date range is usually
+ * byte-identical — re-fetching it spends both the MCP bucket and Google's
+ * own quota for an answer that cannot have changed. `AUTH_SOURCE_TTL_SECONDS`
+ * lives in `bff/wrangler.jsonc`'s `vars` (a per-deployment tuning knob,
+ * unlike the crawl tools' hardcoded `CACHE_TTL_SECONDS` above) with two
+ * numbers per source:
+ *
+ * - `closed` — the requested `endDate` is older than the reporting-lag
+ *   window (`GSC_REPORTING_LAG_DAYS`, `authenticated/freshness.ts`), i.e.
+ *   the data has definitely landed. Long TTL, near this module's clamp
+ *   ceiling.
+ * - `open` — `endDate` is still inside the lag window, i.e. Google's data
+ *   for that range may still be landing. Short TTL.
+ *
+ * A ZERO-ROW result is always cached at the `open` TTL regardless of its
+ * actual range-state (`authenticatedTtlSeconds`'s `resultIsEmpty`
+ * parameter): a zero-row result for a still-landing range usually means
+ * "not reported yet", not "no data", so caching it at the long `closed`
+ * TTL would risk pinning a wrong "empty" answer for hours.
+ *
+ * Refresh stays `?refresh=1`-only — `shouldBypassCacheRead` already covers
+ * this route identically to every other one. There is no timer, interval,
+ * or focus/visibility-triggered revalidation anywhere in this module or
+ * its callers (`dashboard-shell`'s "no polling" rule, server-side half —
+ * see `bff/test/cache.test.ts`'s structural scan).
  */
 export const CACHE_TTL_SECONDS: Record<ToolName, number> = {
   health: 60,
@@ -57,6 +90,58 @@ export const CACHE_TTL_SECONDS: Record<ToolName, number> = {
 
 export function clampTtlSeconds(seconds: number): number {
   return Math.min(MAX_TTL_SECONDS, Math.max(MIN_TTL_SECONDS, seconds));
+}
+
+export type AuthRangeState = "closed" | "open";
+
+/**
+ * `closed` when `endDate` predates the reporting-lag boundary (the data has
+ * definitely landed); `open` when `endDate` falls on or inside it (Google's
+ * data for that range may still be arriving). String comparison is safe and
+ * exact here because both operands are `YYYY-MM-DD` (fixed-width,
+ * zero-padded ISO date-only strings) — lexicographic order matches calendar
+ * order. This intentionally mirrors `authenticated/freshness.ts#deriveSourceFreshness`'s
+ * own `endDate < lagBoundary` boundary check (same `<`, same meaning) so a
+ * response's `sourceFreshness` and its cache range-state never disagree
+ * about which side of the lag window `endDate` falls on. Kept self-contained
+ * (no import from `authenticated/freshness.ts`) rather than coupled to it —
+ * `cache.ts` has no dependency on the `authenticated/` module tree elsewhere.
+ */
+export function authRangeState(
+  endDate: string,
+  lagDays: number,
+  today: Date = new Date(),
+): AuthRangeState {
+  const boundary = new Date(today.getTime());
+  boundary.setUTCDate(boundary.getUTCDate() - lagDays);
+  const lagBoundary = boundary.toISOString().slice(0, 10);
+  return endDate < lagBoundary ? "closed" : "open";
+}
+
+export type AuthSourceTtlTable = Record<string, AuthSourceTtl>;
+export interface AuthSourceTtl {
+  closed: number;
+  open: number;
+}
+
+/**
+ * Resolves the `authenticated-delayed` TTL for `source`, given its
+ * `rangeState` and whether the fetched result was zero-row
+ * (`resultIsEmpty`) — a zero-row result is always treated as `open`
+ * regardless of the requested range's own state (see this module's doc
+ * comment). Always passes through `clampTtlSeconds` so a misconfigured
+ * `AUTH_SOURCE_TTL_SECONDS` value can never escape the same `[60, 86400]`
+ * clamp every other cached entry in this module respects.
+ */
+export function authenticatedTtlSeconds(
+  ttlTable: AuthSourceTtlTable,
+  source: string,
+  rangeState: AuthRangeState,
+  resultIsEmpty: boolean,
+): number {
+  const effectiveState: AuthRangeState = resultIsEmpty ? "open" : rangeState;
+  const entry = ttlTable[source];
+  return clampTtlSeconds(entry[effectiveState]);
 }
 
 /**

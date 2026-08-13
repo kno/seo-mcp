@@ -1,8 +1,12 @@
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   CACHE_TTL_SECONDS,
   MAX_TTL_SECONDS,
   MIN_TTL_SECONDS,
+  authRangeState,
+  authenticatedTtlSeconds,
   cacheKey,
   canonicalJson,
   clampTtlSeconds,
@@ -10,6 +14,7 @@ import {
   isCacheable,
   putCached,
   shouldBypassCacheRead,
+  type AuthSourceTtlTable,
 } from "../src/cache";
 
 function fakeKv(initial: Record<string, string> = {}): KVNamespace {
@@ -220,4 +225,99 @@ describe("getCached / putCached — KV absence or failure is unavailable, never 
       putCached(kv, "v1:health:boom", "health", { status: "ok" }, 60),
     ).resolves.toBeUndefined();
   });
+});
+
+describe("authRangeState — closed vs open by reporting-lag boundary", () => {
+  const today = new Date("2026-08-13T00:00:00Z");
+  const LAG_DAYS = 2; // matches authenticated/freshness.ts's GSC_REPORTING_LAG_DAYS
+
+  it("is closed when endDate is strictly older than the lag boundary (today - lagDays)", () => {
+    expect(authRangeState("2026-08-10", LAG_DAYS, today)).toBe("closed");
+  });
+
+  it("is open when endDate falls exactly on the lag boundary", () => {
+    expect(authRangeState("2026-08-11", LAG_DAYS, today)).toBe("open");
+  });
+
+  it("is open when endDate is inside the still-landing window", () => {
+    expect(authRangeState("2026-08-13", LAG_DAYS, today)).toBe("open");
+  });
+});
+
+describe("authenticatedTtlSeconds — the authenticated-delayed cache class", () => {
+  const ttlTable: AuthSourceTtlTable = {
+    "search-console": { closed: 21600, open: 900 },
+  };
+
+  it("uses the long closed TTL for a settled range with rows", () => {
+    expect(
+      authenticatedTtlSeconds(ttlTable, "search-console", "closed", false),
+    ).toBe(21600);
+  });
+
+  it("uses the short open TTL for a still-landing range with rows", () => {
+    expect(
+      authenticatedTtlSeconds(ttlTable, "search-console", "open", false),
+    ).toBe(900);
+  });
+
+  it("forces the short open TTL for a zero-row result even on a closed range", () => {
+    // A zero-row result for a still-landing date range might not stay
+    // zero — never cache it at the long TTL as though it were final.
+    expect(
+      authenticatedTtlSeconds(ttlTable, "search-console", "closed", true),
+    ).toBe(900);
+  });
+
+  it("clamps a misconfigured value to this module's [60, 86400] ceiling", () => {
+    const oversized: AuthSourceTtlTable = {
+      "search-console": { closed: 999_999, open: 10 },
+    };
+    expect(
+      authenticatedTtlSeconds(oversized, "search-console", "closed", false),
+    ).toBe(MAX_TTL_SECONDS);
+    expect(
+      authenticatedTtlSeconds(oversized, "search-console", "open", false),
+    ).toBe(MIN_TTL_SECONDS);
+  });
+});
+
+describe("no server-side timer/interval revalidation anywhere in bff/src (no-polling, server half)", () => {
+  const SRC_ROOT = join(__dirname, "..", "src");
+  const BANNED_TOKENS = ["setInterval", "setTimeout"] as const;
+
+  function collectSourceFiles(dir: string): string[] {
+    const files: string[] = [];
+    for (const entry of readdirSync(dir)) {
+      const fullPath = join(dir, entry);
+      const stats = statSync(fullPath);
+      if (stats.isDirectory()) {
+        files.push(...collectSourceFiles(fullPath));
+        continue;
+      }
+      if (/\.ts$/.test(entry) && !entry.endsWith(".test.ts")) {
+        files.push(fullPath);
+      }
+    }
+    return files;
+  }
+
+  const files = collectSourceFiles(SRC_ROOT);
+
+  it("scans at least one real production source file (proves this is not a placeholder)", () => {
+    expect(files.length).toBeGreaterThan(0);
+    expect(files).toContain(join(SRC_ROOT, "cache.ts"));
+  });
+
+  it.each(files.map((file) => [file] as const))(
+    "%s registers no setInterval/setTimeout",
+    (file) => {
+      const content = readFileSync(file, "utf-8");
+      for (const token of BANNED_TOKENS) {
+        expect(content, `${file} must not contain "${token}"`).not.toContain(
+          token,
+        );
+      }
+    },
+  );
 });
