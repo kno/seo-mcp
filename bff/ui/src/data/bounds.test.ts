@@ -4,6 +4,7 @@ import {
   collectBounds,
   describeCappedList,
   describeCategory,
+  describeGscRows,
   describeOutputBytes,
   describeProbeSet,
   isBounded,
@@ -273,6 +274,37 @@ describe("describeOutputBytes", () => {
   });
 });
 
+describe("describeGscRows", () => {
+  it("returns 'none' when rowCount is 0", () => {
+    expect(describeGscRows(0, 250)).toEqual({ state: "none" });
+  });
+
+  it("returns 'bounded' naming maxGscRows when rowCount equals the 250-row cap", () => {
+    const result = describeGscRows(250, 250);
+    expect(result.state).toBe("bounded");
+    if (result.state === "bounded") {
+      expect(result.bound).toEqual({
+        kind: "probe_cap",
+        scope: "rowCount",
+        limitName: "maxGscRows",
+        limitValue: 250,
+        shown: 250,
+      });
+    }
+  });
+
+  it("returns 'complete' (never bounded) for 249, one below the cap", () => {
+    expect(describeGscRows(249, 250)).toEqual({
+      state: "complete",
+      total: 249,
+    });
+  });
+
+  it("returns 'complete' for an arbitrary in-range row count", () => {
+    expect(describeGscRows(37, 250)).toEqual({ state: "complete", total: 37 });
+  });
+});
+
 describe("collectBounds", () => {
   it("returns an empty array for a complete, unbounded crawl_site result", () => {
     expect(collectBounds("crawl_site", completeSiteCrawlResult())).toEqual([]);
@@ -376,5 +408,21 @@ describe("collectBounds", () => {
   it("returns an empty array for crawl_page and analyze_pagespeed (no known bound)", () => {
     expect(collectBounds("crawl_page", { anything: true })).toEqual([]);
     expect(collectBounds("analyze_pagespeed", { anything: true })).toEqual([]);
+  });
+
+  it("returns the maxGscRows bound for search_console_query at the 250-row cap", () => {
+    expect(collectBounds("search_console_query", { rowCount: 250 })).toEqual([
+      {
+        kind: "probe_cap",
+        scope: "rowCount",
+        limitName: "maxGscRows",
+        limitValue: 250,
+        shown: 250,
+      },
+    ]);
+  });
+
+  it("returns an empty array for search_console_query below the 250-row cap", () => {
+    expect(collectBounds("search_console_query", { rowCount: 37 })).toEqual([]);
   });
 });

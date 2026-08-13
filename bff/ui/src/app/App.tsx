@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { PageReportContainer } from "../containers/PageReportContainer";
 import { SiteCrawlContainer } from "../containers/SiteCrawlContainer";
 import { PageSpeedContainer } from "../containers/PageSpeedContainer";
+import { SearchConsoleContainer } from "../containers/SearchConsoleContainer";
 import { LoginContainer } from "../containers/LoginContainer";
 
 /**
@@ -38,6 +39,13 @@ const NAV_ITEMS = [
     description:
       "Lighthouse category scores, lab metrics, real-user field data and the optimization opportunities reported for a URL.",
     View: PageSpeedContainer,
+  },
+  {
+    href: "#search-console",
+    label: "Search Console",
+    description:
+      "Query Google Search Console performance data for a property: clicks, impressions, CTR and position by query, page, country, device, date or search appearance.",
+    View: SearchConsoleContainer,
   },
 ] as const;
 

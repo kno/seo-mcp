@@ -97,19 +97,19 @@ PROOF = `pnpm test` green plus the unit's focused command and runtime harness.
 
 ## Phase 4: `search-console-view` UI (PR4) — `search-console-view`
 
-- [ ] 4.1 RED controls match the real input schema exactly: free-text `siteUrl`, `YYYY-MM-DD` dates,
+- [x] 4.1 RED controls match the real input schema exactly: free-text `siteUrl`, `YYYY-MM-DD` dates,
       dimension multi-select over the six enum values, `rowLimit` 1-250; default range last 28 days
-- [ ] 4.2 RED table renders `keys`, `clicks`, `impressions`, `ctr`, `position` for the selected dimensions
-- [ ] 4.3 RED bound badge at `rowCount === 250` naming `maxGscRows`; `0` renders the empty state;
+- [x] 4.2 RED table renders `keys`, `clicks`, `impressions`, `ctr`, `position` for the selected dimensions
+- [x] 4.3 RED bound badge at `rowCount === 250` naming `maxGscRows`; `0` renders the empty state;
       `1..249` renders neither
-- [ ] 4.4 RED two staleness elements with distinct accessible names and **no element containing both**
+- [x] 4.4 RED two staleness elements with distinct accessible names and **no element containing both**
       figures; `basis` rendered as estimated vs. reported
-- [ ] 4.5 RED four distinct states: empty, not-configured, credential-failure (no retry affordance),
+- [x] 4.5 RED four distinct states: empty, not-configured, credential-failure (no retry affordance),
       quota (disabled resubmit, unknown duration)
-- [ ] 4.6 RED no timer, interval, focus or visibility handler issues a request
-- [ ] 4.7 RED export carries as-of date + bound provenance and no credential literal
-- [ ] 4.8 GREEN `bff/ui/search-console/*`: controls, table, bound badge, freshness display, export
-- [ ] 4.9 PROOF automated a11y check passes; keyboard-only navigation reaches every control; `pnpm test`
+- [x] 4.6 RED no timer, interval, focus or visibility handler issues a request
+- [x] 4.7 RED export carries as-of date + bound provenance and no credential literal
+- [x] 4.8 GREEN `bff/ui/search-console/*`: controls, table, bound badge, freshness display, export
+- [x] 4.9 PROOF automated a11y check passes; keyboard-only navigation reaches every control; `pnpm test`
 
 ## Phase 5: Opportunity + GSC-snapshot schemas (PR5) — `gsc-insight-views`, `mcp-result-contract`
 
@@ -243,11 +243,21 @@ Record<string, number>`; rejects a payload exceeding `limit`
 
 ## Phase 12: Sibling-spec coordination (land with or before the PRs they block)
 
-- [ ] 12.1 Amend `dashboard-shell`'s error-presentation completeness requirement for the three new codes —
-      **blocks PR2 and PR4**
-- [ ] 12.2 Amend `quota-visibility`'s 429 requirement with the rate-limited-without-known-delay case; no
-      fabricated `retryAfter` — **blocks PR3 and PR4**
-- [ ] 12.3 Amend `result-export` for as-of date + bound provenance on authenticated exports — **blocks PR4**
+- [x] 12.1 Amend `dashboard-shell`'s error-presentation completeness requirement for the three new codes —
+      **blocks PR2 and PR4**. ALREADY SATISFIED: verified 2026-08-13 that `openspec/specs/dashboard-shell/spec.md`'s
+      "Every Normalized Error Code Has a Defined Presentation" requirement already carries the
+      "Authenticated-source failure classes are separately actionable" scenario, checked in at the
+      `dashboard-views` archive commit (`b1f086b`) — `dashboard-views` was designed with this sibling
+      change already in view. No further edit needed.
+- [x] 12.2 Amend `quota-visibility`'s 429 requirement with the rate-limited-without-known-delay case; no
+      fabricated `retryAfter` — **blocks PR3 and PR4**. ALREADY SATISFIED: same commit, "A rate-limit error
+      without a retry delay is handled honestly" scenario already covers exactly this case. No further edit
+      needed.
+- [x] 12.3 Amend `result-export` for as-of date + bound provenance on authenticated exports — **blocks PR4**.
+      Landed with PR4's own export task (4.7): `openspec/specs/result-export/spec.md` gained a new
+      "Authenticated-Source Exports Carry As-Of Date and Bound Provenance" requirement, and
+      `SearchConsoleContainer`'s JSON/CSV export wiring (`export/json.ts`'s `sourceFreshness` field,
+      `export/csv.ts`'s `notes` option and `search_console_query` shape) implements it.
 - [ ] 12.4 Add navigation entries for the five new views to `dashboard-shell` incrementally, one per view PR
 
 ## Recorded follow-ups (verified, deliberately NOT tasked here)

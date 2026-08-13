@@ -79,12 +79,24 @@ export function StateRegion({ label, state, children }: StateRegionProps) {
           <p className="alert-title">{presentation.title}</p>
           <p className="alert-description">{presentation.description}</p>
         </div>
-        {presentation.retry.kind === "disabled-until-elapsed" && (
-          <Countdown
-            seconds={presentation.retry.retryAfterSeconds}
-            label="Retry available in"
-          />
-        )}
+        {presentation.retry.kind === "disabled-until-elapsed" &&
+          (presentation.retry.retryAfterSeconds > 0 ? (
+            <Countdown
+              seconds={presentation.retry.retryAfterSeconds}
+              label="Retry available in"
+            />
+          ) : (
+            // No known retry delay (e.g. a Google quota rejection carries
+            // no `retryAfter`) — per `quota-visibility`'s "a rate-limit
+            // error without a retry delay is handled honestly" scenario,
+            // this MUST state the limit was reached WITHOUT displaying a
+            // specific wait time (0s would be a fabricated delay), and
+            // MUST still avoid inviting an immediate repeated retry.
+            <p className="alert-note" role="status">
+              The limit was reached. No retry delay was provided by the upstream
+              service.
+            </p>
+          ))}
       </section>
     );
   }

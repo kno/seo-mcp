@@ -87,3 +87,36 @@ A user MUST be able to export a bounded or truncated result. The presence of a t
 - GIVEN a `SiteCrawlResult` reached its output-size cap
 - WHEN the user requests a JSON or CSV export
 - THEN the export MUST complete successfully and MUST include the required truncation marker
+
+### Requirement: Authenticated-Source Exports Carry As-Of Date and Bound Provenance
+
+Any export (JSON or CSV) of a result from an authenticated source (e.g. `search_console_query`) MUST carry
+that source's as-of / reporting-lag figure (`authenticated-source-contract`'s `SourceFreshness`) alongside
+the row data, in addition to the ordinary `resultAge`/`cacheStatus` provenance every export already carries.
+When the source's own row-count bound was reached (e.g. `rowCount === LIMITS.maxGscRows`), the export MUST
+also carry the same bound-reached marker this requirement's existing truncation-provenance rule requires for
+every other capped result — there is no separate exemption for an authenticated source. The export MUST NOT
+contain any Google credential, refresh token, or other value derived from one, per the existing
+no-secret-material requirement.
+
+#### Scenario: Export always includes the as-of indicator
+
+- GIVEN a rendered `search_console_query` result, capped or not
+- WHEN the user exports it to JSON or CSV
+- THEN the exported artifact MUST include the source's as-of date and reporting-lag figure alongside the
+  row data
+
+#### Scenario: Export of a capped authenticated-source result includes the cap marker
+
+- GIVEN a rendered `search_console_query` result with `rowCount` at `LIMITS.maxGscRows` (250)
+- WHEN the user exports it to JSON or CSV
+- THEN the exported artifact MUST include a marker indicating the result was capped at the row limit and
+  may not represent the complete data set, using the same bound-provenance mechanism as every other
+  truncated export
+
+#### Scenario: An authenticated-source export never contains a Google credential
+
+- GIVEN a user exports a `search_console_query` result
+- WHEN the export is generated
+- THEN it MUST NOT contain any Google client ID, client secret, refresh token, derived access token, or
+  `MCP_AUTH_TOKEN`

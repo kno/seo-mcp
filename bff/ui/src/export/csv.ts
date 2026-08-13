@@ -23,6 +23,7 @@
  */
 import type { PageAnalysis } from "../../../../src/seo/html";
 import type {
+  GscQueryResult,
   LinkCheckResult,
   PageSpeedResult,
   SiteCrawlResult,
@@ -337,11 +338,47 @@ const analyzePagespeedShape: CsvShape<PageSpeedResult> = {
   omitted: ["opportunities"],
 };
 
+/**
+ * `search-console-view`'s row shape — one flat row per `GscRow`, exactly
+ * the fields `search_console_query` returns per row (`keys`, `clicks`,
+ * `impressions`, `ctr`, `position`). `keys` is written as-is via `cell()`
+ * (JSON-stringified when it has more than one entry, so a multi-dimension
+ * query's row still fits one column without losing which value belongs to
+ * which dimension — the dimension NAMES themselves live in `dimensions`,
+ * a top-level field with no per-row column, so it is `omitted` alongside
+ * `siteUrl`/`startDate`/`endDate`/`rowCount`, per the "field with no
+ * defined column is explicitly noted" scenario.
+ */
+const searchConsoleQueryShape: CsvShape<GscQueryResult> = {
+  id: "search_console_query",
+  columns: ["keys", "clicks", "impressions", "ctr", "position"],
+  rows(result) {
+    return result.rows.map((row) => [
+      row.keys.length === 1 ? cell(row.keys[0]) : cell(row.keys),
+      cell(row.clicks),
+      cell(row.impressions),
+      cell(row.ctr),
+      cell(row.position),
+    ]);
+  },
+  // `rows` itself is represented by the CSV rows, not by a column — same
+  // convention `crawlSiteShape` uses for `pages`.
+  omitted: [
+    "siteUrl",
+    "startDate",
+    "endDate",
+    "dimensions",
+    "rowCount",
+    "rows",
+  ],
+};
+
 export const CSV_SHAPES = {
   crawl_page: crawlPageShape,
   crawl_site: crawlSiteShape,
   check_links: checkLinksShape,
   analyze_pagespeed: analyzePagespeedShape,
+  search_console_query: searchConsoleQueryShape,
 } as const;
 
 function csvEscape(value: string): string {
@@ -355,6 +392,14 @@ function csvLine(values: readonly string[]): string {
 
 export interface SerializeCsvOptions {
   readonly bounds?: readonly Bound[];
+  /**
+   * Freeform provenance comment lines, written verbatim after `bounds` and
+   * before the header row — e.g. an authenticated source's as-of/
+   * reporting-lag figure (`molecules/SourceFreshnessBadge.tsx`'s
+   * `describeSourceFreshness`), per `result-export`'s "as-of date and
+   * bound provenance on an authenticated export" requirement.
+   */
+  readonly notes?: readonly string[];
 }
 
 /**
@@ -382,6 +427,9 @@ export function serializeCsv<T>(
     lines.push(
       `# bound: ${bound.kind} ${bound.scope} shown=${bound.shown} limit=${bound.limitValue} (${bound.limitName})${totalPart}`,
     );
+  }
+  for (const note of options.notes ?? []) {
+    lines.push(`# ${note}`);
   }
   lines.push(csvLine(shape.columns));
   for (const row of shape.rows(result)) {

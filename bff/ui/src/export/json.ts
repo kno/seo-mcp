@@ -8,6 +8,7 @@
  * violate the `result-export` fidelity requirement.
  */
 import type { ToolName } from "../../../src/timeout";
+import type { SourceFreshness } from "../../../src/authenticated/freshness";
 import type { Bound } from "../data/bounds";
 
 export type CacheStatus = "hit" | "miss" | "bypass" | "unavailable";
@@ -21,6 +22,14 @@ export interface ExportProvenance {
   readonly bounds: readonly Bound[];
   /** Fields present in the source result but not represented in this export. */
   readonly omittedFields: readonly string[];
+  /**
+   * `authenticated-source-contract`'s SECOND staleness axis, present ONLY
+   * for an authenticated-source result (e.g. `search_console_query`) —
+   * absent entirely (not `undefined`-as-a-key) for every other tool, so a
+   * non-authenticated export never carries a calendar-lag field that has
+   * no meaning for it.
+   */
+  readonly sourceFreshness?: SourceFreshness;
 }
 
 export interface JsonExport<T> {
@@ -35,6 +44,7 @@ export interface BuildJsonExportInput<T> {
   readonly resultAge: number;
   readonly bounds: readonly Bound[];
   readonly omittedFields?: readonly string[];
+  readonly sourceFreshness?: SourceFreshness;
   /** Injectable clock for deterministic tests; defaults to `new Date()`. */
   readonly now?: () => Date;
 }
@@ -52,6 +62,9 @@ export function buildJsonExport<T>(
       resultAge: input.resultAge,
       bounds: input.bounds,
       omittedFields: input.omittedFields ?? [],
+      ...(input.sourceFreshness
+        ? { sourceFreshness: input.sourceFreshness }
+        : {}),
     },
   };
 }

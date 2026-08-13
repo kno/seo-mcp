@@ -67,5 +67,10 @@ describe("App shell", () => {
     expect(
       screen.getByRole("form", { name: /pagespeed/i }),
     ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("link", { name: "Search Console" }));
+    expect(
+      screen.getByRole("form", { name: /search console query/i }),
+    ).toBeInTheDocument();
   });
 });

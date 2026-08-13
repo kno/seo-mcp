@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { linkCheckResultSchema } from "../../../../src/schemas/links";
 import { pageAnalysisSchema } from "../../../../src/schemas/page";
 import { pageSpeedResultSchema } from "../../../../src/schemas/pagespeed";
+import { gscQueryResultSchema } from "../../../../src/schemas/search-console";
 import { siteCrawlResultSchema } from "../../../../src/schemas/site";
 import type { PageAnalysis } from "../../../../src/seo/html";
 import type {
@@ -184,6 +185,13 @@ describe("CSV_SHAPES exhaustiveness — columns ∪ omitted covers every schema 
       Object.keys(pageSpeedResultSchema.shape),
     );
   });
+
+  it("search_console_query", () => {
+    assertExhaustive(
+      CSV_SHAPES.search_console_query as CsvShape<unknown>,
+      Object.keys(gscQueryResultSchema.shape),
+    );
+  });
 });
 
 describe("CSV golden/stability — same input always produces the same output", () => {
@@ -273,5 +281,62 @@ describe("CSV — no secret material", () => {
   it("never contains MCP_AUTH_TOKEN", () => {
     const csv = serializeCsv(CSV_SHAPES.check_links, LINK_CHECK_RESULT);
     expect(csv).not.toContain("MCP_AUTH_TOKEN");
+  });
+});
+
+describe("CSV_SHAPES.search_console_query", () => {
+  const GSC_RESULT = {
+    siteUrl: "sc-domain:example.com",
+    startDate: "2026-07-16",
+    endDate: "2026-08-13",
+    dimensions: ["query"] as ("query" | "page")[],
+    rowCount: 1,
+    rows: [
+      {
+        keys: ["seo tool"],
+        clicks: 120,
+        impressions: 4000,
+        ctr: 0.03,
+        position: 5.2,
+      },
+    ],
+  };
+
+  it("renders one row per result row with keys, clicks, impressions, ctr, position", () => {
+    const csv = serializeCsv(CSV_SHAPES.search_console_query, GSC_RESULT);
+    const lines = csv.split("\n");
+    expect(lines).toContain("keys,clicks,impressions,ctr,position");
+    expect(csv).toContain("seo tool");
+    expect(csv).toContain("120");
+  });
+
+  it("notes the top-level fields with no per-row column as omitted, not silently dropped", () => {
+    expect(CSV_SHAPES.search_console_query.omitted).toContain("siteUrl");
+    expect(CSV_SHAPES.search_console_query.omitted).toContain("dimensions");
+  });
+
+  it("carries an as-of/reporting-lag note when provided via `notes`", () => {
+    const csv = serializeCsv(CSV_SHAPES.search_console_query, GSC_RESULT, {
+      notes: ["Google's data is as of 2026-08-11 (2 days behind, estimated)"],
+    });
+    expect(csv).toContain("# Google's data is as of 2026-08-11");
+  });
+
+  it("carries a bound-provenance comment when rowCount is at the 250-row cap", () => {
+    const capped = { ...GSC_RESULT, rowCount: 250 };
+    const csv = serializeCsv(CSV_SHAPES.search_console_query, capped, {
+      bounds: [
+        {
+          kind: "probe_cap",
+          scope: "rowCount",
+          limitName: "maxGscRows",
+          limitValue: 250,
+          shown: 250,
+        },
+      ],
+    });
+    expect(csv).toContain(
+      "# bound: probe_cap rowCount shown=250 limit=250 (maxGscRows)",
+    );
   });
 });

@@ -403,13 +403,51 @@ export function collectLinkCheckBounds(result: {
 }
 
 /**
+ * `search_console_query`'s row-count bound — the only available signal for
+ * this tool, per `search-console-view`'s design: `rowCount` is the length
+ * of the already-truncated `rows` array, with no separate `truncated`/
+ * `linksFound` pair the way `check_links` has. Mirrors `describeProbeSet`'s
+ * exact `checked === limit` pattern, naming `maxGscRows` (250) instead of
+ * `maxLinkChecks`.
+ */
+export function describeGscRows(rowCount: number, limit: number): Cardinality {
+  if (rowCount === 0) return { state: "none" };
+  if (rowCount === limit) {
+    return {
+      state: "bounded",
+      bound: {
+        kind: "probe_cap",
+        scope: "rowCount",
+        limitName: "maxGscRows",
+        limitValue: limit,
+        shown: rowCount,
+      },
+    };
+  }
+  return { state: "complete", total: rowCount };
+}
+
+/** `search_console_query`'s single row-count bound, wrapped for `collectBounds`. */
+export function collectGscBounds(result: {
+  readonly rowCount: number;
+}): Bound[] {
+  const cardinality = describeGscRows(result.rowCount, LIMITS.maxGscRows);
+  return isBounded(cardinality) ? [cardinality.bound] : [];
+}
+
+/**
  * Single entry point `export/json.ts` and `export/csv.ts` both call for
  * provenance — `crawl_page` and `analyze_pagespeed` results carry no known
  * bound (single-page/single-analysis results, no sample-capped fields), so
  * they always return `[]`.
  */
 export function collectBounds(
-  tool: "crawl_page" | "crawl_site" | "check_links" | "analyze_pagespeed",
+  tool:
+    | "crawl_page"
+    | "crawl_site"
+    | "check_links"
+    | "analyze_pagespeed"
+    | "search_console_query",
   result: unknown,
 ): Bound[] {
   if (tool === "crawl_site") {
@@ -417,6 +455,9 @@ export function collectBounds(
   }
   if (tool === "check_links") {
     return collectLinkCheckBounds(result as { readonly checked: number });
+  }
+  if (tool === "search_console_query") {
+    return collectGscBounds(result as { readonly rowCount: number });
   }
   return [];
 }

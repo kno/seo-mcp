@@ -150,6 +150,30 @@ describe("StateRegion — error presentation", () => {
     );
     expect(screen.getByRole("status")).toHaveTextContent("45s");
   });
+
+  it("never fabricates a wait time for a quota rejection that carries no retryAfter", () => {
+    render(
+      <StateRegion
+        label="Search Console query"
+        state={{
+          phase: "error",
+          error: {
+            code: "upstream_source_quota",
+            message: "Google's own quota has been exhausted.",
+          },
+        }}
+      />,
+    );
+
+    // No countdown control at all — 0s would be a fabricated delay per
+    // `quota-visibility`'s "rate-limit error without a retry delay is
+    // handled honestly" scenario.
+    expect(screen.queryByText(/0s/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/retry available in/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      /no retry delay was provided/i,
+    );
+  });
 });
 
 describe("StateRegion — focus management on async transitions", () => {

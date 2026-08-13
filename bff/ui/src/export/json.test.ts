@@ -142,3 +142,60 @@ describe("buildJsonExport — no secret material", () => {
     expect(serializeJsonExport(exported)).not.toContain("MCP_AUTH_TOKEN");
   });
 });
+
+describe("buildJsonExport — authenticated-source freshness", () => {
+  const SOURCE_FRESHNESS = {
+    source: "search-console" as const,
+    asOf: "2026-08-11",
+    lagDays: 2,
+    basis: "assumed" as const,
+  };
+
+  it("carries sourceFreshness in provenance when supplied", () => {
+    const exported = buildJsonExport({
+      tool: "search_console_query",
+      result: { rowCount: 1 },
+      cacheStatus: "miss",
+      resultAge: 0,
+      bounds: [],
+      sourceFreshness: SOURCE_FRESHNESS,
+    });
+
+    expect(exported.provenance.sourceFreshness).toEqual(SOURCE_FRESHNESS);
+  });
+
+  it("omits sourceFreshness entirely for a non-authenticated result", () => {
+    const exported = buildJsonExport({
+      tool: "analyze_pagespeed",
+      result: PAGESPEED_RESULT,
+      cacheStatus: "miss",
+      resultAge: 0,
+      bounds: [],
+    });
+
+    expect(exported.provenance.sourceFreshness).toBeUndefined();
+    expect(Object.keys(exported.provenance)).not.toContain("sourceFreshness");
+  });
+
+  it("carries a bound-provenance marker for a capped search_console_query export", () => {
+    const exported = buildJsonExport({
+      tool: "search_console_query",
+      result: { rowCount: 250 },
+      cacheStatus: "miss",
+      resultAge: 0,
+      bounds: [
+        {
+          kind: "probe_cap",
+          scope: "rowCount",
+          limitName: "maxGscRows",
+          limitValue: 250,
+          shown: 250,
+        },
+      ],
+      sourceFreshness: SOURCE_FRESHNESS,
+    });
+
+    expect(exported.provenance.bounds).toHaveLength(1);
+    expect(exported.provenance.bounds[0]?.limitName).toBe("maxGscRows");
+  });
+});
