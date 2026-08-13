@@ -22,17 +22,27 @@
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "zod": "^4.0.0"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.12.21",
     "@cloudflare/workers-types": "^4.20250810.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.4",
     "@types/node": "^24.0.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^5.2.0",
+    "axe-core": "^4.13.0",
     "jsdom": "^25.0.0",
     "prettier": "^3.6.0",
     "typescript": "^5.9.0",
     "vite": "^7.3.0",
     "vitest": "^3.2.0",
+    "vitest-axe": "^0.1.0",
     "wrangler": "^4.36.0"
   },
   "engines": {

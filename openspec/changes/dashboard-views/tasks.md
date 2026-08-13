@@ -47,10 +47,10 @@ Chain strategy: stacked-to-main
 
 ## Phase 2: Shell (PR2)
 
-- [ ] 2.1 RED per `dashboard-shell` scenarios: unmapped-code state, retryAfter countdown, loading/empty/bound distinction, keyboard/focus, no-polling structural test.
-- [ ] 2.2 GREEN: `data/errors.ts` (`ERROR_PRESENTATION` + `presentFor`), `data/bounds.ts` types, `data/client.ts` (`UserIntent`, `requestTool`), `StateRegion`, atoms.
-- [ ] 2.3 Structural test: no `visibilitychange`/`focus`/`setInterval`/`useEffect→requestTool` under `bff/ui/src`.
-- [ ] 2.4 Manual check (documented, not automated): 360px/1440px layout, per design's jsdom-layout limitation.
+- [x] 2.1 RED per `dashboard-shell` scenarios: unmapped-code state, retryAfter countdown, loading/empty/bound distinction, keyboard/focus, no-polling structural test.
+- [x] 2.2 GREEN: `data/errors.ts` (`ERROR_PRESENTATION` + `presentFor`), `data/bounds.ts` types, `data/client.ts` (`UserIntent`, `requestTool`), `StateRegion`, atoms.
+- [x] 2.3 Structural test: no `visibilitychange`/`focus`/`setInterval`/`useEffect→requestTool` under `bff/ui/src`.
+- [x] 2.4 Manual check (documented, not automated): 360px/1440px layout, per design's jsdom-layout limitation.
 
 ## Phase 3: Page Report (PR3)
 
