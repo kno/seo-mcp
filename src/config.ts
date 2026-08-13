@@ -14,6 +14,8 @@ export interface Env {
   DB?: D1Database;
 }
 
+export const FREE_PLAN_SUBREQUEST_CEILING = 50;
+
 export const LIMITS = {
   fetchTimeoutMs: 8_000,
   maxHtmlBytes: 256_000,
@@ -29,10 +31,10 @@ export const LIMITS = {
   maxRedirects: 3,
   maxOpportunities: 10,
   maxCannibalizationGroups: 50,
-  maxLinkChecks: 50,
+  maxLinkChecks: 40,
   linkCheckConcurrency: 6,
   linkProbeTimeoutMs: 6_000,
-  linkCheckSubrequestBudget: 60,
+  linkCheckSubrequestBudget: 48,
   maxGscRows: 250,
   gscTimeoutMs: 15_000,
   googleTokenTimeoutMs: 10_000,

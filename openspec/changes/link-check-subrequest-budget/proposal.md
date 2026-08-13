@@ -106,19 +106,24 @@ Behaviour-visible to MCP clients, so rollback must be explicit:
 
 ## Dependencies
 
-None. This change is independent of `dashboard-bff-foundations` and can land in either order.
+`dashboard-bff-foundations` and `dashboard-views` are both archived
+(`openspec/specs/dashboard-bff/spec.md`, `openspec/specs/broken-links-view/spec.md`). Decision 3 below
+(resolved: add the truncation signal now) means this change amends both: `linkCheckResultSchema` grows two
+fields, so the BFF's re-validation and the UI's `BrokenLinksPanel`/`BrokenLinksContainer` both need a
+matching, coordinated update in this same change — not a follow-up.
 
-## Open Decisions (need the human)
+## Open Decisions — RESOLVED by the user (2026-08-13)
 
-Recorded rather than assumed, because `executionMode: auto` prevented asking:
-
-1. **`maxLinkChecks = 40` or `44`?** 44 is the maximum that still satisfies `4 + N ≤ 48` and buys 10% more
-   reach with zero redirect headroom beyond the page fetch. 40 is recommended for the margin.
-2. **Alias the `48` default in `src/http/fetch.ts:41` to the new named constant?** Behaviour-identical, but it
-   touches `src/http` (higher risk per project rule) for a readability gain. Recommended: no, this change.
-3. **Should a later change add a truncation signal** (`linksFound` / `truncated`) so callers can tell 40-of-200
-   from 40-of-40? Out of scope here because it changes the result shape; needs sequencing against
-   `dashboard-bff-foundations`.
+1. **`maxLinkChecks = 40` or `44`?** → **40.** Keeps the redirect-headroom margin; design.md already assumed
+   this value.
+2. **Alias the `48` default in `src/http/fetch.ts:41` to the new named constant?** → **No.** Left alone;
+   `src/http` stays untouched by this change, per the original recommendation.
+3. **Add a truncation signal (`linksFound` / `truncated`) now, or defer?** → **Now.** `linkCheckResultSchema`
+   gains `linksFound: number` (unique links found on the page, before the `maxLinkChecks` cap) and
+   `truncated: boolean` (`linksFound > checked`). This is no longer out of scope — see the new "Truncation
+   signal" section in `design.md` for the full file list (schema, `checkLinks`, BFF re-validation is
+   automatic since it re-validates against the same schema, `BrokenLinksPanel`, `broken-links-view` spec
+   amendment).
 
 ## Success Criteria
 

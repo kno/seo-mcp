@@ -16,14 +16,15 @@ The MCP endpoint is `http://localhost:8787/mcp`. Requests to other paths return 
 
 ## Tools
 
-| Tool                | Purpose                                | Important defaults                    |
-| ------------------- | -------------------------------------- | ------------------------------------- |
-| `health`            | Confirm the Worker is ready            | No input                              |
-| `crawl_page`        | Extract on-page SEO signals and issues | 256 KB response cap                   |
-| `crawl_site`        | Analyze URLs from `/sitemap.xml`       | 10 pages, max 20; concurrency max 4   |
-| `analyze_pagespeed` | Normalize PageSpeed Insights v5        | Mobile; four scores; 10 opportunities |
+| Tool                | Purpose                                                           | Important defaults                                      |
+| ------------------- | ----------------------------------------------------------------- | ------------------------------------------------------- |
+| `health`            | Confirm the Worker is ready                                       | No input                                                |
+| `crawl_page`        | Extract on-page SEO signals and issues                            | 256 KB response cap                                     |
+| `crawl_site`        | Analyze URLs from `/sitemap.xml`                                  | 10 pages, max 20; concurrency max 4                     |
+| `check_links`       | Probe a page's links for broken (4xx/5xx) and unreachable targets | 40 links max; 48-subrequest budget; 6 concurrent probes |
+| `analyze_pagespeed` | Normalize PageSpeed Insights v5                                   | Mobile; four scores; 10 opportunities                   |
 
-`crawl_site` supports a clear `urlset` or one bounded sitemap index level. It deliberately does **not** recursively check broken links.
+`crawl_site` supports a clear `urlset` or one bounded sitemap index level. It does not recursively crawl links; per-page link checking is the separate `check_links` tool.
 
 `analyze_pagespeed` requests performance, accessibility, best-practices, and SEO in one PSI v5 call. Category scores are rounded integers on a consistent 0–100 scale; lab metrics and optional field INP remain separate.
 
@@ -106,7 +107,7 @@ Exact header configuration and secure environment-variable interpolation vary by
 - Authentication uses one shared bearer token for a controlled consumer. SHA-256 digests are compared with Workers-native `crypto.subtle.timingSafeEqual`; missing crypto support, secret, or limiter binding fails closed with `503`.
 - The native `MCP_RATE_LIMITER` allows approximately 60 authenticated requests per 60 seconds for the shared `mcp:shared-v1` bucket. Cloudflare rate limits are intentionally approximate and applied per Cloudflare location, not as one globally exact counter.
 - Cloudflare Workers do not expose a portable DNS-resolution or DNS-pinning API before `fetch`. DNS rebinding therefore remains a residual SSRF risk after hostname and literal-IP filtering. High-assurance deployments should add platform egress restrictions or an explicit destination allowlist.
-- A site crawl shares a 48-subrequest budget and uses at most four concurrent page fetches, keeping explicit request/connection bounds below the Free-plan ceilings. These controls do **not** guarantee the 10 ms CPU target; real deployment telemetry is required.
+- A site crawl shares a 48-subrequest budget and uses at most four concurrent page fetches, keeping explicit request/connection bounds below the Free-plan ceilings. `check_links` enforces the same 48-subrequest budget across one page fetch plus up to 40 link probes, keeping both tools below the Cloudflare Free-plan ceiling of 50 external subrequests per invocation (`FREE_PLAN_SUBREQUEST_CEILING` in `src/config.ts`). These controls do **not** guarantee the 10 ms CPU target; real deployment telemetry is required.
 
 ## Development checks
 
@@ -123,4 +124,4 @@ This repository uses `pnpm-lock.yaml`; use `pnpm install --frozen-lockfile` for 
 
 ## Scope
 
-The MVP intentionally excludes Search Console, Google Ads, persistent crawl storage, scheduled jobs, recursive crawling, and a broken-link checker. Shared bearer authentication is appropriate for the current controlled consumer; OAuth, scopes, and per-client revocation remain a later phase. See [ROADMAP.md](ROADMAP.md) for sequencing and unresolved decisions.
+The MVP intentionally excludes Search Console, Google Ads, persistent crawl storage, scheduled jobs, and recursive crawling. Shared bearer authentication is appropriate for the current controlled consumer; OAuth, scopes, and per-client revocation remain a later phase. See [ROADMAP.md](ROADMAP.md) for sequencing and unresolved decisions.

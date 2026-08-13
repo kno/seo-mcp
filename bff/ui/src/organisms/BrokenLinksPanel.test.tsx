@@ -10,6 +10,8 @@ const RESULT: LinkCheckResult = {
   ok: 2,
   broken: 1,
   errors: 1,
+  linksFound: 4,
+  truncated: false,
   results: [
     { url: "https://example.com/a", state: "ok", status: 200 },
     { url: "https://example.com/b", state: "ok", status: 200 },
@@ -42,6 +44,8 @@ describe("BrokenLinksPanel", () => {
           ok: 12,
           broken: 0,
           errors: 0,
+          linksFound: 12,
+          truncated: false,
           results: [],
         }}
       />,
@@ -58,5 +62,47 @@ describe("BrokenLinksPanel", () => {
     expect(screen.getByTestId("badge-error")).toBeInTheDocument();
     expect(screen.getByText("404")).toBeInTheDocument();
     expect(screen.getByText("Link probe timed out")).toBeInTheDocument();
+  });
+
+  it("shows a bound indicator naming both figures when truncated is true", () => {
+    render(
+      <BrokenLinksPanel
+        result={{
+          url: "https://example.com",
+          pageStatus: 200,
+          checked: 40,
+          ok: 40,
+          broken: 0,
+          errors: 0,
+          linksFound: 127,
+          truncated: true,
+          results: [],
+        }}
+      />,
+    );
+
+    const indicator = screen.getByTestId("bound-indicator");
+    expect(indicator).toHaveTextContent("40");
+    expect(indicator).toHaveTextContent("127");
+  });
+
+  it("shows no bound indicator when truncated is false, even at the exact limit", () => {
+    render(
+      <BrokenLinksPanel
+        result={{
+          url: "https://example.com",
+          pageStatus: 200,
+          checked: 40,
+          ok: 40,
+          broken: 0,
+          errors: 0,
+          linksFound: 40,
+          truncated: false,
+          results: [],
+        }}
+      />,
+    );
+
+    expect(screen.queryByTestId("bound-indicator")).not.toBeInTheDocument();
   });
 });

@@ -11,6 +11,8 @@ const RESULT: LinkCheckResult = {
   ok: 2,
   broken: 1,
   errors: 1,
+  linksFound: 4,
+  truncated: false,
   results: [
     { url: "https://example.com/a", state: "ok", status: 200 },
     { url: "https://example.com/b", state: "ok", status: 200 },
@@ -77,18 +79,24 @@ describe("BrokenLinksContainer", () => {
     expect(screen.getByTestId("badge-error")).toBeInTheDocument();
   });
 
-  it("shows the probe-cap-at-50 bound indicator when checked hits the server's limit", async () => {
-    const boundedResult: LinkCheckResult = {
+  it("shows a bound indicator when the result is truncated", async () => {
+    const truncatedResult: LinkCheckResult = {
       url: "https://example.com",
       pageStatus: 200,
-      checked: 50,
-      ok: 50,
+      checked: 40,
+      ok: 40,
       broken: 0,
       errors: 0,
+      linksFound: 127,
+      truncated: true,
       results: [],
     };
     vi.mocked(global.fetch).mockResolvedValue(
-      jsonResponse({ data: boundedResult, cacheStatus: "miss", resultAge: 0 }),
+      jsonResponse({
+        data: truncatedResult,
+        cacheStatus: "miss",
+        resultAge: 0,
+      }),
     );
 
     const user = userEvent.setup();
@@ -96,7 +104,36 @@ describe("BrokenLinksContainer", () => {
     await user.click(screen.getByRole("button", { name: /check links/i }));
 
     const indicator = await screen.findByTestId("bound-indicator");
-    expect(indicator).toHaveTextContent("50");
+    expect(indicator).toHaveTextContent("40");
+    expect(indicator).toHaveTextContent("127");
+  });
+
+  it("shows no bound indicator when checked hits the limit but truncated is false", async () => {
+    const untruncatedResult: LinkCheckResult = {
+      url: "https://example.com",
+      pageStatus: 200,
+      checked: 40,
+      ok: 40,
+      broken: 0,
+      errors: 0,
+      linksFound: 40,
+      truncated: false,
+      results: [],
+    };
+    vi.mocked(global.fetch).mockResolvedValue(
+      jsonResponse({
+        data: untruncatedResult,
+        cacheStatus: "miss",
+        resultAge: 0,
+      }),
+    );
+
+    const user = userEvent.setup();
+    render(<BrokenLinksContainer pageUrl="https://example.com" />);
+    await user.click(screen.getByRole("button", { name: /check links/i }));
+
+    await screen.findByTestId("links-checked");
+    expect(screen.queryByTestId("bound-indicator")).not.toBeInTheDocument();
   });
 
   it("shows no bound indicator when checked is below the server's limit", async () => {

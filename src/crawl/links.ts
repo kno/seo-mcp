@@ -87,13 +87,10 @@ export async function checkLinks(
   const page = await crawlPage(pageUrl, budget.fetcher);
 
   const seen = new Set<string>();
-  const targets: string[] = [];
   for (const link of page.links) {
-    if (seen.has(link)) continue;
     seen.add(link);
-    targets.push(link);
-    if (targets.length >= LIMITS.maxLinkChecks) break;
   }
+  const targets = [...seen].slice(0, LIMITS.maxLinkChecks);
 
   const results = await mapConcurrent(
     targets,
@@ -128,5 +125,7 @@ export async function checkLinks(
     broken,
     errors,
     results,
+    linksFound: seen.size,
+    truncated: seen.size > results.length,
   };
 }

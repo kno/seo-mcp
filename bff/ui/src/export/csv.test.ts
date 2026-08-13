@@ -132,6 +132,8 @@ const LINK_CHECK_RESULT: LinkCheckResult = {
   ok: 1,
   broken: 1,
   errors: 0,
+  linksFound: 2,
+  truncated: false,
   results: [
     { url: "https://example.com/a", state: "ok", status: 200, redirects: 0 },
     {

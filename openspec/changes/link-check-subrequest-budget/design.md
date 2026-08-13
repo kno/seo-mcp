@@ -52,15 +52,50 @@ check_links(url)  budget = 48   ceiling = 50
                   maxLinkChecks x (mR+1)     = 160     -> clamped by budget at 48 < 50
 ```
 
+### Decision: truncation signal — `linksFound` + `truncated`, not a re-derived count
+
+**Choice**: `checkLinks` already builds `seen` (the deduped set of every link on the page) before
+slicing it down to `targets` (capped at `maxLinkChecks`) at `src/crawl/links.ts:95`. `linksFound` is
+`seen.size` — a value the function already computes, never a new crawl or a second pass. `truncated`
+is a derived boolean (`linksFound > checked`), not stored independently, so the two fields can never
+disagree. **Rejected**: (a) a client-side "is checked === maxLinkChecks?" inference in the UI —
+`checked` can also equal `maxLinkChecks` when the page has EXACTLY 40 links with zero truncation,
+which is indistinguishable from a truncated 40-of-200 without this field; (b) sending back the full
+untruncated URL list — defeats the point of the cap, and turns a bandwidth-bounded response into an
+unbounded one on a page with thousands of links.
+
+**Where it flows**: `src/schemas/links.ts`'s `linkCheckResultSchema` gains both fields (required, not
+optional — every `checkLinks` call computes them, there is no legacy caller to stay compatible with).
+The BFF's `bff/src/mcp-client.ts` re-validates `structuredContent` against this SAME schema
+(`VALIDATE_UPSTREAM_RESULTS`), so it picks up the new fields automatically — no BFF code change, only
+the shared schema. `openspec/specs/dashboard-bff/spec.md`'s "One JSON Route Per Tool" requirement
+already says the route returns "the tool's structured content" generically, so no BFF spec edit is
+needed either. `bff/ui/src/organisms/BrokenLinksPanel.tsx` renders the signal using the SAME
+`Bound`/`Cardinality` pattern `describeProbeSet` (`bff/ui/src/data/bounds.ts`) already established for
+`site-crawl-view`'s per-page cap — this is that same pattern's second call site, not a new one.
+`openspec/specs/broken-links-view/spec.md`'s existing "Bounded Probe Set Is Named, Not Implied
+Exhaustive" requirement is amended: today it infers truncation purely from `checked ===
+maxLinkChecks` (`describeProbeSet`, `bff/ui/src/data/bounds.ts:58-59`), which is exactly this
+decision's rejected option (a) — a real latent defect in the shipped requirement, not a hypothetical.
+The amendment replaces that inference with the two new fields and adds a scenario for the previously
+unhandled case: exactly `maxLinkChecks` links found, zero truncation.
+
 ## File Changes
 
-| File                  | Action | Description                                                                    |
-| --------------------- | ------ | ------------------------------------------------------------------------------ |
-| `src/config.ts`       | Modify | Add `FREE_PLAN_SUBREQUEST_CEILING = 50`; `60 -> 48`, `50 -> 40`                |
-| `test/config.test.ts` | Create | Regression guard on both arithmetic relations, read from the live constants    |
-| `README.md`           | Modify | `check_links` row; line 26 wording; line 109 budgets; line 126 stale exclusion |
+| File                                             | Action | Description                                                                       |
+| ------------------------------------------------ | ------ | --------------------------------------------------------------------------------- |
+| `src/config.ts`                                  | Modify | Add `FREE_PLAN_SUBREQUEST_CEILING = 50`; `60 -> 48`, `50 -> 40`                   |
+| `test/config.test.ts`                            | Create | Regression guard on both arithmetic relations, read from the live constants       |
+| `src/schemas/links.ts`                           | Modify | Add `linksFound: z.number()`, `truncated: z.boolean()` to `linkCheckResultSchema` |
+| `src/crawl/links.ts`                             | Modify | Compute `linksFound` from `seen.size`, `truncated` from `linksFound > checked`    |
+| `test/links.test.ts`                             | Modify | Cover both fields, truncated and non-truncated cases                              |
+| `bff/ui/src/organisms/BrokenLinksPanel.tsx`      | Modify | Render a bound indicator (`describeProbeSet` pattern) when `truncated`            |
+| `bff/ui/src/organisms/BrokenLinksPanel.test.tsx` | Modify | Cover the truncated / non-truncated presentation                                  |
+| `openspec/specs/broken-links-view/spec.md`       | Modify | Fix "Bounded Probe Set..." to use `linksFound`/`truncated`, not `checked===limit` |
+| `README.md`                                      | Modify | `check_links` row; line 26 wording; line 109 budgets; line 126 stale exclusion    |
 
-Not touched: `src/http/**`, `src/security/**`, `src/crawl/**`, `src/server.ts`, `wrangler.jsonc`.
+Not touched: `src/http/**`, `src/security/**`, `src/server.ts`, `wrangler.jsonc`, `bff/src/**` (the
+BFF's own code — only the shared schema it imports changes).
 
 ## README Edits (concrete)
 
@@ -101,12 +136,12 @@ Reverting restores the Free-plan defect, so it is a stopgap, not a resting state
 
 ## Open Questions
 
-- [ ] `maxLinkChecks = 40` (recommended, 4 subrequests of redirect margin) or `44` (zero margin)?
-      Design assumes `40`.
-- [ ] Alias `createFetchBudget`'s `maximum = 48` default (`src/http/fetch.ts:43`) to the named
-      constant? **Left open, and deliberately not done here.** Both real call sites pass the budget
-      explicitly — `src/crawl/links.ts:99` and `src/crawl/site.ts:274` — so the default is dead for
-      production paths and aliasing it would touch `src/http` for readability only.
+Both former open decisions on `maxLinkChecks` and the `src/http/fetch.ts` alias are RESOLVED — see
+`proposal.md`'s "Open Decisions — RESOLVED by the user" section. `maxLinkChecks = 40`; the
+`src/http/fetch.ts` default is left alone, deliberately not aliased in this change (both real call
+sites — `src/crawl/links.ts:99`, `src/crawl/site.ts:274` — pass the budget explicitly, so the default
+is dead for production paths).
+
 - [ ] Spec Requirement 6 says the `crawl_site` budget lives "in `src/config.ts`". It does not: it is
       a bare literal `48` at `src/crawl/site.ts:274`. This change keeps that byte-for-byte unchanged
       per the proposal, so README's `crawl_site` number is documented against a literal, not a

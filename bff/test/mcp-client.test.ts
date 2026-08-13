@@ -251,6 +251,8 @@ describe("callTool — platform-failure mapping (check_links)", () => {
       broken: 2,
       errors: 0,
       results: [],
+      linksFound: 12,
+      truncated: false,
     };
     const dependencies = fakeDependencies(() =>
       jsonRpcResult({ structuredContent: partial }),

@@ -67,6 +67,8 @@ const TOOL_RESULTS = {
     broken: 0,
     errors: 0,
     results: [],
+    linksFound: 1,
+    truncated: false,
   },
   analyze_pagespeed: {
     url: "https://example.com",

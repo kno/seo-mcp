@@ -16,4 +16,6 @@ export const linkCheckResultSchema = z.object({
   broken: z.number(),
   errors: z.number(),
   results: z.array(linkProbeSchema),
+  linksFound: z.number(),
+  truncated: z.boolean(),
 });

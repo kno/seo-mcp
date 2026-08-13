@@ -72,6 +72,40 @@ export function describeProbeSet(checked: number, limit: number): Cardinality {
 }
 
 /**
+ * `check_links`' truncation signal, derived directly from
+ * `LinkCheckResult.truncated`/`linksFound` rather than the `checked === limit`
+ * inference `describeProbeSet` above uses. Fixes `broken-links-view`'s
+ * amended "Bounded Probe Set Is Named, Not Implied Exhaustive" requirement's
+ * latent defect: a page with exactly `maxLinkChecks` links and zero
+ * truncation is indistinguishable from a truncated page by `checked` count
+ * alone, so this derivation reads the server's own `truncated` boolean
+ * instead — the same "derive from the actual result flags" pattern
+ * `SiteCrawlContainer`'s `describeOutputBytes` bound already establishes for
+ * its own per-page cap.
+ */
+export function describeLinkCheckProbeSet(result: {
+  readonly checked: number;
+  readonly linksFound: number;
+  readonly truncated: boolean;
+}): Cardinality {
+  if (result.checked === 0) return { state: "none" };
+  if (result.truncated) {
+    return {
+      state: "bounded",
+      bound: {
+        kind: "probe_cap",
+        scope: "checked",
+        limitName: "maxLinkChecks",
+        limitValue: result.checked,
+        shown: result.checked,
+        total: result.linksFound,
+      },
+    };
+  }
+  return { state: "complete", total: result.checked };
+}
+
+/**
  * `site-crawl-view`'s generic `{ count, sample }` category derivation —
  * shared by `DomainSummary`'s `missingH1`/`multipleH1`/`thinContent`/
  * `nonIndexable`, each `DuplicateGroup`'s own `sample` (`count` there is the

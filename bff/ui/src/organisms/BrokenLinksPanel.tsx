@@ -1,4 +1,5 @@
 import type { LinkCheckResult } from "../../../../src/types";
+import { describeLinkCheckProbeSet, isBounded } from "../data/bounds";
 import { ProbeRow } from "../molecules/ProbeRow";
 
 /**
@@ -19,10 +20,17 @@ export interface BrokenLinksPanelProps {
 
 export function BrokenLinksPanel({ result }: BrokenLinksPanelProps) {
   const problems = result.results.filter((probe) => probe.state !== "ok");
+  const cardinality = describeLinkCheckProbeSet(result);
 
   return (
     <section className="panel" aria-label="Broken links">
       <h3>Link check</h3>
+      {isBounded(cardinality) && (
+        <p className="bound-indicator" data-testid="bound-indicator">
+          Showing {cardinality.bound.shown} of {cardinality.bound.total} links
+          found ({cardinality.bound.limitName} limit).
+        </p>
+      )}
       {/* All four figures always render together, as four equally-weighted
           stat cards. The colour treatment follows the figure's own meaning
           (`ok` green, `broken` red, `errors` amber) and never suppresses a

@@ -17,8 +17,8 @@ phases:
   specs: done
   design: done
   tasks: done
-  apply: pending
-  verify: pending
+  apply: done
+  verify: done
   archive: pending
 
 notes: |
@@ -44,9 +44,15 @@ notes: |
   is absent entirely), and README.md:126 which still claims the MVP excludes a
   broken-link checker.
 
-  Three open decisions recorded for the human rather than assumed (auto mode blocked
-  asking): maxLinkChecks 40 vs 44; whether to alias the fetch.ts 48 default; whether a
-  later change adds a truncation signal to the result shape.
+  RESOLVED (2026-08-13, user decision via AskUserQuestion): maxLinkChecks = 40 (not 44);
+  do NOT alias the fetch.ts 48 default; DO add the truncation signal (linksFound/truncated)
+  now, in this change, rather than deferring. This is a scope addition versus the original
+  proposal/design -- both were updated in place (see design.md's new "Decision: truncation
+  signal" section and tasks.md's new Phase 4) rather than left stale. It touches
+  linkCheckResultSchema (src/schemas/links.ts), src/crawl/links.ts, and
+  bff/ui/src/organisms/BrokenLinksPanel.tsx, and amends the already-archived
+  broken-links-view spec with one new scenario. bff/src/** itself needs no edit -- the BFF
+  re-validates structuredContent against the same schema it already imports.
 
   Write boundary respected: only proposal.md and state.yaml in this folder were written.
   No git-mutating command, no formatter, no test run. The other actor's in-flight

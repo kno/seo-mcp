@@ -339,10 +339,12 @@ describe("collectBounds", () => {
     const result: LinkCheckResult = {
       url: "https://example.com",
       pageStatus: 200,
-      checked: 50,
-      ok: 40,
+      checked: 40,
+      ok: 30,
       broken: 5,
       errors: 5,
+      linksFound: 40,
+      truncated: false,
       results: [],
     };
     expect(collectBounds("check_links", result)).toEqual([
@@ -350,8 +352,8 @@ describe("collectBounds", () => {
         kind: "probe_cap",
         scope: "checked",
         limitName: "maxLinkChecks",
-        limitValue: 50,
-        shown: 50,
+        limitValue: 40,
+        shown: 40,
       },
     ]);
   });
@@ -364,6 +366,8 @@ describe("collectBounds", () => {
       ok: 10,
       broken: 0,
       errors: 0,
+      linksFound: 10,
+      truncated: false,
       results: [],
     };
     expect(collectBounds("check_links", result)).toEqual([]);

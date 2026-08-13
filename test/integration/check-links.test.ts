@@ -133,6 +133,53 @@ describe("checkLinks (real HTMLRewriter)", () => {
     }
   });
 
+  it("reports linksFound and truncated when the page exceeds maxLinkChecks", async () => {
+    const original = LIMITS.maxLinkChecks;
+    (LIMITS as { maxLinkChecks: number }).maxLinkChecks = 5;
+    try {
+      const anchors = Array.from(
+        { length: 20 },
+        (_, i) => `<a href="https://example.com/p${i}">p${i}</a>`,
+      ).join("");
+      const page = html(anchors);
+      const fetcher = vi.fn<typeof fetch>(async (input) => {
+        const url = new URL(input.toString());
+        if (url.hostname === "example.com" && url.pathname === "/")
+          return new Response(page, {
+            headers: { "content-type": "text/html" },
+          });
+        return new Response("x", { status: 200 });
+      });
+
+      const result = await checkLinks("https://example.com", fetcher);
+      expect(result.checked).toBe(5);
+      expect(result.linksFound).toBe(20);
+      expect(result.truncated).toBe(true);
+    } finally {
+      (LIMITS as { maxLinkChecks: number }).maxLinkChecks = original;
+    }
+  });
+
+  it("reports truncated: false and linksFound === checked when under the limit", async () => {
+    const page = html(`
+      <a href="https://example.com/a">a</a>
+      <a href="https://example.com/b">b</a>
+    `);
+    const fetcher = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(input.toString());
+      if (url.hostname === "example.com" && url.pathname === "/")
+        return new Response(page, {
+          headers: { "content-type": "text/html" },
+        });
+      return new Response("x", { status: 200 });
+    });
+
+    const result = await checkLinks("https://example.com", fetcher);
+    expect(result.checked).toBe(2);
+    expect(result.linksFound).toBe(2);
+    expect(result.truncated).toBe(false);
+  });
+
   it("propagates a bad page url as a thrown error", async () => {
     const fetcher = vi.fn<typeof fetch>();
     await expect(

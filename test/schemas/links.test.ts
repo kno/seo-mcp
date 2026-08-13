@@ -48,6 +48,8 @@ describe("linkCheckResultSchema", () => {
       ok: 1,
       broken: 1,
       errors: 1,
+      linksFound: 3,
+      truncated: false,
       results: [
         {
           url: "https://example.com/a",

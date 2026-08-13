@@ -293,6 +293,8 @@ describe("router — check_links input validation", () => {
           broken: 0,
           errors: 0,
           results: [],
+          linksFound: 1,
+          truncated: false,
         }),
       } as unknown as Fetcher,
     });
