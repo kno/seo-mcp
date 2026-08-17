@@ -8,6 +8,8 @@ import { KeywordResearchContainer } from "../containers/KeywordResearchContainer
 import { SeoIntelligenceContainer } from "../containers/SeoIntelligenceContainer";
 import { HistoryContainer } from "../containers/HistoryContainer";
 import { LoginContainer } from "../containers/LoginContainer";
+import { ManageDomainsContainer } from "../containers/ManageDomainsContainer";
+import { SiteProvider, useSiteContext } from "./SiteContext";
 
 /**
  * Root shell: header, title, primary navigation, and a minimal hash router.
@@ -79,9 +81,55 @@ const NAV_ITEMS = [
       "Search Console and crawl snapshot history and comparison — captured manually or (for Search Console only, when configured) on a schedule. Snapshots accumulate without limit; nothing here expires automatically.",
     View: HistoryContainer,
   },
+  {
+    href: "#manage-domains",
+    label: "Manage domains",
+    description:
+      "Add or remove the domains this dashboard remembers, and pick the one every other view defaults to.",
+    View: ManageDomainsContainer,
+  },
 ] as const;
 
+/** The domain selector pinned above the primary nav — bound to
+ * `SiteContext`'s `activeSite`/`setActiveSite`, populated from `sites`. */
+function DomainSelector() {
+  const { sites, activeSite, setActiveSite } = useSiteContext();
+
+  if (sites.length === 0) {
+    return (
+      <p className="empty-state" data-testid="domain-selector-empty">
+        No domains yet — <a href="#manage-domains">add one</a>.
+      </p>
+    );
+  }
+
+  return (
+    <div className="field">
+      <label htmlFor="domain-selector">Domain</label>
+      <select
+        id="domain-selector"
+        value={activeSite ?? ""}
+        onChange={(event) => setActiveSite(event.currentTarget.value || null)}
+      >
+        {sites.map((site) => (
+          <option key={site.id} value={site.url}>
+            {site.label ? `${site.label} (${site.url})` : site.url}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export function App() {
+  return (
+    <SiteProvider>
+      <AppShell />
+    </SiteProvider>
+  );
+}
+
+function AppShell() {
   const [hash, setHash] = useState(() => window.location.hash);
 
   useEffect(() => {
@@ -132,6 +180,11 @@ export function App() {
             <p className="brand-subtitle">Site intelligence</p>
           </div>
         </div>
+
+        <section className="domain-panel" aria-label="Domain">
+          <p className="domain-panel-label">Domain</p>
+          <DomainSelector />
+        </section>
 
         <nav aria-label="Primary">
           <p className="nav-label">Views</p>

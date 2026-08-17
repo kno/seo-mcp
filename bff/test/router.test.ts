@@ -556,3 +556,85 @@ describe("router — delete_search_console_snapshot / delete_crawl_snapshot (man
     });
   }
 });
+
+describe("router — list_sites / add_site / delete_site (domain-management)", () => {
+  it("dispatches a GET list_sites request and never caches the response", async () => {
+    const env = fakeEnv({
+      SEO_MCP: {
+        fetch: stubToolFetch({ count: 0, sites: [] }),
+      } as unknown as Fetcher,
+    });
+    const request = await authenticatedRequest(env, "/api/tools/list_sites");
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(200);
+    expect(env.SEO_MCP.fetch).toHaveBeenCalledOnce();
+    const body = (await response.clone().json()) as { cacheStatus: string };
+    expect(body.cacheStatus).toBe("bypass");
+  });
+
+  it("dispatches a GET add_site request with url and optional label, and never caches the response", async () => {
+    const env = fakeEnv({
+      SEO_MCP: {
+        fetch: stubToolFetch({
+          added: true,
+          site: {
+            id: 1,
+            url: "https://example.com",
+            label: "Main",
+            createdAt: "2026-01-01T00:00:00.000Z",
+          },
+        }),
+      } as unknown as Fetcher,
+    });
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/add_site?url=https%3A%2F%2Fexample.com&label=Main",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(200);
+    expect(env.SEO_MCP.fetch).toHaveBeenCalledOnce();
+    const body = (await response.clone().json()) as { cacheStatus: string };
+    expect(body.cacheStatus).toBe("bypass");
+  });
+
+  it("rejects a GET request to delete_site rather than silently accepting it", async () => {
+    const env = fakeEnv();
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/delete_site?siteId=7&confirm=true",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(404);
+    expect(env.SEO_MCP.fetch).not.toHaveBeenCalled();
+  });
+
+  it("rejects confirm: false over POST to delete_site before any D1/upstream call", async () => {
+    const env = fakeEnv();
+    const request = await authenticatedRequest(env, "/api/tools/delete_site", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ siteId: 7, confirm: false }),
+    });
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(400);
+    expect(env.SEO_MCP.fetch).not.toHaveBeenCalled();
+  });
+
+  it("dispatches a confirmed POST to delete_site and never caches the response", async () => {
+    const env = fakeEnv({
+      SEO_MCP: {
+        fetch: stubToolFetch({ siteId: 7, deleted: true }),
+      } as unknown as Fetcher,
+    });
+    const request = await authenticatedRequest(env, "/api/tools/delete_site", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ siteId: 7, confirm: true }),
+    });
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(200);
+    expect(env.SEO_MCP.fetch).toHaveBeenCalledOnce();
+    const body = (await response.clone().json()) as { cacheStatus: string };
+    expect(body.cacheStatus).toBe("bypass");
+  });
+});

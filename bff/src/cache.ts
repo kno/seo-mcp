@@ -149,6 +149,13 @@ export const CACHE_TTL_SECONDS: Record<ToolName, number> = {
   // exhaustiveness.
   delete_search_console_snapshot: MIN_TTL_SECONDS,
   delete_crawl_snapshot: MIN_TTL_SECONDS,
+  // Domain-management follow-up: `isCacheable` always returns `false` for
+  // all three, so `dispatch()` never reads these — present only for this
+  // `Record<ToolName, number>`'s exhaustiveness, same as the delete-snapshot
+  // tools above.
+  list_sites: MIN_TTL_SECONDS,
+  add_site: MIN_TTL_SECONDS,
+  delete_site: MIN_TTL_SECONDS,
 };
 
 export function clampTtlSeconds(seconds: number): number {
@@ -265,6 +272,13 @@ export async function cacheKey(
  * cache entirely (rather than building a fragile per-limit invalidation
  * mechanism) is the simpler and more correct fix. Every other route's
  * inputs are cache-key-safe per design.
+ *
+ * `list_sites`/`add_site`/`delete_site` (domain-management follow-up) get
+ * the same treatment: `list_sites` is a cheap D1 read with no external
+ * cost, and caching it would let a stale list mask an `add_site`/
+ * `delete_site` mutation exactly like `list_crawl_snapshots` above; both
+ * mutations are excluded for the same "never cache a mutation" reason
+ * `delete_search_console_snapshot`/`delete_crawl_snapshot` already get.
  */
 export function isCacheable(
   tool: ToolName,
@@ -274,7 +288,10 @@ export function isCacheable(
     tool === "delete_search_console_snapshot" ||
     tool === "delete_crawl_snapshot" ||
     tool === "list_search_console_snapshots" ||
-    tool === "list_crawl_snapshots"
+    tool === "list_crawl_snapshots" ||
+    tool === "list_sites" ||
+    tool === "add_site" ||
+    tool === "delete_site"
   ) {
     return false;
   }

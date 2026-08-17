@@ -11,6 +11,7 @@ import { JsonLdPanel } from "../organisms/JsonLdPanel";
 import { IssuesList } from "../organisms/IssuesList";
 import { BrokenLinksContainer } from "./BrokenLinksContainer";
 import { takePendingDrillDown } from "../app/navigation";
+import { useActiveSite } from "../app/SiteContext";
 
 /**
  * Container for `page-report-view`. Owns the `crawl_page` request lifecycle
@@ -42,8 +43,9 @@ export function PageReportContainer() {
   const [state, setState] = useState<RegionState | null>(null);
   const [analysis, setAnalysis] = useState<PageAnalysis | null>(null);
   const [pageUrl, setPageUrl] = useState<string | null>(null);
+  const activeSite = useActiveSite();
   const [initialUrl] = useState(
-    () => takePendingDrillDown("page-report") ?? "",
+    () => takePendingDrillDown("page-report") ?? activeSite ?? "",
   );
   const controllerRef = useRef<AbortController | null>(null);
   const requestIdRef = useRef(0);

@@ -20,6 +20,7 @@ import { SnapshotListPanel } from "../organisms/SnapshotListPanel";
 import { SnapshotDiffPanel } from "../organisms/SnapshotDiffPanel";
 import { CrawlSnapshotListPanel } from "../organisms/CrawlSnapshotListPanel";
 import { CrawlDiffPanel } from "../organisms/CrawlDiffPanel";
+import { useActiveSite } from "../app/SiteContext";
 
 /**
  * `history-comparison-view` (PR11) — the two sub-families (GSC-snapshot
@@ -76,7 +77,8 @@ type OrdinaryResult<T> = OrdinaryResponse<T> | { readonly error: BffError };
 /** GSC-snapshot history section — reuses `list_search_console_snapshots`/
  * `compare_search_console` (authenticated) and PR6's own panels. */
 function GscHistorySection() {
-  const [siteUrl, setSiteUrl] = useState("");
+  const activeSite = useActiveSite();
+  const [siteUrl, setSiteUrl] = useState(() => activeSite ?? "");
   const [label, setLabel] = useState("");
   const [captureState, setCaptureState] = useState<RegionState | null>(null);
   const [captureInFlight, setCaptureInFlight] = useState(false);
@@ -393,7 +395,8 @@ function GscHistorySection() {
  * `list_crawl_snapshots`/`compare_crawls` (NOT authenticated, see this
  * file's doc comment) and the sibling crawl organisms above. */
 function CrawlHistorySection() {
-  const [url, setUrl] = useState("");
+  const activeSite = useActiveSite();
+  const [url, setUrl] = useState(() => activeSite ?? "");
   const [label, setLabel] = useState("");
   const [captureState, setCaptureState] = useState<RegionState | null>(null);
   const [captureInFlight, setCaptureInFlight] = useState(false);

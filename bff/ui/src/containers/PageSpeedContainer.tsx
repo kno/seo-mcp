@@ -10,6 +10,7 @@ import { ScorePanel } from "../organisms/ScorePanel";
 import { LabMetricsPanel } from "../organisms/LabMetricsPanel";
 import { FieldDataPanel } from "../organisms/FieldDataPanel";
 import { OpportunitiesTable } from "../organisms/OpportunitiesTable";
+import { useActiveSite } from "../app/SiteContext";
 
 /**
  * Container for `pagespeed-view`. Follows the same `{ controller, requestId
@@ -27,6 +28,7 @@ import { OpportunitiesTable } from "../organisms/OpportunitiesTable";
  * for the same URL is never served from a cache keyed by the first key.
  */
 export function PageSpeedContainer() {
+  const activeSite = useActiveSite();
   const [state, setState] = useState<RegionState | null>(null);
   const [result, setResult] = useState<PageSpeedResult | null>(null);
   const [inFlight, setInFlight] = useState(false);
@@ -75,7 +77,11 @@ export function PageSpeedContainer() {
 
   return (
     <div className="view-stack">
-      <PageSpeedForm onSubmit={handleSubmit} disabled={inFlight} />
+      <PageSpeedForm
+        onSubmit={handleSubmit}
+        disabled={inFlight}
+        defaultUrl={activeSite ?? undefined}
+      />
 
       {state && (
         <StateRegion label="PageSpeed analysis" state={state}>

@@ -25,6 +25,7 @@ import { CannibalizationPanel } from "../organisms/CannibalizationPanel";
 import { PageKeywordsPanel } from "../organisms/PageKeywordsPanel";
 import { ContentGapsPanel } from "../organisms/ContentGapsPanel";
 import { DomainReportPanel } from "../organisms/DomainReportPanel";
+import { useActiveSite } from "../app/SiteContext";
 
 /**
  * Container for `seo-intelligence-view` (PR10) — five tools
@@ -589,7 +590,8 @@ function ContentGapsTab({
 }
 
 function DomainReportTab() {
-  const [url, setUrl] = useState("");
+  const activeSite = useActiveSite();
+  const [url, setUrl] = useState(() => activeSite ?? "");
   const [gscProperty, setGscProperty] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -731,7 +733,8 @@ function DomainReportTab() {
 }
 
 export function SeoIntelligenceContainer() {
-  const [siteUrl, setSiteUrl] = useState("");
+  const activeSite = useActiveSite();
+  const [siteUrl, setSiteUrl] = useState(() => activeSite ?? "");
   const [startDate, setStartDate] = useState(() =>
     toDateOnly(subtractDays(new Date(), DEFAULT_RANGE_DAYS)),
   );

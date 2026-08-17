@@ -19,6 +19,7 @@ import { LIMITS } from "../../../../src/config";
 import { describeGscRows, collectBounds } from "../data/bounds";
 import { buildJsonExport, serializeJsonExport } from "../export/json";
 import { CSV_SHAPES, serializeCsv } from "../export/csv";
+import { useActiveSite } from "../app/SiteContext";
 
 /**
  * Container for `search-console-view`. Follows the same
@@ -39,6 +40,7 @@ interface AuthenticatedGscResponse {
 }
 
 export function SearchConsoleContainer() {
+  const activeSite = useActiveSite();
   const [state, setState] = useState<RegionState | null>(null);
   const [result, setResult] = useState<GscQueryResult | null>(null);
   const [envelope, setEnvelope] = useState<{
@@ -124,6 +126,7 @@ export function SearchConsoleContainer() {
       <SearchConsoleForm
         onSubmit={handleSubmit}
         disabled={inFlight || quotaExhausted}
+        defaultSiteUrl={activeSite ?? undefined}
       />
 
       {state && (

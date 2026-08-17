@@ -33,9 +33,18 @@ export interface PageSpeedFormProps {
     input: PageSpeedFormInput,
   ) => void;
   readonly disabled: boolean;
+  /** Domain-management follow-up's smarter default (`SiteContext`'s
+   * `activeSite`) — seeds the uncontrolled URL input's `defaultValue`
+   * once, at mount. The user can still freely edit it afterward, exactly
+   * like every other field in this uncontrolled form. */
+  readonly defaultUrl?: string;
 }
 
-export function PageSpeedForm({ onSubmit, disabled }: PageSpeedFormProps) {
+export function PageSpeedForm({
+  onSubmit,
+  disabled,
+  defaultUrl,
+}: PageSpeedFormProps) {
   const urlRef = useRef<HTMLInputElement>(null);
   const strategyRef = useRef<HTMLSelectElement>(null);
   const apiKeyRef = useRef<HTMLInputElement>(null);
@@ -79,6 +88,7 @@ export function PageSpeedForm({ onSubmit, disabled }: PageSpeedFormProps) {
             name="url"
             type="url"
             placeholder="https://example.com/page"
+            defaultValue={defaultUrl}
             ref={urlRef}
           />
         </div>

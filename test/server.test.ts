@@ -39,6 +39,9 @@ describe("buildServer tool registration", () => {
     "cluster_keywords",
     "delete_search_console_snapshot",
     "delete_crawl_snapshot",
+    "list_sites",
+    "add_site",
+    "delete_site",
   ])("declares an outputSchema for the in-scope tool %s", (name) => {
     expect(registeredTool(name).outputSchema).toBeDefined();
   });

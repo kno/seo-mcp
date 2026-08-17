@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fetchUsage, requestTool, userIntent } from "./client";
+import { fetchSites, fetchUsage, requestTool, userIntent } from "./client";
 import { SecretCell } from "./secret";
 
 describe("userIntent", () => {
@@ -241,5 +241,56 @@ describe("fetchUsage", () => {
       signal: undefined,
     });
     expect(result).toEqual(snapshot);
+  });
+});
+
+describe("fetchSites", () => {
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    global.fetch = vi.fn();
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
+  it("issues a plain GET request to /api/tools/list_sites, without a UserIntent, since it never spends Google quota", async () => {
+    const payload = {
+      data: {
+        count: 1,
+        sites: [
+          {
+            id: 1,
+            url: "https://example.com",
+            label: null,
+            createdAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      },
+      cacheStatus: "bypass",
+      resultAge: 0,
+    };
+    vi.mocked(global.fetch).mockResolvedValue({
+      json: () => Promise.resolve(payload),
+    } as Response);
+
+    const result = await fetchSites();
+
+    expect(global.fetch).toHaveBeenCalledWith("/api/tools/list_sites", {
+      method: "GET",
+      signal: undefined,
+    });
+    expect(result).toEqual(payload);
+  });
+
+  it("degrades a network-level failure to a normalized error instead of throwing", async () => {
+    vi.mocked(global.fetch).mockRejectedValue(new TypeError("fetch failed"));
+
+    const result = await fetchSites();
+
+    expect(result).toEqual({
+      error: { code: "upstream_unavailable", message: "Network error" },
+    });
   });
 });

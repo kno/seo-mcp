@@ -115,7 +115,10 @@ export type ToolName =
   | "list_crawl_snapshots"
   | "compare_crawls"
   | "delete_search_console_snapshot"
-  | "delete_crawl_snapshot";
+  | "delete_crawl_snapshot"
+  | "list_sites"
+  | "add_site"
+  | "delete_site";
 
 export const TOOL_TIMEOUT_MS: Record<ToolName, number> = {
   health: 5000,
@@ -142,6 +145,13 @@ export const TOOL_TIMEOUT_MS: Record<ToolName, number> = {
   compare_crawls: 10_000,
   delete_search_console_snapshot: 10_000,
   delete_crawl_snapshot: 10_000,
+  // Domain-management follow-up: pure D1 reads/writes over the tiny `sites`
+  // table, no Google call and no crawl in their path — 10s is generous,
+  // mirroring `list_crawl_snapshots`/`delete_crawl_snapshot`'s identical
+  // reasoning.
+  list_sites: 10_000,
+  add_site: 10_000,
+  delete_site: 10_000,
 };
 
 export type TimeoutResult<T> =

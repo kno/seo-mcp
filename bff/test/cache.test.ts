@@ -132,6 +132,14 @@ describe("isCacheable", () => {
       isCacheable("list_crawl_snapshots", { url: "https://example.com" }),
     ).toBe(false);
   });
+
+  it("is NEVER cacheable for list_sites, add_site, or delete_site — a mutation must never be masked by a stale cached list, and these are cheap D1 reads/writes with no external cost a cache would meaningfully protect", () => {
+    expect(isCacheable("list_sites", {})).toBe(false);
+    expect(isCacheable("add_site", { url: "https://example.com" })).toBe(false);
+    expect(isCacheable("delete_site", { siteId: 7, confirm: true })).toBe(
+      false,
+    );
+  });
 });
 
 describe("clampTtlSeconds", () => {

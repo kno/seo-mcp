@@ -16,6 +16,7 @@
 import type { BffError, BffOk } from "../../../src/errors";
 import type { ToolName } from "../../../src/timeout";
 import type { UsageSnapshot } from "../../../src/usage";
+import type { ListSitesResult } from "../../../../src/types";
 import type { SecretCell } from "./secret";
 
 declare const brand: unique symbol;
@@ -149,4 +150,35 @@ export async function requestTool<T>(
 export async function fetchUsage(signal?: AbortSignal): Promise<UsageSnapshot> {
   const response = await fetch("/api/usage", { method: "GET", signal });
   return (await response.json()) as UsageSnapshot;
+}
+
+/**
+ * Domain-management follow-up's read source for `SiteContext`. Deliberately
+ * bypasses `requestTool`'s `UserIntent` gate — the same exception
+ * `fetchUsage` above already establishes — because `list_sites` spends no
+ * Google quota and makes no external call (a cheap local D1 read, per
+ * `bff/src/cache.ts#isCacheable`'s own doc comment); `SiteContext` calls
+ * this once on mount, not on a timer, so the "no polling" invariant
+ * (`no-polling.test.ts`) is unaffected: that invariant is specifically about
+ * `requestTool()` being called from a `useEffect` body, not about mount-time
+ * fetching in general.
+ */
+export async function fetchSites(
+  signal?: AbortSignal,
+): Promise<BffOk<ListSitesResult> | { error: BffError }> {
+  try {
+    const response = await fetch("/api/tools/list_sites", {
+      method: "GET",
+      signal,
+    });
+    return (await response.json()) as
+      BffOk<ListSitesResult> | { error: BffError };
+  } catch {
+    // A network-level failure (offline, unreachable BFF) must degrade to
+    // the same normalized error shape `SiteContext` already branches on,
+    // never an unhandled rejection from a mount-time fetch.
+    return {
+      error: { code: "upstream_unavailable", message: "Network error" },
+    };
+  }
 }

@@ -18,6 +18,7 @@ import { OpenGraphPanel } from "../organisms/OpenGraphPanel";
 import { JsonLdPanel } from "../organisms/JsonLdPanel";
 import { IssuesList } from "../organisms/IssuesList";
 import { takePendingDrillDown } from "../app/navigation";
+import { useActiveSite } from "../app/SiteContext";
 
 /**
  * Container for `site-crawl-view`. Follows `PageReportContainer`'s and
@@ -45,7 +46,10 @@ export function SiteCrawlContainer() {
   const [inFlight, setInFlight] = useState(false);
   // `seo-intelligence-view`'s (PR10) drill-down (task 10.11) — consumed
   // exactly once, at mount; see `CrawlFormProps.initialUrl`'s doc comment.
-  const [initialUrl] = useState(() => takePendingDrillDown("site-crawl") ?? "");
+  const activeSite = useActiveSite();
+  const [initialUrl] = useState(
+    () => takePendingDrillDown("site-crawl") ?? activeSite ?? "",
+  );
   const controllerRef = useRef<AbortController | null>(null);
   const requestIdRef = useRef(0);
 

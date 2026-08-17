@@ -44,7 +44,9 @@
  * or an omitted `confirm` fails validation and is rejected with
  * `invalid_input` before `dispatch()` — and therefore before any D1 call —
  * ever runs. Neither route is cacheable (`cache.ts#isCacheable`) — a
- * mutation's response must never be served stale.
+ * mutation's response must never be served stale. `POST
+ * /api/tools/delete_site` (domain-management follow-up) is a THIRD,
+ * identical POST-ONLY deviation, for the same reason.
  *
  * `handleRequest`'s optional third parameter, `ctx` (the Worker's
  * `ExecutionContext`), exists solely so `dispatchAuthenticated()` can fire
@@ -89,6 +91,11 @@ import {
   deleteCrawlSnapshotResultSchema,
 } from "../../src/schemas/crawl-snapshots";
 import { deleteSearchConsoleSnapshotResultSchema } from "../../src/schemas/gsc-snapshots";
+import {
+  listSitesResultSchema,
+  addSiteResultSchema,
+  deleteSiteResultSchema,
+} from "../../src/schemas/sites";
 import { getAuthenticatedRoute } from "./authenticated/registry";
 import {
   GSC_REPORTING_LAG_DAYS,
@@ -162,6 +169,26 @@ const deleteSearchConsoleSnapshotInputSchema = z.object({
 
 const deleteCrawlSnapshotInputSchema = z.object({
   snapshotId: z.number().int().positive(),
+  confirm: z.literal(true),
+});
+
+// Domain-management follow-up. Mirrors `src/mcp-tools/sites.ts`'s
+// `list_sites`/`add_site`/`delete_site` inputSchemas. `list_sites`/
+// `add_site` stay GET (a duplicate `add_site` is a safe no-op, undoable via
+// `delete_site` — the same "safe/idempotent-ish" reasoning
+// `snapshot_crawl`/`snapshot_search_console` already get GET for). Only
+// `delete_site` is POST-only, with `confirm` narrowed to `z.literal(true)`
+// for the same reason `deleteSearchConsoleSnapshotInputSchema` narrows it —
+// see this file's top-of-file doc comment.
+const listSitesInputSchema = z.object({});
+
+const addSiteInputSchema = z.object({
+  url: z.string().min(1),
+  label: z.string().min(1).optional(),
+});
+
+const deleteSiteInputSchema = z.object({
+  siteId: z.number().int().positive(),
   confirm: z.literal(true),
 });
 
@@ -842,6 +869,23 @@ export async function handleRequest(
     );
   }
 
+  // Domain-management follow-up. POST-only, JSON body — a THIRD deliberate
+  // GET-deviation, mirroring `delete_search_console_snapshot`/
+  // `delete_crawl_snapshot` exactly (see this file's top-of-file doc
+  // comment for the full irreversibility/GET-safety reasoning).
+  if (request.method === "POST" && url.pathname === "/api/tools/delete_site") {
+    const parsed = await parseBody(request, deleteSiteInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatch(
+      request,
+      url,
+      env,
+      "delete_site",
+      parsed.data,
+      deleteSiteResultSchema,
+    );
+  }
+
   if (request.method !== "GET") {
     return new Response("Not found", { status: 404 });
   }
@@ -1142,6 +1186,32 @@ export async function handleRequest(
       parsed.data,
       compareCrawlsResultSchema,
       classifyStorageFailure,
+    );
+  }
+
+  if (url.pathname === "/api/tools/list_sites") {
+    const parsed = parseQuery(url, listSitesInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatch(
+      request,
+      url,
+      env,
+      "list_sites",
+      parsed.data,
+      listSitesResultSchema,
+    );
+  }
+
+  if (url.pathname === "/api/tools/add_site") {
+    const parsed = parseQuery(url, addSiteInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatch(
+      request,
+      url,
+      env,
+      "add_site",
+      parsed.data,
+      addSiteResultSchema,
     );
   }
 

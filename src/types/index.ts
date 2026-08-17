@@ -82,3 +82,12 @@ export type { PageQuery, PageKeywords, ContentGap } from "../seo/keyword-pages";
 // `z.infer<typeof domainReportSchema>` — the exact same type — so this
 // re-export is identical, not a duplicate.
 export type { DomainSearch, DomainReport } from "../schemas/domain-report";
+// `Site` is published from the schema module rather than
+// `src/db/site-store.ts`, for the identical reason `StoredSnapshot`/
+// `StoredCrawlSnapshot` are above.
+export type {
+  Site,
+  ListSitesResult,
+  AddSiteResult,
+  DeleteSiteResult,
+} from "../schemas/sites";

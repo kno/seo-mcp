@@ -24,6 +24,7 @@ import { OpportunityResultPanel } from "../organisms/OpportunityResultPanel";
 import { SnapshotListPanel } from "../organisms/SnapshotListPanel";
 import { SnapshotDiffPanel } from "../organisms/SnapshotDiffPanel";
 import { describeOpportunityBound } from "../data/bounds";
+import { useActiveSite } from "../app/SiteContext";
 
 /**
  * Container for `gsc-insight-views` — five tools across three sub-tools
@@ -449,7 +450,8 @@ function SnapshotsTab({
 }
 
 export function GscInsightsContainer() {
-  const [siteUrl, setSiteUrl] = useState("");
+  const activeSite = useActiveSite();
+  const [siteUrl, setSiteUrl] = useState(() => activeSite ?? "");
   const [startDate, setStartDate] = useState(() =>
     toDateOnly(subtractDays(new Date(), DEFAULT_RANGE_DAYS)),
   );

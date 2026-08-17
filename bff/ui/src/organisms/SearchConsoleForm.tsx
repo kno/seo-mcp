@@ -52,6 +52,10 @@ export interface SearchConsoleFormProps {
   /** Injectable clock for deterministic default-range tests; defaults to
    * `Date.now`-backed `new Date()`. */
   readonly now?: () => Date;
+  /** Domain-management follow-up's smarter default (`SiteContext`'s
+   * `activeSite`) — seeds `siteUrl`'s `useState` initializer once, at
+   * mount. The user can still freely edit it afterward. */
+  readonly defaultSiteUrl?: string;
 }
 
 function toDateOnly(date: Date): string {
@@ -68,8 +72,9 @@ export function SearchConsoleForm({
   onSubmit,
   disabled,
   now = () => new Date(),
+  defaultSiteUrl,
 }: SearchConsoleFormProps) {
-  const [siteUrl, setSiteUrl] = useState("");
+  const [siteUrl, setSiteUrl] = useState(() => defaultSiteUrl ?? "");
   const [startDate, setStartDate] = useState(() =>
     toDateOnly(subtractDays(now(), DEFAULT_RANGE_DAYS)),
   );
