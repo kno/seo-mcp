@@ -179,3 +179,21 @@ export function useActiveSite(): string | null {
   const ctx = useContext(SiteContext);
   return ctx?.activeSite ?? null;
 }
+
+/**
+ * Non-throwing read of `refreshSites`, for `LoginContainer`. `SiteProvider`'s
+ * `list_sites` fetch always fires on mount — before the user has had a
+ * chance to submit the login form — so it is a 401 (`gate_unauthorized`)
+ * every single time on a fresh session, and nothing was re-triggering it
+ * after a successful login: the domain selector and Manage domains view
+ * stayed stuck on that stale 401 until a full page reload. `LoginContainer`
+ * calls this on a successful sign-in to recover without one. Same
+ * degrade-gracefully rationale as `useActiveSite` above: `LoginContainer`'s
+ * own test file renders it standalone, without a `SiteProvider`.
+ */
+export function useSitesRefresher(): () => void {
+  const ctx = useContext(SiteContext);
+  return () => {
+    void ctx?.refreshSites();
+  };
+}

@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import type { FormEvent } from "react";
+import { useSitesRefresher } from "../app/SiteContext";
 
 type LoginStatus =
   | { readonly phase: "idle" }
@@ -22,6 +23,7 @@ export function LoginContainer() {
   const [secret, setSecret] = useState("");
   const [status, setStatus] = useState<LoginStatus>({ phase: "idle" });
   const fieldId = useId();
+  const refreshSites = useSitesRefresher();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -45,6 +47,7 @@ export function LoginContainer() {
     if (response.status === 204) {
       setSecret("");
       setStatus({ phase: "success" });
+      refreshSites();
       return;
     }
 
