@@ -1,9 +1,11 @@
 import { useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, MouseEvent } from "react";
 import type { BffError } from "../../../src/errors";
 import type {
   CompareCrawlsResult,
   CompareSearchConsoleResult,
+  DeleteCrawlSnapshotResult,
+  DeleteSearchConsoleSnapshotResult,
   ListCrawlSnapshotsResult,
   ListSearchConsoleSnapshotsResult,
   StoredCrawlSnapshot,
@@ -199,6 +201,43 @@ function GscHistorySection() {
     });
   }
 
+  /**
+   * Manual-snapshot-deletion follow-up. Called on the panel's SECOND
+   * (confirmed) click. On success, removes the row from `snapshots` by
+   * LOCAL splice (never an automatic re-fetch — see
+   * `SnapshotListPanel`'s own doc comment for why the panel itself never
+   * triggers a request); if the deleted id was one of the two selected for
+   * an in-progress or just-shown comparison, that selection/comparison is
+   * cleared too, rather than silently keeping a diff that references a
+   * snapshot which no longer exists.
+   */
+  async function handleDelete(
+    event: MouseEvent<HTMLButtonElement>,
+    id: number,
+  ) {
+    const intent = userIntent(event);
+    const response = (await requestTool<DeleteSearchConsoleSnapshotResult>(
+      "delete_search_console_snapshot",
+      { snapshotId: id, confirm: true },
+      intent,
+      { signal: new AbortController().signal, postJson: true },
+    )) as unknown as OrdinaryResult<DeleteSearchConsoleSnapshotResult>;
+
+    if ("error" in response || !response.data.deleted) return;
+
+    setSnapshots((prev) => prev?.filter((s) => s.id !== id) ?? prev);
+    if (baseSnapshotId === id) setBaseSnapshotId(null);
+    if (currentSnapshotId === id) setCurrentSnapshotId(null);
+    if (
+      compareResult &&
+      (compareResult.baseSnapshotId === id ||
+        compareResult.currentSnapshotId === id)
+    ) {
+      setCompareResult(null);
+      setCompareState(null);
+    }
+  }
+
   const knownSnapshotCount = snapshots?.length ?? null;
   const needsOnboarding = knownSnapshotCount !== null && knownSnapshotCount < 2;
 
@@ -300,6 +339,7 @@ function GscHistorySection() {
             currentSnapshotId={currentSnapshotId}
             onSelectBase={setBaseSnapshotId}
             onSelectCurrent={setCurrentSnapshotId}
+            onDelete={handleDelete}
           />
 
           {needsOnboarding ? (
@@ -465,6 +505,36 @@ function CrawlHistorySection() {
     });
   }
 
+  /** Mirrors `GscHistorySection#handleDelete` exactly — see that function's
+   * own doc comment for the full reasoning (local splice, no auto-refetch,
+   * and clearing a stale comparison/selection). */
+  async function handleDelete(
+    event: MouseEvent<HTMLButtonElement>,
+    id: number,
+  ) {
+    const intent = userIntent(event);
+    const response = (await requestTool<DeleteCrawlSnapshotResult>(
+      "delete_crawl_snapshot",
+      { snapshotId: id, confirm: true },
+      intent,
+      { signal: new AbortController().signal, postJson: true },
+    )) as unknown as OrdinaryResult<DeleteCrawlSnapshotResult>;
+
+    if ("error" in response || !response.data.deleted) return;
+
+    setSnapshots((prev) => prev?.filter((s) => s.id !== id) ?? prev);
+    if (baseSnapshotId === id) setBaseSnapshotId(null);
+    if (currentSnapshotId === id) setCurrentSnapshotId(null);
+    if (
+      compareResult &&
+      (compareResult.baseSnapshotId === id ||
+        compareResult.currentSnapshotId === id)
+    ) {
+      setCompareResult(null);
+      setCompareState(null);
+    }
+  }
+
   const knownSnapshotCount = snapshots?.length ?? null;
   const needsOnboarding = knownSnapshotCount !== null && knownSnapshotCount < 2;
 
@@ -563,6 +633,7 @@ function CrawlHistorySection() {
             currentSnapshotId={currentSnapshotId}
             onSelectBase={setBaseSnapshotId}
             onSelectCurrent={setCurrentSnapshotId}
+            onDelete={handleDelete}
           />
 
           {needsOnboarding ? (

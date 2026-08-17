@@ -79,6 +79,16 @@
  *   also diffs), no crawl and no Google call in their own path — 10s is
  *   generous, mirroring `list_search_console_snapshots`/
  *   `compare_search_console`'s identical reasoning.
+ *
+ * Manual-snapshot-deletion follow-up adds two more tools, both routed
+ * through the ordinary, NON-authenticated `dispatch()` path (no Google
+ * credential, no Google quota — a pure D1 mutation, exactly like
+ * `snapshot_crawl`'s own reasoning above) but reached via a dedicated POST
+ * route in `router.ts` rather than the usual GET + query-string transport
+ * (see that route's own doc comment for why): `delete_search_console_snapshot`
+ * / `delete_crawl_snapshot`. 10s is generous for a single-row D1 DELETE,
+ * mirroring `list_search_console_snapshots`/`list_crawl_snapshots`'s own
+ * D1-only reasoning.
  */
 
 export type ToolName =
@@ -103,7 +113,9 @@ export type ToolName =
   | "analyze_domain"
   | "snapshot_crawl"
   | "list_crawl_snapshots"
-  | "compare_crawls";
+  | "compare_crawls"
+  | "delete_search_console_snapshot"
+  | "delete_crawl_snapshot";
 
 export const TOOL_TIMEOUT_MS: Record<ToolName, number> = {
   health: 5000,
@@ -128,6 +140,8 @@ export const TOOL_TIMEOUT_MS: Record<ToolName, number> = {
   snapshot_crawl: 56_000,
   list_crawl_snapshots: 10_000,
   compare_crawls: 10_000,
+  delete_search_console_snapshot: 10_000,
+  delete_crawl_snapshot: 10_000,
 };
 
 export type TimeoutResult<T> =

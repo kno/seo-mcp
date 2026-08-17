@@ -116,6 +116,27 @@ export async function getSnapshotRows(
   }));
 }
 
+/**
+ * Deletes a stored Search Console snapshot by id. `gsc_rows.snapshot_id`
+ * carries `ON DELETE CASCADE` (`migrations/0001_gsc_snapshots.sql`), so
+ * deleting the parent row is sufficient — D1/SQLite removes the child rows
+ * itself, no manual cleanup needed here.
+ *
+ * Returns whether a row was ACTUALLY deleted (`result.meta.changes > 0`),
+ * so the caller can distinguish "deleted" from "no such snapshot id" rather
+ * than reporting success either way.
+ */
+export async function deleteGscSnapshot(
+  db: D1Database,
+  snapshotId: number,
+): Promise<boolean> {
+  const result = await db
+    .prepare("DELETE FROM gsc_snapshots WHERE id = ?")
+    .bind(snapshotId)
+    .run();
+  return result.meta.changes > 0;
+}
+
 export async function twoMostRecent(
   db: D1Database,
   siteUrl: string,

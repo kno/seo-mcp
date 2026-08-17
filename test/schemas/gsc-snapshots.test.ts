@@ -4,6 +4,7 @@ import {
   gscMetricsSchema,
   gscDiffRowSchema,
   gscDiffSchema,
+  deleteSearchConsoleSnapshotResultSchema,
 } from "../../src/schemas/gsc-snapshots";
 
 function metrics(overrides: Partial<Record<string, unknown>> = {}) {
@@ -171,5 +172,27 @@ describe("gscDiffSchema", () => {
       // gained omitted
     };
     expect(() => gscDiffSchema.parse(fixture)).toThrow();
+  });
+});
+
+describe("deleteSearchConsoleSnapshotResultSchema", () => {
+  it("accepts a successful deletion result", () => {
+    const fixture = { snapshotId: 7, deleted: true };
+    expect(deleteSearchConsoleSnapshotResultSchema.parse(fixture)).toEqual(
+      fixture,
+    );
+  });
+
+  it("accepts a no-op deletion result (id did not exist)", () => {
+    const fixture = { snapshotId: 999, deleted: false };
+    expect(deleteSearchConsoleSnapshotResultSchema.parse(fixture)).toEqual(
+      fixture,
+    );
+  });
+
+  it("rejects a payload missing deleted", () => {
+    expect(() =>
+      deleteSearchConsoleSnapshotResultSchema.parse({ snapshotId: 7 }),
+    ).toThrow();
   });
 });

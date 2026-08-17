@@ -26,6 +26,8 @@ describe("TOOL_TIMEOUT_MS", () => {
       snapshot_crawl: 56000,
       list_crawl_snapshots: 10000,
       compare_crawls: 10000,
+      delete_search_console_snapshot: 10000,
+      delete_crawl_snapshot: 10000,
     });
   });
 

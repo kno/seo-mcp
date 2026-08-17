@@ -107,6 +107,25 @@ export async function getCrawlSnapshotPages(
   }));
 }
 
+/**
+ * Deletes a stored crawl snapshot by id. `crawl_snapshot_pages.snapshot_id`
+ * carries `ON DELETE CASCADE` (`migrations/0002_crawl_snapshots.sql`), so
+ * deleting the parent row is sufficient — no manual child-row cleanup
+ * needed here. Mirrors `gsc-store.ts#deleteGscSnapshot` exactly, including
+ * the `result.meta.changes > 0` check that distinguishes "deleted" from
+ * "no such snapshot id".
+ */
+export async function deleteCrawlSnapshot(
+  db: D1Database,
+  snapshotId: number,
+): Promise<boolean> {
+  const result = await db
+    .prepare("DELETE FROM crawl_snapshots WHERE id = ?")
+    .bind(snapshotId)
+    .run();
+  return result.meta.changes > 0;
+}
+
 export async function twoMostRecentCrawls(
   db: D1Database,
   url: string,

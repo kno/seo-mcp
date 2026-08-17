@@ -25,6 +25,27 @@
  * fails the request — it degrades to a direct upstream call and reports
  * `cacheStatus: "unavailable"`.
  *
+ * Manual-snapshot-deletion follow-up: `POST /api/tools/delete_search_console_snapshot`
+ * and `POST /api/tools/delete_crawl_snapshot` are a SECOND, deliberate
+ * deviation from the GET convention — unlike `analyze_pagespeed`'s reason
+ * (a secret input), this one is about the HTTP method's own safety
+ * semantics. Deletion is irreversible, and a GET request can be triggered
+ * unintentionally (link prefetching, browser history navigation, crawlers)
+ * in a way a POST cannot — GET is conventionally treated as safe/
+ * idempotent-to-retry by browsers and infrastructure, so an accidental GET
+ * to a delete endpoint is a real risk a POST does not share. Both routes
+ * are POST-ONLY: a GET to either path is rejected as 404 by the same
+ * `request.method !== "GET"` early-return below, never silently accepted
+ * the way `snapshot_search_console`/`snapshot_crawl` accept GET for their
+ * own (safe, re-crawlable) writes. The request body carries
+ * `{ snapshotId, confirm: true }` as JSON — the same transport shape
+ * `analyze_pagespeed`'s POST path already uses via `parseBody`. `confirm`
+ * is typed as `z.literal(true)` in each input schema, so `confirm: false`
+ * or an omitted `confirm` fails validation and is rejected with
+ * `invalid_input` before `dispatch()` — and therefore before any D1 call —
+ * ever runs. Neither route is cacheable (`cache.ts#isCacheable`) — a
+ * mutation's response must never be served stale.
+ *
  * `handleRequest`'s optional third parameter, `ctx` (the Worker's
  * `ExecutionContext`), exists solely so `dispatchAuthenticated()` can fire
  * its upstream-quota-ledger increment via `ctx.waitUntil` — fire-and-
@@ -65,7 +86,9 @@ import {
   snapshotCrawlResultSchema,
   listCrawlSnapshotsResultSchema,
   compareCrawlsResultSchema,
+  deleteCrawlSnapshotResultSchema,
 } from "../../src/schemas/crawl-snapshots";
+import { deleteSearchConsoleSnapshotResultSchema } from "../../src/schemas/gsc-snapshots";
 import { getAuthenticatedRoute } from "./authenticated/registry";
 import {
   GSC_REPORTING_LAG_DAYS,
@@ -121,6 +144,25 @@ const compareCrawlsInputSchema = z.object({
   url: z.url(),
   baseSnapshotId: z.coerce.number().int().positive().optional(),
   currentSnapshotId: z.coerce.number().int().positive().optional(),
+});
+
+// Manual-snapshot-deletion follow-up. Mirrors `src/server.ts`'s
+// `delete_search_console_snapshot`/`delete_crawl_snapshot` inputSchemas
+// exactly, EXCEPT `confirm` is narrowed to `z.literal(true)` rather than
+// `z.boolean()`: this route's transport is a POST JSON body (see this
+// file's top-of-file doc comment), so — unlike a GET route's coerced
+// query-string fields — there is no reason to accept `confirm: false` or
+// omit it only to re-check it deeper in the pipeline. Narrowing here means
+// `parseBody` itself rejects an unconfirmed request as `invalid_input`
+// before `dispatch()` — and therefore before any D1 call — ever runs.
+const deleteSearchConsoleSnapshotInputSchema = z.object({
+  snapshotId: z.number().int().positive(),
+  confirm: z.literal(true),
+});
+
+const deleteCrawlSnapshotInputSchema = z.object({
+  snapshotId: z.number().int().positive(),
+  confirm: z.literal(true),
 });
 
 const analyzePagespeedInputSchema = z.object({
@@ -625,6 +667,34 @@ async function dispatchAuthenticated(
     return callUpstream();
   };
 
+  // `list_search_console_snapshots` (and, via the ordinary `dispatch()`
+  // path, `list_crawl_snapshots`) are never cached — see `isCacheable`'s
+  // doc comment. Unlike `dispatch()`, this function had no `isCacheable`
+  // check at all until this fix: every authenticated route unconditionally
+  // read/wrote the cache, so a `delete_*_snapshot` mutation could leave a
+  // now-stale list result served as a "hit" for up to that route's own TTL.
+  // `sourceFreshness`/`quota`/`currencyLabel` are unaffected — the response
+  // still carries them, only the `cacheStatus` and its underlying KV
+  // read/write are skipped.
+  if (!isCacheable(toolName, args)) {
+    const result = await trackedCallUpstream();
+    const sourceFreshness = deriveSourceFreshness(
+      route.source,
+      route.freshnessDate(args, result.ok ? result.data : undefined),
+      undefined,
+      lagDays,
+    );
+    return authenticatedToolResponse(
+      result,
+      "bypass",
+      0,
+      sourceFreshness,
+      await readQuotaEstimate(),
+      currencyLabel,
+      criteria,
+    );
+  }
+
   if (!shouldBypassCacheRead(request, url)) {
     const cached = await getCached(env.RESULT_CACHE, key);
     if (cached.status === "hit") {
@@ -727,6 +797,48 @@ export async function handleRequest(
       "analyze_pagespeed",
       parsed.data,
       pageSpeedResultSchema,
+    );
+  }
+
+  // Manual-snapshot-deletion follow-up. POST-only, JSON body — see this
+  // file's top-of-file doc comment for the full irreversibility/GET-safety
+  // reasoning. `classifyStorageFailure` mirrors `snapshot_crawl`/
+  // `list_crawl_snapshots`/`compare_crawls`'s own precedent so a
+  // D1-not-configured failure still renders as its own distinct state.
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/tools/delete_search_console_snapshot"
+  ) {
+    const parsed = await parseBody(
+      request,
+      deleteSearchConsoleSnapshotInputSchema,
+    );
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatch(
+      request,
+      url,
+      env,
+      "delete_search_console_snapshot",
+      parsed.data,
+      deleteSearchConsoleSnapshotResultSchema,
+      classifyStorageFailure,
+    );
+  }
+
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/tools/delete_crawl_snapshot"
+  ) {
+    const parsed = await parseBody(request, deleteCrawlSnapshotInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatch(
+      request,
+      url,
+      env,
+      "delete_crawl_snapshot",
+      parsed.data,
+      deleteCrawlSnapshotResultSchema,
+      classifyStorageFailure,
     );
   }
 

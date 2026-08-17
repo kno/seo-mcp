@@ -45,6 +45,7 @@ export type {
   SnapshotSearchConsoleResult,
   ListSearchConsoleSnapshotsResult,
   CompareSearchConsoleResult,
+  DeleteSearchConsoleSnapshotResult,
 } from "../schemas/gsc-snapshots";
 export type { CrawlPageIssueChange, CrawlDiff } from "../seo/crawl-diff";
 // `StoredCrawlSnapshot` is published from the schema module rather than
@@ -57,6 +58,7 @@ export type {
   SnapshotCrawlResult,
   ListCrawlSnapshotsResult,
   CompareCrawlsResult,
+  DeleteCrawlSnapshotResult,
 } from "../schemas/crawl-snapshots";
 export type { KeywordMetric, KeywordMetricsResult } from "../google/ads";
 export type {

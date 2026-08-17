@@ -32,6 +32,7 @@ export {
   snapshotSearchConsoleResultSchema,
   listSearchConsoleSnapshotsResultSchema,
   compareSearchConsoleResultSchema,
+  deleteSearchConsoleSnapshotResultSchema,
 } from "../schemas/gsc-snapshots";
 export {
   crawlPageIssueChangeSchema,
@@ -40,6 +41,7 @@ export {
   snapshotCrawlResultSchema,
   listCrawlSnapshotsResultSchema,
   compareCrawlsResultSchema,
+  deleteCrawlSnapshotResultSchema,
 } from "../schemas/crawl-snapshots";
 export {
   keywordMetricSchema,

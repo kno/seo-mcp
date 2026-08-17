@@ -75,3 +75,12 @@ export const compareSearchConsoleResultSchema = z.object({
 export type CompareSearchConsoleResult = z.infer<
   typeof compareSearchConsoleResultSchema
 >;
+
+export const deleteSearchConsoleSnapshotResultSchema = z.object({
+  // OBJECT ROOT — required by the SDK
+  snapshotId: z.number().int(),
+  deleted: z.boolean(),
+});
+export type DeleteSearchConsoleSnapshotResult = z.infer<
+  typeof deleteSearchConsoleSnapshotResultSchema
+>;

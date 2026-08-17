@@ -5,6 +5,7 @@ import {
   listCrawlSnapshots,
   getCrawlSnapshotPages,
   twoMostRecentCrawls,
+  deleteCrawlSnapshot,
 } from "../../src/db/crawl-store";
 import { LIMITS } from "../../src/config";
 import type { SiteCrawlResult, SitePageAnalysis } from "../../src/crawl/site";
@@ -181,6 +182,33 @@ describe("crawl-store (real D1 via Miniflare)", () => {
       site: site([{ url: "https://none.com/a" }]),
     });
     expect(await twoMostRecentCrawls(DB, "https://none.com")).toBeNull();
+  });
+
+  it("deleteCrawlSnapshot removes an existing snapshot and cascades its pages", async () => {
+    const { snapshotId } = await storeCrawlSnapshot(DB, {
+      url: "https://example.com",
+      capturedAt: "2026-08-01T00:00:00.000Z",
+      site: site([{ url: "https://example.com/a", codes: ["X"] }]),
+    });
+
+    const deleted = await deleteCrawlSnapshot(DB, snapshotId);
+    expect(deleted).toBe(true);
+
+    const remaining = await listCrawlSnapshots(DB, "https://example.com");
+    expect(remaining).toHaveLength(0);
+
+    // Prove the ON DELETE CASCADE actually fired, not just trust the
+    // migration file — query the child table directly.
+    const { results: childPages } = await DB.prepare(
+      "SELECT * FROM crawl_snapshot_pages WHERE snapshot_id = ?",
+    )
+      .bind(snapshotId)
+      .all();
+    expect(childPages).toHaveLength(0);
+  });
+
+  it("deleteCrawlSnapshot returns false for a non-existent id", async () => {
+    expect(await deleteCrawlSnapshot(DB, 999999)).toBe(false);
   });
 
   it("caps stored pages at LIMITS.maxCrawlSnapshotPages", async () => {

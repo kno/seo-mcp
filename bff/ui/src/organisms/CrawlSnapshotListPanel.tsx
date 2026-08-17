@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import type { MouseEvent } from "react";
 import type { StoredCrawlSnapshot } from "../../../../src/types";
 
 /**
@@ -15,6 +17,15 @@ import type { StoredCrawlSnapshot } from "../../../../src/types";
  * `topLinkedPages` — no charting library, per design.md's "Charting
  * Primitives" decision) layered `aria-hidden` alongside the numeric
  * cells, which remain the accessible source of truth.
+ *
+ * Deletion (manual-snapshot-deletion follow-up): a two-click confirm
+ * pattern (copied verbatim from `SnapshotListPanel` — see that component's
+ * own doc comment for the full reasoning). First click on a row's "Delete"
+ * button arms it ("Confirm delete?"); a second click on the SAME armed row
+ * calls `onDelete(event, snapshot.id)` and disarms; clicking a DIFFERENT
+ * row's button re-arms that row instead, disarming the previous one; the
+ * armed state resets to `null` whenever the `snapshots` array reference
+ * changes.
  */
 export interface CrawlSnapshotListPanelProps {
   readonly snapshots: readonly StoredCrawlSnapshot[];
@@ -22,6 +33,7 @@ export interface CrawlSnapshotListPanelProps {
   readonly currentSnapshotId: number | null;
   readonly onSelectBase: (id: number) => void;
   readonly onSelectCurrent: (id: number) => void;
+  readonly onDelete: (event: MouseEvent<HTMLButtonElement>, id: number) => void;
 }
 
 function CrawledFailedBar({
@@ -60,7 +72,23 @@ export function CrawlSnapshotListPanel({
   currentSnapshotId,
   onSelectBase,
   onSelectCurrent,
+  onDelete,
 }: CrawlSnapshotListPanelProps) {
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+
+  useEffect(() => {
+    setPendingDeleteId(null);
+  }, [snapshots]);
+
+  function handleDeleteClick(event: MouseEvent<HTMLButtonElement>, id: number) {
+    if (pendingDeleteId === id) {
+      setPendingDeleteId(null);
+      onDelete(event, id);
+    } else {
+      setPendingDeleteId(id);
+    }
+  }
+
   if (snapshots.length === 0) {
     return (
       <p className="empty-state" data-testid="crawl-snapshot-list-empty">
@@ -80,6 +108,7 @@ export function CrawlSnapshotListPanel({
             <th scope="col">Crawled / failed</th>
             <th scope="col">Base</th>
             <th scope="col">Current</th>
+            <th scope="col">Delete</th>
           </tr>
         </thead>
         <tbody>
@@ -116,6 +145,22 @@ export function CrawlSnapshotListPanel({
                   checked={currentSnapshotId === snapshot.id}
                   onChange={() => onSelectCurrent(snapshot.id)}
                 />
+              </td>
+              <td>
+                <button
+                  type="button"
+                  className={
+                    pendingDeleteId === snapshot.id
+                      ? "btn-primary"
+                      : "btn-ghost"
+                  }
+                  aria-label={`Delete crawl snapshot #${snapshot.id}`}
+                  onClick={(event) => handleDeleteClick(event, snapshot.id)}
+                >
+                  {pendingDeleteId === snapshot.id
+                    ? "Confirm delete?"
+                    : "Delete"}
+                </button>
               </td>
             </tr>
           ))}

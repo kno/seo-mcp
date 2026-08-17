@@ -36,12 +36,14 @@ import {
   listSnapshots,
   getSnapshotRows,
   twoMostRecent,
+  deleteGscSnapshot,
 } from "./db/gsc-store";
 import {
   storeCrawlSnapshot,
   listCrawlSnapshots,
   getCrawlSnapshotPages,
   twoMostRecentCrawls,
+  deleteCrawlSnapshot,
 } from "./db/crawl-store";
 import { healthSchema } from "./schemas/health";
 import { pageAnalysisSchema } from "./schemas/page";
@@ -54,11 +56,13 @@ import {
   snapshotSearchConsoleResultSchema,
   listSearchConsoleSnapshotsResultSchema,
   compareSearchConsoleResultSchema,
+  deleteSearchConsoleSnapshotResultSchema,
 } from "./schemas/gsc-snapshots";
 import {
   snapshotCrawlResultSchema,
   listCrawlSnapshotsResultSchema,
   compareCrawlsResultSchema,
+  deleteCrawlSnapshotResultSchema,
 } from "./schemas/crawl-snapshots";
 import {
   keywordMetricsResultSchema,
@@ -123,6 +127,20 @@ const errorResult = (error: unknown) => ({
   ],
   isError: true,
 });
+
+// Deletion-specific confirm gate — mirrors `src/google/business.ts`'s
+// `assertConfirmed`/`REFUSE_WRITE` shape exactly (same "throw unless
+// confirm===true" contract), with a delete-specific message since deleting
+// a snapshot is a distinct, irreversible action from a Business Profile
+// write.
+const REFUSE_DELETE =
+  "Refusing to delete: pass confirm=true to execute this deletion";
+
+function assertConfirmedDelete(confirm: boolean): void {
+  if (confirm !== true) {
+    throw new Error(REFUSE_DELETE);
+  }
+}
 
 export function buildServer(env: Env): McpServer {
   const server = new McpServer(
@@ -725,6 +743,33 @@ export function buildServer(env: Env): McpServer {
   );
 
   server.registerTool(
+    "delete_search_console_snapshot",
+    {
+      description:
+        "Delete a stored Search Console snapshot from D1. Irreversible — requires confirm=true. Closes a known gap: snapshots otherwise accumulate indefinitely with no cleanup mechanism.",
+      inputSchema: z.object({
+        snapshotId: z.number().int().positive(),
+        confirm: z.boolean(),
+      }),
+      outputSchema: deleteSearchConsoleSnapshotResultSchema,
+    },
+    async ({ snapshotId, confirm }) => {
+      if (!env.DB)
+        return errorResult(new Error("D1 storage is not configured"));
+      try {
+        assertConfirmedDelete(confirm);
+        const deleted = await deleteGscSnapshot(env.DB, snapshotId);
+        return jsonResult(deleteSearchConsoleSnapshotResultSchema, {
+          snapshotId,
+          deleted,
+        });
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.registerTool(
     "snapshot_crawl",
     {
       description:
@@ -827,6 +872,33 @@ export function buildServer(env: Env): McpServer {
           baseSnapshotId: baseId,
           currentSnapshotId: currentId,
           diff,
+        });
+      } catch (e) {
+        return errorResult(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    "delete_crawl_snapshot",
+    {
+      description:
+        "Delete a stored crawl snapshot from D1. Irreversible — requires confirm=true. Mirrors delete_search_console_snapshot for the crawl-snapshot family.",
+      inputSchema: z.object({
+        snapshotId: z.number().int().positive(),
+        confirm: z.boolean(),
+      }),
+      outputSchema: deleteCrawlSnapshotResultSchema,
+    },
+    async ({ snapshotId, confirm }) => {
+      if (!env.DB)
+        return errorResult(new Error("D1 storage is not configured"));
+      try {
+        assertConfirmedDelete(confirm);
+        const deleted = await deleteCrawlSnapshot(env.DB, snapshotId);
+        return jsonResult(deleteCrawlSnapshotResultSchema, {
+          snapshotId,
+          deleted,
         });
       } catch (e) {
         return errorResult(e);

@@ -60,6 +60,18 @@ export interface RequestToolOptions {
    * never appears in any thrown error, log, or the resolved value.
    */
   readonly secrets?: Readonly<Record<string, SecretCell>>;
+  /**
+   * Forces `POST` with `input` as a plain JSON body, with none of
+   * `opts.secrets`'s cell-consuming machinery — for a route that requires
+   * POST for a reason OTHER than a secret input.
+   * `delete_search_console_snapshot`/`delete_crawl_snapshot`
+   * (manual-snapshot-deletion) are the only current callers: their BFF
+   * route is POST-only because deletion is irreversible and a GET request
+   * can be triggered unintentionally (`bff/src/router.ts`'s doc comment),
+   * not because any field here is secret. Mutually exclusive with
+   * `opts.secrets` in practice — no current caller supplies both.
+   */
+  readonly postJson?: boolean;
 }
 
 /**
@@ -89,6 +101,16 @@ export async function requestTool<T>(
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
+      signal: opts.signal,
+    });
+    return (await response.json()) as BffOk<T> | { error: BffError };
+  }
+
+  if (opts.postJson) {
+    const response = await fetch(`/api/tools/${tool}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
       signal: opts.signal,
     });
     return (await response.json()) as BffOk<T> | { error: BffError };

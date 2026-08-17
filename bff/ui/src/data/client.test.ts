@@ -173,6 +173,42 @@ describe("requestTool", () => {
     const requestUrl = String(vi.mocked(global.fetch).mock.calls[0]?.[0]);
     expect(requestUrl).not.toContain("apiKey");
   });
+
+  it("issues a POST with input as a plain JSON body when opts.postJson is true", async () => {
+    const mockResponse = {
+      json: () =>
+        Promise.resolve({
+          data: { snapshotId: 7, deleted: true },
+          cacheStatus: "bypass",
+          resultAge: 0,
+        }),
+    };
+    vi.mocked(global.fetch).mockResolvedValue(mockResponse as Response);
+
+    const intent = userIntent({ type: "click" });
+    const controller = new AbortController();
+    const result = await requestTool(
+      "delete_search_console_snapshot",
+      { snapshotId: 7, confirm: true },
+      intent,
+      { signal: controller.signal, postJson: true },
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/tools/delete_search_console_snapshot",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ snapshotId: 7, confirm: true }),
+        signal: controller.signal,
+      },
+    );
+    expect(result).toEqual({
+      data: { snapshotId: 7, deleted: true },
+      cacheStatus: "bypass",
+      resultAge: 0,
+    });
+  });
 });
 
 describe("fetchUsage", () => {

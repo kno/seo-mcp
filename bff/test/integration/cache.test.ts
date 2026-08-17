@@ -157,4 +157,38 @@ describe("BFF result cache (integration, real KV)", () => {
     );
     expect(response.status).toBe(400);
   });
+
+  it("never caches list_search_console_snapshots (a deleted snapshot must never keep appearing in a stale cached list until its TTL elapses)", async () => {
+    const before = await stubCallCount();
+    const path =
+      "/api/tools/list_search_console_snapshots?siteUrl=https%3A%2F%2Fcache-never.example";
+
+    const first = await SELF.fetch(await authenticatedRequest(path));
+    const firstBody = (await first.json()) as { cacheStatus: string };
+    expect(firstBody.cacheStatus).toBe("bypass");
+    expect(await stubCallCount()).toBe(before + 1);
+
+    const second = await SELF.fetch(await authenticatedRequest(path));
+    const secondBody = (await second.json()) as { cacheStatus: string };
+    expect(secondBody.cacheStatus).toBe("bypass");
+    // A second identical request must reach the stub again -- proof it was
+    // never written to the cache, not just that this call skipped reading it.
+    expect(await stubCallCount()).toBe(before + 2);
+  });
+
+  it("never caches list_crawl_snapshots, for the same reason", async () => {
+    const before = await stubCallCount();
+    const path =
+      "/api/tools/list_crawl_snapshots?url=https%3A%2F%2Fcache-never-crawl.example";
+
+    const first = await SELF.fetch(await authenticatedRequest(path));
+    const firstBody = (await first.json()) as { cacheStatus: string };
+    expect(firstBody.cacheStatus).toBe("bypass");
+    expect(await stubCallCount()).toBe(before + 1);
+
+    const second = await SELF.fetch(await authenticatedRequest(path));
+    const secondBody = (await second.json()) as { cacheStatus: string };
+    expect(secondBody.cacheStatus).toBe("bypass");
+    expect(await stubCallCount()).toBe(before + 2);
+  });
 });

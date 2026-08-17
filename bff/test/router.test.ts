@@ -496,3 +496,63 @@ describe("router — cluster_keywords input validation (keyword-research-view, P
     expect(body.quota).toBeUndefined();
   });
 });
+
+describe("router — delete_search_console_snapshot / delete_crawl_snapshot (manual-snapshot-deletion)", () => {
+  for (const path of [
+    "/api/tools/delete_search_console_snapshot",
+    "/api/tools/delete_crawl_snapshot",
+  ]) {
+    it(`rejects a GET request to ${path} rather than silently accepting it`, async () => {
+      const env = fakeEnv();
+      const request = await authenticatedRequest(
+        env,
+        `${path}?snapshotId=7&confirm=true`,
+      );
+      const response = await handleRequest(request, env);
+      expect(response.status).toBe(404);
+      expect(env.SEO_MCP.fetch).not.toHaveBeenCalled();
+    });
+
+    it(`rejects confirm: false over POST to ${path} before any D1/upstream call`, async () => {
+      const env = fakeEnv();
+      const request = await authenticatedRequest(env, path, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ snapshotId: 7, confirm: false }),
+      });
+      const response = await handleRequest(request, env);
+      expect(response.status).toBe(400);
+      expect(env.SEO_MCP.fetch).not.toHaveBeenCalled();
+    });
+
+    it(`rejects an omitted confirm over POST to ${path} before any D1/upstream call`, async () => {
+      const env = fakeEnv();
+      const request = await authenticatedRequest(env, path, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ snapshotId: 7 }),
+      });
+      const response = await handleRequest(request, env);
+      expect(response.status).toBe(400);
+      expect(env.SEO_MCP.fetch).not.toHaveBeenCalled();
+    });
+
+    it(`dispatches a confirmed POST to ${path} and never caches the response`, async () => {
+      const env = fakeEnv({
+        SEO_MCP: {
+          fetch: stubToolFetch({ snapshotId: 7, deleted: true }),
+        } as unknown as Fetcher,
+      });
+      const request = await authenticatedRequest(env, path, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ snapshotId: 7, confirm: true }),
+      });
+      const response = await handleRequest(request, env);
+      expect(response.status).toBe(200);
+      expect(env.SEO_MCP.fetch).toHaveBeenCalledOnce();
+      const body = (await response.clone().json()) as { cacheStatus: string };
+      expect(body.cacheStatus).toBe("bypass");
+    });
+  }
+});

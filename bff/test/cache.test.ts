@@ -109,6 +109,29 @@ describe("isCacheable", () => {
       }),
     ).toBe(false);
   });
+
+  it("is NEVER cacheable for delete_search_console_snapshot or delete_crawl_snapshot, regardless of input", () => {
+    expect(
+      isCacheable("delete_search_console_snapshot", {
+        snapshotId: 7,
+        confirm: true,
+      }),
+    ).toBe(false);
+    expect(
+      isCacheable("delete_crawl_snapshot", { snapshotId: 7, confirm: true }),
+    ).toBe(false);
+  });
+
+  it("is NEVER cacheable for list_search_console_snapshots or list_crawl_snapshots — a delete for the same site must never be masked by a stale cached list until its TTL (6h/1h) elapses, and these are cheap D1 reads with no external cost a cache would meaningfully protect", () => {
+    expect(
+      isCacheable("list_search_console_snapshots", {
+        siteUrl: "https://example.com",
+      }),
+    ).toBe(false);
+    expect(
+      isCacheable("list_crawl_snapshots", { url: "https://example.com" }),
+    ).toBe(false);
+  });
 });
 
 describe("clampTtlSeconds", () => {

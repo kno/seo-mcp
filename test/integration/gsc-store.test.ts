@@ -5,6 +5,7 @@ import {
   listSnapshots,
   getSnapshotRows,
   twoMostRecent,
+  deleteGscSnapshot,
 } from "../../src/db/gsc-store";
 import { LIMITS } from "../../src/config";
 import type { GscRow } from "../../src/google/search-console";
@@ -186,6 +187,35 @@ describe("gsc-store (real D1 via Miniflare)", () => {
       rows: [],
     });
     expect(await twoMostRecent(DB, "sc-domain:none.com")).toBeNull();
+  });
+
+  it("deleteGscSnapshot removes an existing snapshot and cascades its rows", async () => {
+    const { snapshotId } = await storeGscSnapshot(DB, {
+      siteUrl: "sc-domain:example.com",
+      startDate: "2026-07-01",
+      endDate: "2026-07-31",
+      capturedAt: "2026-08-01T00:00:00.000Z",
+      rows: [row("shoes", "/p1", 100, 1000, 3)],
+    });
+
+    const deleted = await deleteGscSnapshot(DB, snapshotId);
+    expect(deleted).toBe(true);
+
+    const remaining = await listSnapshots(DB, "sc-domain:example.com");
+    expect(remaining).toHaveLength(0);
+
+    // Prove the ON DELETE CASCADE actually fired, not just trust the
+    // migration file — query the child table directly.
+    const { results: childRows } = await DB.prepare(
+      "SELECT * FROM gsc_rows WHERE snapshot_id = ?",
+    )
+      .bind(snapshotId)
+      .all();
+    expect(childRows).toHaveLength(0);
+  });
+
+  it("deleteGscSnapshot returns false for a non-existent id", async () => {
+    expect(await deleteGscSnapshot(DB, 999999)).toBe(false);
   });
 
   it("caps stored rows at LIMITS.maxSnapshotRows", async () => {

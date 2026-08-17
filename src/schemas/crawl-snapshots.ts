@@ -100,3 +100,12 @@ export const compareCrawlsResultSchema = z.object({
   diff: crawlDiffSchema,
 });
 export type CompareCrawlsResult = z.infer<typeof compareCrawlsResultSchema>;
+
+export const deleteCrawlSnapshotResultSchema = z.object({
+  // OBJECT ROOT — required by the SDK
+  snapshotId: z.number().int(),
+  deleted: z.boolean(),
+});
+export type DeleteCrawlSnapshotResult = z.infer<
+  typeof deleteCrawlSnapshotResultSchema
+>;

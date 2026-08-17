@@ -3,6 +3,7 @@ import {
   storedCrawlSnapshotSchema,
   crawlPageIssueChangeSchema,
   crawlDiffSchema,
+  deleteCrawlSnapshotResultSchema,
 } from "../../src/schemas/crawl-snapshots";
 
 describe("storedCrawlSnapshotSchema", () => {
@@ -95,5 +96,23 @@ describe("crawlDiffSchema", () => {
     const parsed = crawlDiffSchema.parse(fixture);
     expect(parsed.newPages).toEqual(["https://example.com/new"]);
     expect(parsed.newIssues).toEqual([]);
+  });
+});
+
+describe("deleteCrawlSnapshotResultSchema", () => {
+  it("accepts a successful deletion result", () => {
+    const fixture = { snapshotId: 3, deleted: true };
+    expect(deleteCrawlSnapshotResultSchema.parse(fixture)).toEqual(fixture);
+  });
+
+  it("accepts a no-op deletion result (id did not exist)", () => {
+    const fixture = { snapshotId: 999, deleted: false };
+    expect(deleteCrawlSnapshotResultSchema.parse(fixture)).toEqual(fixture);
+  });
+
+  it("rejects a payload missing deleted", () => {
+    expect(() =>
+      deleteCrawlSnapshotResultSchema.parse({ snapshotId: 3 }),
+    ).toThrow();
   });
 });

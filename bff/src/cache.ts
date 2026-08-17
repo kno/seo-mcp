@@ -67,6 +67,18 @@ export const MAX_TTL_SECONDS = 86400;
  *   `url`/`limit`/`concurrency`/`label`) rather than re-crawling mirrors
  *   `snapshot_search_console`'s own established precedent of caching a
  *   write action, avoiding a duplicate real crawl on a double-submit.
+ * - `delete_search_console_snapshot` / `delete_crawl_snapshot`: 60s (the
+ *   clamp minimum) here ONLY to satisfy this `Record<ToolName, number>`'s
+ *   exhaustiveness — `isCacheable` below always returns `false` for both,
+ *   the SAME "never cache a mutation" treatment `analyze_pagespeed`'s
+ *   secret-`apiKey` case gets, so `dispatch()` never reads this value for
+ *   either tool. Unlike `snapshot_crawl`/`snapshot_search_console`
+ *   (write actions that are still safe/idempotent-ish to cache — a
+ *   double-submit just re-returns the same capture), caching a DELETE
+ *   response would let a later identical-looking request (same
+ *   `snapshotId`) silently replay a stale `{deleted: true}` for an id that
+ *   has since been reused or was never re-checked against D1 — deletion is
+ *   irreversible and must always hit the store fresh.
  *
  * ---
  *
@@ -132,6 +144,11 @@ export const CACHE_TTL_SECONDS: Record<ToolName, number> = {
   snapshot_crawl: 3600,
   list_crawl_snapshots: 3600,
   compare_crawls: 3600,
+  // Never actually read — see `isCacheable`, which always returns `false`
+  // for both. Present only for this `Record<ToolName, number>`'s
+  // exhaustiveness.
+  delete_search_console_snapshot: MIN_TTL_SECONDS,
+  delete_crawl_snapshot: MIN_TTL_SECONDS,
 };
 
 export function clampTtlSeconds(seconds: number): number {
@@ -230,13 +247,37 @@ export async function cacheKey(
 }
 
 /**
- * `analyze_pagespeed` with an explicit `apiKey` is never cached. Every
- * other route's inputs are cache-key-safe per design.
+ * `analyze_pagespeed` with an explicit `apiKey` is never cached. Neither is
+ * `delete_search_console_snapshot`/`delete_crawl_snapshot` — EVER,
+ * regardless of input — deletion is irreversible, so a stale cached
+ * `{deleted: ...}` response for a since-changed `snapshotId` must never be
+ * served (see `CACHE_TTL_SECONDS`'s doc comment for the full reasoning).
+ *
+ * `list_search_console_snapshots`/`list_crawl_snapshots` are ALSO never
+ * cached, for a related reason found during manual verification of the
+ * delete tools: a delete mutates D1 directly, but the corresponding list
+ * route's cache key is derived from `{siteUrl/url, limit}` — a delete has
+ * no way to know every `limit` value a caller may have cached a list
+ * under, so precise invalidation isn't reliably achievable, and a stale
+ * list would keep showing an already-deleted snapshot until its TTL
+ * (6h for GSC, 1h for crawl) elapsed. These are cheap, local D1 reads with
+ * no external API cost or rate-limit pressure to protect, so removing the
+ * cache entirely (rather than building a fragile per-limit invalidation
+ * mechanism) is the simpler and more correct fix. Every other route's
+ * inputs are cache-key-safe per design.
  */
 export function isCacheable(
   tool: ToolName,
   inputs: Record<string, unknown>,
 ): boolean {
+  if (
+    tool === "delete_search_console_snapshot" ||
+    tool === "delete_crawl_snapshot" ||
+    tool === "list_search_console_snapshots" ||
+    tool === "list_crawl_snapshots"
+  ) {
+    return false;
+  }
   if (tool !== "analyze_pagespeed") return true;
   const apiKey = inputs.apiKey;
   return !(typeof apiKey === "string" && apiKey.length > 0);

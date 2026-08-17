@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, MouseEvent } from "react";
 import type { BffError, BffOk } from "../../../src/errors";
 import type {
   CompareSearchConsoleResult,
+  DeleteSearchConsoleSnapshotResult,
   ListSearchConsoleSnapshotsResult,
   OpportunityResult,
   SnapshotSearchConsoleResult,
@@ -293,6 +294,45 @@ function SnapshotsTab({
     });
   }
 
+  /**
+   * Manual-snapshot-deletion follow-up. `delete_search_console_snapshot` is
+   * NOT authenticated (pure D1 mutation, `bff/src/timeout.ts`'s doc
+   * comment), so its response carries no `sourceFreshness` — a plain
+   * `BffOk<T>` rather than `AuthenticatedResult<T>`. On success, removes
+   * the row from `snapshots` by LOCAL splice (the panel itself never
+   * triggers a request — see `SnapshotListPanel`'s own doc comment) and
+   * clears the base/current selection and any in-progress/shown comparison
+   * that referenced the deleted id, rather than silently keeping a diff
+   * that references a snapshot which no longer exists.
+   */
+  async function handleDelete(
+    event: MouseEvent<HTMLButtonElement>,
+    id: number,
+  ) {
+    const intent = userIntent(event);
+    const response = (await requestTool<DeleteSearchConsoleSnapshotResult>(
+      "delete_search_console_snapshot",
+      { snapshotId: id, confirm: true },
+      intent,
+      { signal: new AbortController().signal, postJson: true },
+    )) as unknown as
+      BffOk<DeleteSearchConsoleSnapshotResult> | { readonly error: BffError };
+
+    if ("error" in response || !response.data.deleted) return;
+
+    setSnapshots((prev) => prev?.filter((s) => s.id !== id) ?? prev);
+    if (baseSnapshotId === id) setBaseSnapshotId(null);
+    if (currentSnapshotId === id) setCurrentSnapshotId(null);
+    if (
+      compareResult &&
+      (compareResult.baseSnapshotId === id ||
+        compareResult.currentSnapshotId === id)
+    ) {
+      setCompareResult(null);
+      setCompareState(null);
+    }
+  }
+
   const knownSnapshotCount = snapshots?.length ?? null;
   const needsOnboarding = knownSnapshotCount !== null && knownSnapshotCount < 2;
 
@@ -363,6 +403,7 @@ function SnapshotsTab({
             currentSnapshotId={currentSnapshotId}
             onSelectBase={setBaseSnapshotId}
             onSelectCurrent={setCurrentSnapshotId}
+            onDelete={handleDelete}
           />
 
           {needsOnboarding ? (
