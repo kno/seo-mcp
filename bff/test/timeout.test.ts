@@ -32,6 +32,8 @@ describe("TOOL_TIMEOUT_MS", () => {
       add_site: 10000,
       delete_site: 10000,
       connect_google_account: 30000,
+      disconnect_google_account: 10000,
+      check_site_credentials: 30000,
     });
   });
 

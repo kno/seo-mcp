@@ -7,6 +7,7 @@ import { registerKeywordsTools } from "./mcp-tools/keywords";
 import { registerCrawlHistoryTools } from "./mcp-tools/crawl-history";
 import { registerBusinessTools } from "./mcp-tools/business";
 import { registerSitesTools } from "./mcp-tools/sites";
+import { registerSiteCredentialsTools } from "./mcp-tools/site-credentials";
 
 export function buildServer(env: Env): McpServer {
   const server = new McpServer(
@@ -21,6 +22,7 @@ export function buildServer(env: Env): McpServer {
   registerCrawlHistoryTools(server, env);
   registerBusinessTools(server, env);
   registerSitesTools(server, env);
+  registerSiteCredentialsTools(server, env);
 
   return server;
 }

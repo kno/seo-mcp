@@ -74,3 +74,39 @@ export const deleteSiteResultSchema = z.object({
   deleted: z.boolean(),
 });
 export type DeleteSiteResult = z.infer<typeof deleteSiteResultSchema>;
+
+// ---------------------------------------------------------------------------
+// `src/mcp-tools/site-credentials.ts` (Phase 4b) — object roots for
+// `connect_google_account`/`disconnect_google_account`/`check_site_credentials`.
+// ---------------------------------------------------------------------------
+
+export const connectGoogleAccountResultSchema = z.object({
+  // OBJECT ROOT — required by the SDK
+  siteUrl: z.string().min(1),
+  connected: z.boolean(),
+  accountLabel: z.string().nullable(),
+  health: z.object({
+    searchConsole: presentedHealthSchema,
+    googleAds: presentedHealthSchema.nullable(),
+  }),
+});
+export type ConnectGoogleAccountResult = z.infer<
+  typeof connectGoogleAccountResultSchema
+>;
+
+export const disconnectGoogleAccountResultSchema = z.object({
+  // OBJECT ROOT — required by the SDK
+  siteId: z.number().int(),
+  disconnected: z.boolean(),
+});
+export type DisconnectGoogleAccountResult = z.infer<
+  typeof disconnectGoogleAccountResultSchema
+>;
+
+export const checkSiteCredentialsResultSchema = credentialStatusSchema.extend({
+  // OBJECT ROOT — required by the SDK
+  siteId: z.number().int(),
+});
+export type CheckSiteCredentialsResult = z.infer<
+  typeof checkSiteCredentialsResultSchema
+>;

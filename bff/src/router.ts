@@ -105,6 +105,8 @@ import {
   listSitesResultSchema,
   addSiteResultSchema,
   deleteSiteResultSchema,
+  disconnectGoogleAccountResultSchema,
+  checkSiteCredentialsResultSchema,
 } from "../../src/schemas/sites";
 import { getAuthenticatedRoute } from "./authenticated/registry";
 import {
@@ -200,6 +202,24 @@ const addSiteInputSchema = z.object({
 const deleteSiteInputSchema = z.object({
   siteId: z.number().int().positive(),
   confirm: z.literal(true),
+});
+
+// Phase 4b (`site-google-credentials`, `dashboard-bff`). Mirrors
+// `src/mcp-tools/site-credentials.ts`'s `disconnect_google_account`/
+// `check_site_credentials` inputSchemas. Both are POST-only JSON body
+// routes: `disconnect_google_account` for the same irreversibility reason
+// `deleteSiteInputSchema` narrows `confirm` above; `check_site_credentials`
+// for consistency with its sibling and because it can trigger a live
+// probe call with `forceRecheck: true`, which — like a mutation — must
+// never be served from or written to the cache (`cache.ts#isCacheable`).
+const disconnectGoogleAccountInputSchema = z.object({
+  siteId: z.number().int().positive(),
+  confirm: z.literal(true),
+});
+
+const checkSiteCredentialsInputSchema = z.object({
+  siteId: z.number().int().positive(),
+  forceRecheck: z.boolean().optional(),
 });
 
 const analyzePagespeedInputSchema = z.object({
@@ -928,6 +948,44 @@ export async function handleRequest(
       "delete_site",
       parsed.data,
       deleteSiteResultSchema,
+    );
+  }
+
+  // `site-google-credentials`, Phase 4b. POST-only, JSON body — same
+  // irreversibility/GET-safety reasoning as `delete_site` above.
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/tools/disconnect_google_account"
+  ) {
+    const parsed = await parseBody(request, disconnectGoogleAccountInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatch(
+      request,
+      url,
+      env,
+      "disconnect_google_account",
+      parsed.data,
+      disconnectGoogleAccountResultSchema,
+    );
+  }
+
+  // `site-google-credentials`, Phase 4b. POST-only, JSON body — mirrors its
+  // sibling above; `forceRecheck: true` triggers a live probe call that,
+  // like a mutation, must never be served from or written to the cache
+  // (`cache.ts#isCacheable`).
+  if (
+    request.method === "POST" &&
+    url.pathname === "/api/tools/check_site_credentials"
+  ) {
+    const parsed = await parseBody(request, checkSiteCredentialsInputSchema);
+    if (!parsed.ok) return bffErrorResponse("invalid_input");
+    return dispatch(
+      request,
+      url,
+      env,
+      "check_site_credentials",
+      parsed.data,
+      checkSiteCredentialsResultSchema,
     );
   }
 

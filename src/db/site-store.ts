@@ -43,6 +43,22 @@ export async function getSiteByUrl(
 }
 
 /**
+ * Used by `site-credentials.ts`'s `disconnect_google_account`/
+ * `check_site_credentials` tools, which receive `siteId` (not `siteUrl`)
+ * per `bff/src/oauth/callback.ts`'s state-token payload shape.
+ */
+export async function getSiteById(
+  db: D1Database,
+  id: number,
+): Promise<Site | null> {
+  const row = await db
+    .prepare("SELECT id, url, label, created_at FROM sites WHERE id = ?")
+    .bind(id)
+    .first<SiteRecord>();
+  return row ? toSite(row) : null;
+}
+
+/**
  * Inserts a new site. `INSERT OR IGNORE` on the unique `url` column makes
  * a duplicate add a no-op rather than an error — mirrors
  * `gsc-store.ts#deleteGscSnapshot`'s `result.meta.changes > 0` pattern to

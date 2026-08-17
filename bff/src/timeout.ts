@@ -122,11 +122,21 @@ export type ToolName =
   // `google-account-connect-flow` (PR4a) forwards the OAuth `code` to this
   // tool; `dashboard-bff`'s spec requires a timeout above the combined
   // worst case of a Google token exchange plus the mandatory post-connect
-  // health probe (Phase 3's `runConnectHealthCheck`). The tool itself is
-  // NOT built until Phase 4b — this entry exists so `bff/src/oauth/
-  // callback.ts` can call it with a type-checked `ToolName` now; the call
-  // 404s at runtime until 4b lands, by design.
-  | "connect_google_account";
+  // health probe (Phase 3's `runConnectHealthCheck`). Built in Phase 4b
+  // (`src/mcp-tools/site-credentials.ts`); NOT reachable via the generic
+  // `/api/tools/{tool}` dispatch path, only via `bff/src/oauth/callback.ts`'s
+  // direct `callTool` call.
+  | "connect_google_account"
+  // Phase 4b: `disconnect_google_account`/`check_site_credentials`, routed
+  // through the ordinary `dispatch()` path like `delete_site` above — pure
+  // D1 reads/writes plus, for `check_site_credentials` with
+  // `forceRecheck: true`, at most two live Google probe calls (the same
+  // `sites.get`/`listAccessibleCustomers` calls `runConnectHealthCheck`
+  // already budgets for at connect time). 30s mirrors
+  // `connect_google_account`'s own budget for the same reason: a probe
+  // round-trip plus tool latency.
+  | "disconnect_google_account"
+  | "check_site_credentials";
 
 export const TOOL_TIMEOUT_MS: Record<ToolName, number> = {
   health: 5000,
@@ -164,6 +174,13 @@ export const TOOL_TIMEOUT_MS: Record<ToolName, number> = {
   // (two Google calls, `dashboard-bff`'s "at least 25 seconds" budget for
   // token exchange plus tool latency) — 30s leaves a small margin above.
   connect_google_account: 30_000,
+  // Pure D1 delete + a cleanup delete of the paired health rows — no Google
+  // call in its path, mirroring `delete_site`'s own 10s reasoning.
+  disconnect_google_account: 10_000,
+  // Without `forceRecheck`, a cached-only D1 read (10s is generous, same as
+  // `delete_site`). With `forceRecheck: true`, up to two live probe calls —
+  // 30s mirrors `connect_google_account`'s own budget for the same reason.
+  check_site_credentials: 30_000,
 };
 
 export type TimeoutResult<T> =

@@ -27,6 +27,17 @@ export default defineWorkersProject({
               name: "seo-mcp",
               modules: true,
               scriptPath: "./bff/test/integration/stub-mcp-worker.js",
+              // `google-account-connect-flow`/Phase 4b's headline
+              // containment test (`oauth-round-trip.test.ts`): a decoy
+              // secret owned by THIS auxiliary worker, never the primary
+              // BFF worker under test — proving the value crosses the
+              // service binding (as a real refresh token would) and is
+              // never observable anywhere on the BFF's own response
+              // surface.
+              bindings: {
+                DECOY_REFRESH_TOKEN:
+                  "decoy-refresh-token-should-never-leak-987",
+              },
             },
           ],
         },

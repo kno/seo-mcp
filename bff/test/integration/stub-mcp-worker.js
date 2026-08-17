@@ -431,6 +431,35 @@ const TOOL_RESULTS = {
   },
 };
 
+/**
+ * `site-google-credentials`/`google-account-connect-flow`, Phase 4b:
+ * `list_sites`'s object-root shape, re-validated by `bff/src/oauth/
+ * authorize.ts`'s own `callTool(..., listSitesResultSchema)` call (default
+ * `validateUpstreamResults: true`, unlike `connect_google_account`'s own
+ * call, which passes `false`) — so this MUST satisfy the real schema, not
+ * an arbitrary shape.
+ */
+TOOL_RESULTS.list_sites = {
+  count: 1,
+  sites: [
+    {
+      id: 1,
+      url: "https://example.com",
+      label: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      credential: {
+        tier: "none",
+        accountLabel: null,
+        accountKey: null,
+        health: {
+          searchConsole: { state: "not_connected" },
+          googleAds: { state: "not_connected" },
+        },
+      },
+    },
+  ],
+};
+
 const DECOY_CREDENTIAL = "DECOY_REFRESH_TOKEN_xyz789";
 
 const GSC_ERROR_TEXTS = {
@@ -465,7 +494,7 @@ const CRAWL_SNAPSHOT_ERROR_TEXTS = {
 const DOMAIN_ENRICHMENT_FAILURE_TRIGGER = "simulate-domain-enrichment-failure";
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/__calls") {
       return Response.json({ calls, lastAuthorizationHeader });
@@ -547,6 +576,37 @@ export default {
     }
     if (argUrl.includes("simulate-503")) {
       return new Response("Service unavailable", { status: 503 });
+    }
+
+    // `google-account-connect-flow`, Phase 4b headline containment test
+    // (`oauth-round-trip.test.ts`): `connect_google_account`'s real
+    // implementation NEVER returns a refresh token, ciphertext, or
+    // authorization code — but `bff/src/oauth/callback.ts` calls it with
+    // `validateUpstreamResults: false` and discards `result.data` entirely
+    // regardless (only `result.ok` gates the redirect). This stub adds a
+    // decoy secret (sourced from the auxiliary worker's OWN
+    // `DECOY_REFRESH_TOKEN` binding, never a hardcoded literal here) to the
+    // response anyway, to prove that BFF-side discard-the-body containment
+    // holds even if a future upstream bug ever leaked one, not merely
+    // because this stub happens to behave.
+    if (toolName === "connect_google_account") {
+      return Response.json({
+        jsonrpc: "2.0",
+        id: "stub",
+        result: {
+          content: [{ type: "text", text: "ok" }],
+          structuredContent: {
+            siteUrl: "https://example.com",
+            connected: true,
+            accountLabel: "owner@example.com",
+            health: {
+              searchConsole: { state: "healthy" },
+              googleAds: null,
+            },
+            _leakCheckOnly: env?.DECOY_REFRESH_TOKEN ?? null,
+          },
+        },
+      });
     }
 
     const structuredContent =

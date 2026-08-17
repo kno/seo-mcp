@@ -349,32 +349,77 @@ timeout.ts`'s `ToolName` union (30s budget: token exchange + the mandatory post-
 
 ## Phase 4b: Three new MCP tools — `connect_google_account`, `disconnect_google_account`, `check_site_credentials` (PR4b) — `site-google-credentials`, `dashboard-bff`
 
-- [ ] 4b.1 RED `test/mcp-tools/site-credentials.test.ts`: `connect_google_account` exchanges `code`
+- [x] 4b.1 RED `test/mcp-tools/site-credentials.test.ts`: `connect_google_account` exchanges `code`
       server-side, encrypts+persists via Phase 1's store, runs the mandatory synchronous post-connect
       probe from Phase 3 before reporting success (spec "A successful connect marks the site healthy" /
       "...marks the site invalid, not silently connected"); refresh token/ciphertext/`code` never appear
-      in the tool's own return value (Threat Matrix row c)
-- [ ] 4b.2 GREEN `src/mcp-tools/site-credentials.ts`: `connect_google_account({siteUrl, code, redirectUri})`
+      in the tool's own return value (Threat Matrix row c) — done: 6 RED tests against a hand-rolled fake
+      D1 (this "unit" vitest project has no Miniflare D1 binding, mirroring
+      `test/google/credentials.test.ts`'s existing fake-D1 pattern); confirmed failing (`Cannot find
+module`) before 4b.2
+- [x] 4b.2 GREEN `src/mcp-tools/site-credentials.ts`: `connect_google_account({siteId, code, redirectUri})`
       — POST to Google `/token`, AES-GCM encrypt via Phase 1, UPSERT via `site-credential-store.ts`, run
       both health probes, return `{siteUrl, connected, accountLabel, health}` — never ciphertext or token
-- [ ] 4b.3 RED disconnect requires confirm gate; rejected without it, row remains intact (spec "Disconnect
+      — done: all 6 tests pass. **Deviation from this task's own literal wording, and from design.md's
+      mermaid diagram**: the input is `{siteId, code, redirectUri}`, not `{siteUrl, ...}` — Phase 4a's
+      actual `bff/src/oauth/callback.ts` forwards `verification.payload.siteId` (the `state` token itself
+      is minted with `siteId`, per `authorize.ts`/`state.ts`), and that file needed no change per this
+      phase's own assignment ("it should need NO changes now that the tool exists for real"). Flagged for
+      `sdd-verify`, not silently reconciled. Added `getSiteById` to `src/db/site-store.ts` (did not exist;
+      the tool receives `siteId`, not `siteUrl`). The connected account's email is obtained by **decoding
+      the `id_token` JWT** returned alongside the refresh token (`openid email` scope guarantees an
+      `email` claim), not by an extra `GET /oauth2/v3/userinfo` call — one fewer network round-trip for
+      the same fact; the JWT signature is not verified since it arrived directly from Google's token
+      endpoint over TLS, not from anything browser-supplied
+- [x] 4b.3 RED disconnect requires confirm gate; rejected without it, row remains intact (spec "Disconnect
       requires confirmation"); confirmed disconnect deletes the row, `connected` becomes `false`, re-resolves
       to global tier with a fresh `"unchecked"` health state (spec "Confirmed disconnect deletes the row
-      and re-resolves to the global tier")
-- [ ] 4b.4 GREEN `disconnect_google_account({siteId, confirm: true})` behind `assertConfirmedDelete`
-- [ ] 4b.5 RED `check_site_credentials` returns current health without a probe unless explicitly asked to
+      and re-resolves to the global tier") — done: 2 RED tests. **Investigated whether an explicit
+      `deleteSiteCredentialHealth` call is necessary**: `src/google/health.ts#derivePresentedHealth`
+      already treats an `accountKey` mismatch as `"unchecked"`, and after disconnect the resolved tier's
+      `accountKey` becomes `"global"` while the stale row still carries the old site-tier `accountKey` —
+      so the mismatch-is-unchecked derivation already produces the spec-required behavior with NO explicit
+      delete. Implemented the explicit delete anyway (in 4b.4), for tidiness only — an orphaned row for a
+      credential identity that no longer exists would otherwise sit unreachable in D1 indefinitely unless
+      the exact same account is later reconnected, mirroring `deleteSite`'s own batch-delete precedent for
+      the same two tables. Documented as a deliberate belt-and-suspenders choice, not a correctness fix
+- [x] 4b.4 GREEN `disconnect_google_account({siteId, confirm: true})` behind `assertConfirmedDelete` — done:
+      both tests pass; deletes `site_credentials` then, only if a row existed, `site_credential_health`
+- [x] 4b.5 RED `check_site_credentials` returns current health without a probe unless explicitly asked to
       re-check; manual re-check bypasses the freshness window (spec "Manual recheck clears an invalid
-      state without a new OAuth round-trip")
-- [ ] 4b.6 GREEN `check_site_credentials({siteId})`
-- [ ] 4b.7 GREEN wire `bff/src/router.ts`: `POST /api/tools/disconnect_google_account`, `POST
-/api/tools/check_site_credentials` (both behind `authenticate()`); `bff/src/oauth/callback.ts` (4a.6)
-      now calls `connect_google_account` for real
-- [ ] 4b.8 RED `bff/test/integration/oauth-round-trip.test.ts`: mocked Google token endpoint; full
+      state without a new OAuth round-trip") — done: 2 RED tests, asserting zero `fetch` calls without
+      `forceRecheck` and a live probe call with it
+- [x] 4b.6 GREEN `check_site_credentials({siteId, forceRecheck?: boolean})` — done: without `forceRecheck`,
+      returns `credentialStatusForSite`'s cached summary (zero Google calls); with `forceRecheck: true`,
+      calls `checkSearchConsoleHealth`/`checkGoogleAdsHealth` with `{forceRecheck: true}` first, then
+      re-reads the now-fresh summary via the same `credentialStatusForSite` call
+- [x] 4b.7 GREEN wire `bff/src/router.ts`: `POST /api/tools/disconnect_google_account`, `POST
+/api/tools/check_site_credentials` (both behind `authenticate()`, POST-only JSON body mirroring
+      `delete_site`'s own precedent); `bff/src/oauth/callback.ts` (4a.6) now calls `connect_google_account`
+      for real — done, confirmed it needed NO changes (see 4b.2's deviation note). Registered the three
+      tools in `src/server.ts` via a new `registerSiteCredentialsTools(server, env)` call. Added
+      `disconnect_google_account`/`check_site_credentials` to `bff/src/timeout.ts`'s `ToolName` union (10s
+      / 30s) and to `bff/src/cache.ts`'s `CACHE_TTL_SECONDS` + `isCacheable` exhaustiveness (both never
+      cached — a mutation and a route whose `forceRecheck: true` case must never be served stale)
+- [x] 4b.8 RED `bff/test/integration/oauth-round-trip.test.ts`: mocked Google token endpoint; full
       authorize→callback→connected round-trip; a decoy refresh token set in the **stub** env appears in no
       response body, header, redirect URL, cache value, export, or log line (Threat Matrix row c, the
-      change's headline containment test)
-- [ ] 4b.9 PROOF `pnpm test -- site-credentials`; `bff/test/integration/` full round-trip green; note in PR
-      description this remains a **mocked-endpoint** proof per Phase 0's structural-only caveat
+      change's headline containment test) — done: 2 tests, against the REAL `SELF` BFF Worker and the REAL
+      stub MCP worker (`bff/test/integration/stub-mcp-worker.js`, extended with a `list_sites` entry and a
+      `connect_google_account` branch that embeds a decoy secret sourced from the auxiliary worker's OWN
+      `DECOY_REFRESH_TOKEN` binding — added to `vitest.bff-integration.config.ts` — never a hardcoded
+      literal in the stub itself, so the test proves the value crosses the service binding, as a real
+      refresh token would, and is still never observable in the callback's response body, headers,
+      redirect URL, or the `RESULT_CACHE` KV namespace)
+- [x] 4b.9 PROOF `pnpm test -- site-credentials`; `bff/test/integration/` full round-trip green; note in PR
+      description this remains a **mocked-endpoint** proof per Phase 0's structural-only caveat — done:
+      focused `site-credentials` run green (6 tests); `bff/test/integration/oauth-round-trip.test.ts` green
+      (2 tests); full `pnpm test` green (168 files, up from 166; 1518 tests, up from 1510); `pnpm typecheck`
+      clean (both root and `bff/ui` programs); `pnpm run format:check` clean after one `prettier --write`
+      pass on the touched `.ts` files. **Mocked-endpoint caveat**: both the unit test's Google `/token`/
+      `sites.get` calls and the integration test's `connect_google_account` tool call are against mocks/
+      stubs, per Phase 0's structural-only note — no task in this phase exercises a real Google OAuth
+      exchange
 
 ## Phase 5: Credential-scoped BFF cache key + per-account quota ledger (PR5) — `quota-visibility`, `authenticated-source-contract`
 

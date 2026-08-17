@@ -161,6 +161,13 @@ export const CACHE_TTL_SECONDS: Record<ToolName, number> = {
   // `callTool` directly with its own timeout, not through the cache path.
   // Present only for this `Record<ToolName, number>`'s exhaustiveness.
   connect_google_account: MIN_TTL_SECONDS,
+  // Phase 4b: `isCacheable` always returns `false` for both — a mutation
+  // (`disconnect_google_account`) and a route whose `forceRecheck: true`
+  // case must never be served stale, same "never cache a mutation/probe"
+  // reasoning as `delete_site`/`delete_search_console_snapshot` above.
+  // Present only for this `Record<ToolName, number>`'s exhaustiveness.
+  disconnect_google_account: MIN_TTL_SECONDS,
+  check_site_credentials: MIN_TTL_SECONDS,
 };
 
 export function clampTtlSeconds(seconds: number): number {
@@ -296,7 +303,9 @@ export function isCacheable(
     tool === "list_crawl_snapshots" ||
     tool === "list_sites" ||
     tool === "add_site" ||
-    tool === "delete_site"
+    tool === "delete_site" ||
+    tool === "disconnect_google_account" ||
+    tool === "check_site_credentials"
   ) {
     return false;
   }
