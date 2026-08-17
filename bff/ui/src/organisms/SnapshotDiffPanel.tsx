@@ -1,3 +1,4 @@
+import { useId, useState } from "react";
 import type {
   GscDiff,
   GscDiffRow,
@@ -121,9 +122,15 @@ function DiffRowItem({
 function DiffBucketSection({
   name,
   rows,
+  pageFilter,
 }: {
   readonly name: DiffBucketName;
+  /** The bucket's FULL, unfiltered rows — the bound label is always
+   * derived from this, never from `pageFilter`'s narrowed view, so typing
+   * a filter can never fabricate a bound that was never real (task 6.6's
+   * per-bucket-only guarantee extends to the filtered display). */
   readonly rows: readonly GscDiffRow[];
+  readonly pageFilter: string;
 }) {
   const meta = BUCKET_META[name];
   const bounds = collectDiffBounds({
@@ -133,6 +140,10 @@ function DiffBucketSection({
     gained: name === "gained" ? rows : [],
   });
   const cardinality = bounds[name];
+  const normalizedFilter = pageFilter.trim().toLowerCase();
+  const displayRows = normalizedFilter
+    ? rows.filter((row) => row.page.toLowerCase().includes(normalizedFilter))
+    : rows;
 
   return (
     <section
@@ -152,11 +163,13 @@ function DiffBucketSection({
           cap.
         </p>
       )}
-      {rows.length === 0 ? (
-        <p className="empty-state">No {name} queries.</p>
+      {displayRows.length === 0 ? (
+        <p className="empty-state">
+          No {name} queries.{normalizedFilter ? " (filtered by page)" : ""}
+        </p>
       ) : (
         <ul className="item-list" aria-label={`${name} rows`}>
-          {rows.map((row, index) => (
+          {displayRows.map((row, index) => (
             <DiffRowItem
               key={`${row.query}|${row.page}|${index}`}
               row={row}
@@ -176,6 +189,9 @@ export function SnapshotDiffPanel({
   baseSnapshot,
   currentSnapshot,
 }: SnapshotDiffPanelProps) {
+  const [pageFilter, setPageFilter] = useState("");
+  const filterId = useId();
+
   return (
     <div className="panel panel-wide span-full">
       <h3>Comparison</h3>
@@ -196,11 +212,43 @@ export function SnapshotDiffPanel({
         </span>
       </div>
 
+      <div className="field">
+        <label htmlFor={filterId}>Filter by page</label>
+        <input
+          id={filterId}
+          type="text"
+          value={pageFilter}
+          onChange={(event) => setPageFilter(event.target.value)}
+          placeholder="e.g. https://as-jardineria.com/"
+        />
+        <p className="field-hint">
+          Narrows all four buckets below to rows whose page contains this text —
+          a client-side view of the same comparison, not a new request. Bound
+          labels still reflect each bucket's real, unfiltered size.
+        </p>
+      </div>
+
       <div className="view-stack">
-        <DiffBucketSection name="decayed" rows={diff.decayed} />
-        <DiffBucketSection name="improved" rows={diff.improved} />
-        <DiffBucketSection name="lost" rows={diff.lost} />
-        <DiffBucketSection name="gained" rows={diff.gained} />
+        <DiffBucketSection
+          name="decayed"
+          rows={diff.decayed}
+          pageFilter={pageFilter}
+        />
+        <DiffBucketSection
+          name="improved"
+          rows={diff.improved}
+          pageFilter={pageFilter}
+        />
+        <DiffBucketSection
+          name="lost"
+          rows={diff.lost}
+          pageFilter={pageFilter}
+        />
+        <DiffBucketSection
+          name="gained"
+          rows={diff.gained}
+          pageFilter={pageFilter}
+        />
       </div>
     </div>
   );
