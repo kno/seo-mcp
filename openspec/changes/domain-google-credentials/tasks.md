@@ -77,25 +77,42 @@ real origin and the OAuth client's redirect URIs are registered — flag this ex
 
 ## Phase 1: Migration + crypto + store, no reader (PR1) — `site-google-credentials`
 
-- [ ] 1.1 Create `migrations/0004_site_credentials.sql`: additive `CREATE TABLE IF NOT EXISTS
+- [x] 1.1 Create `migrations/0004_site_credentials.sql`: additive `CREATE TABLE IF NOT EXISTS
 site_credentials` + `site_credential_health`, per design's exact schema; apply locally and confirm
-      idempotent re-apply
-- [ ] 1.2 RED `test/crypto/credential-cipher.test.ts`: round-trip encrypt/decrypt; tampered ciphertext
+      idempotent re-apply — done: applied via `wrangler d1 migrations apply seo-mcp-db --local`; confirmed
+      idempotent both at wrangler's migration-tracking level (`✅ No migrations to apply!` on re-run) and by
+      re-executing the raw SQL file directly (`CREATE TABLE IF NOT EXISTS` no-ops without error)
+- [x] 1.2 RED `test/crypto/credential-cipher.test.ts`: round-trip encrypt/decrypt; tampered ciphertext
       fails closed (Threat Matrix row c, spec "A tampered ciphertext fails closed"); wrong key fails; wrong
       AAD (site B's `additionalData`) fails; IV differs across two writes of the same plaintext (spec "Each
-      write uses a unique IV")
-- [ ] 1.3 GREEN `src/crypto/credential-cipher.ts`: AES-GCM-256 encrypt/decrypt, `subtle.importKey("raw",
+      write uses a unique IV") — done: confirmed failing (`Cannot find module`) before 1.3
+- [x] 1.3 GREEN `src/crypto/credential-cipher.ts`: AES-GCM-256 encrypt/decrypt, `subtle.importKey("raw",
 …, { name: "AES-GCM" }, false, ["encrypt","decrypt"])`, random 12-byte IV per write,
-      `additionalData = "site:{site_id}:refresh_token"`
-- [ ] 1.4 RED `test/db/site-credential-store.test.ts`: write persists ciphertext+IV never plaintext (spec
-      "Refresh token is encrypted before the D1 write"); `deleteSite` batch-deletes both
-      `site_credentials` and `site_credential_health` rows, not `ON DELETE CASCADE` (Threat Matrix row j)
-- [ ] 1.5 GREEN `src/db/site-credential-store.ts`: read/write for both tables; `src/db/site-store.ts`'s
-      `deleteSite` becomes an explicit `db.batch([...])`
-- [ ] 1.6 GREEN `src/config.ts`: add `DOMAIN_CREDENTIAL_ENCRYPTION_KEY` binding; regenerate `Env` via
-      `wrangler types` (never hand-write)
-- [ ] 1.7 PROOF: `pnpm test -- credential-cipher site-credential-store`; `pnpm test` green; no reader
-      wired yet, so this slice is unread by any live code path
+      `additionalData = "site:{site_id}:refresh_token"` — done: all 5 RED tests pass
+- [x] 1.4 RED `test/integration/site-credential-store.test.ts`: write persists ciphertext+IV never
+      plaintext (spec "Refresh token is encrypted before the D1 write"); `deleteSite` batch-deletes both
+      `site_credentials` and `site_credential_health` rows, not `ON DELETE CASCADE` (Threat Matrix row j) —
+      **deviation**: placed under `test/integration/` (real Miniflare D1 via `cloudflare:test`), not
+      `test/db/`, matching this repo's existing convention for every other D1-backed store test
+      (`site-store.test.ts`, `crawl-store.test.ts`, `gsc-store.test.ts` all live there) — a `test/db/` unit
+      test has no D1 binding available (the "unit" vitest project runs outside the Workers pool). Confirmed
+      failing (`Cannot find module`) before 1.5
+- [x] 1.5 GREEN `src/db/site-credential-store.ts`: read/write for both tables; `src/db/site-store.ts`'s
+      `deleteSite` becomes an explicit `db.batch([...])` — done: 6 RED tests pass; also updated
+      `site-store.test.ts`'s `beforeAll` to create the two new tables (it exercises the now-batched
+      `deleteSite`)
+- [x] 1.6 GREEN `src/config.ts`: add `DOMAIN_CREDENTIAL_ENCRYPTION_KEY` binding — done: added by hand, NOT
+      via `wrangler types`. Confirmed this repo's `Env` interface in `src/config.ts` is hand-maintained: only
+      `types:bff` exists in `package.json` (`wrangler types -c bff/wrangler.jsonc --path
+bff/worker-configuration.d.ts`), scoped to the BFF worker only. The root `seo-mcp` worker has no
+      equivalent `types` script and no generated `worker-configuration.d.ts`; every existing secret
+      (`GOOGLE_CLIENT_ID` etc.) is a hand-written field on this same interface
+- [x] 1.7 PROOF: `pnpm test -- credential-cipher site-credential-store` green (11 tests); full `pnpm test`
+      green (157 files, 1444 tests); `pnpm typecheck` clean (required one fix: `base64Decode`'s return
+      annotated `Uint8Array<ArrayBuffer>`, matching `bff/src/session.ts`'s existing pattern, since plain
+      `Uint8Array` doesn't satisfy `BufferSource` under this repo's TS lib config); `pnpm run format:check`
+      clean after one `prettier --write` pass on the two new `.ts` files. No reader wired yet, so this slice
+      is unread by any live code path — no existing test's behavior changed
 
 ## Phase 2: `resolveSiteCredentials` + keyed token cache + call-site ripple (PR2) — `site-google-credentials`, `authenticated-source-contract`
 

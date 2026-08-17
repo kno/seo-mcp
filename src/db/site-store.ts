@@ -64,13 +64,22 @@ export async function addSite(
   };
 }
 
+/**
+ * Deletes a site and its per-site Google credential rows in one batch.
+ * `site_credentials`/`site_credential_health` are deleted explicitly here
+ * rather than via `ON DELETE CASCADE` — cascade depends on D1's foreign-key
+ * PRAGMA state rather than on tested code.
+ */
 export async function deleteSite(
   db: D1Database,
   siteId: number,
 ): Promise<boolean> {
-  const result = await db
-    .prepare("DELETE FROM sites WHERE id = ?")
-    .bind(siteId)
-    .run();
-  return result.meta.changes > 0;
+  const [siteResult] = await db.batch([
+    db.prepare("DELETE FROM sites WHERE id = ?").bind(siteId),
+    db.prepare("DELETE FROM site_credentials WHERE site_id = ?").bind(siteId),
+    db
+      .prepare("DELETE FROM site_credential_health WHERE site_id = ?")
+      .bind(siteId),
+  ]);
+  return siteResult.meta.changes > 0;
 }

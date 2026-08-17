@@ -11,6 +11,7 @@ export interface Env {
   GSC_SNAPSHOT_PROPERTIES?: string;
   GOOGLE_BUSINESS_ACCOUNT?: string;
   GOOGLE_BUSINESS_LOCATION?: string;
+  DOMAIN_CREDENTIAL_ENCRYPTION_KEY?: string;
   DB?: D1Database;
 }
 

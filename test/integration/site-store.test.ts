@@ -8,6 +8,12 @@ beforeAll(async () => {
   await DB.exec(
     "CREATE TABLE IF NOT EXISTS sites (id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT NOT NULL UNIQUE, label TEXT, created_at TEXT NOT NULL)",
   );
+  await DB.exec(
+    "CREATE TABLE IF NOT EXISTS site_credentials (site_id INTEGER PRIMARY KEY, client_id TEXT NOT NULL, refresh_token_ciphertext TEXT NOT NULL, refresh_token_iv TEXT NOT NULL, google_account_email TEXT NOT NULL, account_key TEXT NOT NULL, ads_customer_id TEXT, scopes TEXT NOT NULL, connected_at TEXT NOT NULL)",
+  );
+  await DB.exec(
+    "CREATE TABLE IF NOT EXISTS site_credential_health (site_id INTEGER NOT NULL, source TEXT NOT NULL, credential_source TEXT NOT NULL, account_key TEXT NOT NULL, state TEXT NOT NULL, reason TEXT, detail TEXT, checked_at TEXT NOT NULL, expires_at TEXT NOT NULL, PRIMARY KEY (site_id, source))",
+  );
 });
 
 beforeEach(async () => {
