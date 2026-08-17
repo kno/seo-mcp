@@ -1,11 +1,13 @@
 /**
  * BFF request router. The single most important property this module
- * upholds: `authenticate()` runs BEFORE any dispatch to the MCP client and
- * BEFORE any static asset is served, for every route — including unknown
- * GET routes, which fall through to `env.ASSETS.fetch` (the SPA shell)
- * rather than reaching `SEO_MCP`; unknown non-GET routes return 404.
- * `POST /auth/session` is the sole exception: it is the login endpoint
- * itself, so it cannot require a prior session.
+ * upholds: `authenticate()` runs BEFORE any dispatch to the MCP client, for
+ * every `/api/*` route. The SPA shell itself (`/`, hashed assets, unknown
+ * deep links) is deliberately NOT gated — a fresh visitor must be able to
+ * load the page containing the login form, or they could never submit it;
+ * the shell holds no data of its own, only `/api/*` ever reaches `SEO_MCP`
+ * or any credential. `POST /auth/session` is the one `/api/`-adjacent
+ * exception: it is the login endpoint itself, so it cannot require a prior
+ * session.
  *
  * Each tool route validates its own inputs with a Zod schema mirroring
  * `src/server.ts`'s `inputSchema` for that tool exactly (same fields, same
@@ -803,9 +805,20 @@ export async function handleRequest(
     return createSession(request, env);
   }
 
-  const outcome = await authenticate(request, env);
-  if (outcome === "unavailable") return bffErrorResponse("gate_unavailable");
-  if (outcome === "denied") return bffErrorResponse("gate_unauthorized");
+  // The SPA shell itself (`/`, hashed assets, unknown deep links) is
+  // never gated — a fresh visitor must be able to load the page
+  // containing the login form, or they could never submit it. Only
+  // `/api/*` ever reaches SEO_MCP or any credential, so only `/api/*` is
+  // gated. `run_worker_first: true` on the `assets` binding still routes
+  // this request to this Worker rather than letting the Asset Worker's
+  // own SPA fallback intercept it.
+  if (url.pathname.startsWith("/api/")) {
+    const outcome = await authenticate(request, env);
+    if (outcome === "unavailable") return bffErrorResponse("gate_unavailable");
+    if (outcome === "denied") return bffErrorResponse("gate_unauthorized");
+  } else {
+    return env.ASSETS.fetch(request);
+  }
 
   // The one secret-bearing route accepts POST with a JSON body, so a
   // caller supplying apiKey never sends it as a query-string parameter.
@@ -1220,16 +1233,12 @@ export async function handleRequest(
   // rejection path for every `business_*` tool name and any other tool the
   // authenticated registry does not name (threat row f): no route below
   // ever dispatches to `SEO_MCP` for an unrecognized tool name.
-  if (url.pathname.startsWith("/api/")) {
-    return new Response("Not found", { status: 404 });
-  }
-
-  // Every other GET request (SPA pages, hashed assets, unknown deep
-  // links) falls through to the static SPA bundle. Safe only because
-  // `authenticate()` above already ran unconditionally for this request;
-  // the `assets` binding's `run_worker_first: true` (`bff/wrangler.jsonc`)
-  // is what makes that ordering hold at the platform level too — without
-  // it the Asset Worker would answer this request before this Worker
-  // (and this gate check) ever ran.
-  return env.ASSETS.fetch(request);
+  // Every request reaching this point has `/api/` as its pathname prefix
+  // (every non-`/api/` request already returned via the SPA-shell branch
+  // above) — an unmatched `/api/*` path is a bad API call, not a page.
+  // This is also the rejection path for every `business_*` tool name and
+  // any other tool the authenticated registry does not name (threat row
+  // f): no route above ever dispatches to `SEO_MCP` for an unrecognized
+  // tool name.
+  return new Response("Not found", { status: 404 });
 }

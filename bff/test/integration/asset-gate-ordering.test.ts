@@ -1,11 +1,16 @@
 /**
- * Proves the single most important property Phase 1 (dashboard-views) must
- * demonstrate: the `assets` Cloudflare binding never answers a static asset
- * path before `bff/src/gate.ts` has authorized the request. Without
- * `run_worker_first: true` on the `assets` binding (`bff/wrangler.jsonc`),
- * the Asset Worker answers matching paths BEFORE the user Worker, silently
- * bypassing the gate — this test's unauthenticated cases must fail for
- * exactly that reason until `run_worker_first: true` is set.
+ * The SPA shell (`/`, hashed assets, unknown deep links) is served
+ * unauthenticated — a fresh visitor must be able to load the page
+ * containing the login form itself, or they can never submit it. Real
+ * data only ever comes from `/api/tools/*`, which stays fully gated
+ * (`bff/test/integration/gate-ordering.test.ts` covers that boundary).
+ *
+ * `run_worker_first: true` on the `assets` binding (`bff/wrangler.jsonc`)
+ * is still required, but for a different reason now: without it, the
+ * Asset Worker's own `single-page-application` fallback would intercept
+ * `/api/tools/*` paths (which match no real file) and serve `index.html`
+ * for them directly, before this Worker's routing ever ran — this
+ * module's actual gate (`bff/src/gate.ts`) would never even be reached.
  *
  * Runs against the real `SELF` BFF Worker over the real `assets` binding
  * declared in `bff/wrangler.jsonc`, backed by the built `bff/ui/dist`
@@ -53,24 +58,31 @@ beforeAll(async () => {
 });
 
 describe("BFF asset-gate ordering (integration, real assets binding)", () => {
-  const STATIC_PATHS = [
-    "/",
-    "/index.html",
-    "/favicon.ico",
-    "/some/unknown/deep-link",
-  ];
+  // `/favicon.ico` is binary, not HTML — asserted on status only below.
+  const HTML_PATHS = ["/", "/index.html", "/some/unknown/deep-link"];
 
-  for (const path of STATIC_PATHS) {
-    it(`rejects an unauthenticated request to ${path} with gate_unauthorized before any asset is served`, async () => {
+  for (const path of HTML_PATHS) {
+    it(`serves the SPA shell for an UNAUTHENTICATED request to ${path} (the login form itself must be reachable without a session)`, async () => {
       const response = await SELF.fetch(`https://bff.example${path}`);
-      expect(response.status).toBe(401);
-      const body = (await response.json()) as { error: { code: string } };
-      expect(body.error.code).toBe("gate_unauthorized");
+      expect(response.status).toBe(200);
+      const text = await response.text();
+      expect(text).toContain("<title>SEO Dashboard</title>");
     });
   }
 
-  it("rejects an unauthenticated request to the hashed JS bundle with gate_unauthorized", async () => {
+  it("serves the favicon for an UNAUTHENTICATED request", async () => {
+    const response = await SELF.fetch("https://bff.example/favicon.ico");
+    expect(response.status).toBe(200);
+  });
+
+  it("serves the hashed built JS bundle for an UNAUTHENTICATED request", async () => {
     const response = await SELF.fetch(`https://bff.example${hashedJsPath}`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toMatch(/javascript/);
+  });
+
+  it("still rejects an unauthenticated /api/tools/* request with gate_unauthorized (only the static shell is exempt)", async () => {
+    const response = await SELF.fetch("https://bff.example/api/tools/health");
     expect(response.status).toBe(401);
     const body = (await response.json()) as { error: { code: string } };
     expect(body.error.code).toBe("gate_unauthorized");
