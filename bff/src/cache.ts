@@ -156,6 +156,11 @@ export const CACHE_TTL_SECONDS: Record<ToolName, number> = {
   list_sites: MIN_TTL_SECONDS,
   add_site: MIN_TTL_SECONDS,
   delete_site: MIN_TTL_SECONDS,
+  // `google-account-connect-flow` (PR4a): never dispatched through
+  // `dispatch()`/`isCacheable` at all — the callback route calls
+  // `callTool` directly with its own timeout, not through the cache path.
+  // Present only for this `Record<ToolName, number>`'s exhaustiveness.
+  connect_google_account: MIN_TTL_SECONDS,
 };
 
 export function clampTtlSeconds(seconds: number): number {

@@ -1,21 +1,29 @@
 /**
- * Threat matrix row (b): no Google credential binding exists anywhere
+ * Threat matrix row (b): no Google *credential* binding exists anywhere
  * reachable from `bff/`. This is a structural, not a procedural,
- * guarantee — the BFF never holds `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
- * `GOOGLE_REFRESH_TOKEN`, or any Ads credential; it reaches Google only
- * indirectly, through `env.SEO_MCP.fetch(...)`. This test scans every
- * TypeScript source file under `bff/src` (excluding `bff/ui`, which has its
- * own build and is out of scope for this containment claim) plus
+ * guarantee — the BFF never holds `GOOGLE_CLIENT_SECRET`,
+ * `GOOGLE_REFRESH_TOKEN`, or any Ads credential; it reaches Google's data
+ * APIs only indirectly, through `env.SEO_MCP.fetch(...)`. This test scans
+ * every TypeScript source file under `bff/src` (excluding `bff/ui`, which
+ * has its own build and is out of scope for this containment claim) plus
  * `bff/wrangler.jsonc` for any of those identifiers and fails if any are
  * found — a regression fence against a future authenticated route
  * accidentally introducing a credential binding.
+ *
+ * `GOOGLE_CLIENT_ID` is deliberately NOT in this list as of
+ * `domain-google-credentials` (Phase 4a): design.md's "the callback is
+ * pre-gate..." decision documents the BFF holding the app's `client_id` to
+ * build the Google consent-screen redirect URL for `bff/src/oauth/
+ * authorize.ts`. A `client_id` is a public identifier (it is sent in a
+ * plaintext redirect URL to the browser on every authorize call) — it is
+ * not a secret, unlike every identifier still in this list, none of which
+ * the BFF holds or needs.
  */
 import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const FORBIDDEN_IDENTIFIERS = [
-  "GOOGLE_CLIENT_ID",
   "GOOGLE_CLIENT_SECRET",
   "GOOGLE_REFRESH_TOKEN",
   "GOOGLE_ADS_DEVELOPER_TOKEN",

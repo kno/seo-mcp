@@ -74,7 +74,7 @@ function toTimingSafeSubtle(
   };
 }
 
-function readCookie(request: Request, name: string): string | undefined {
+export function readCookie(request: Request, name: string): string | undefined {
   const header = request.headers.get("cookie");
   if (!header) return undefined;
   for (const part of header.split(";")) {
@@ -178,7 +178,7 @@ export async function createSession(
   return new Response(null, {
     status: 204,
     headers: {
-      "set-cookie": `${SESSION_COOKIE_NAME}=${cookie}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${SESSION_TTL_SECONDS}`,
+      "set-cookie": `${SESSION_COOKIE_NAME}=${cookie}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL_SECONDS}`,
     },
   });
 }

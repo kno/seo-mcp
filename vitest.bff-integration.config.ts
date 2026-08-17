@@ -14,6 +14,9 @@ export default defineWorkersProject({
             DASHBOARD_SECRET: "integration-test-secret",
             DASHBOARD_SESSION_KEY: "integration-test-session-key",
             MCP_AUTH_TOKEN: "integration-test-mcp-token",
+            GOOGLE_OAUTH_STATE_KEY: "integration-test-oauth-state-key",
+            GOOGLE_CLIENT_ID:
+              "integration-test-client-id.apps.googleusercontent.com",
           },
           // Stub upstream standing in for `seo-mcp`, bound to the same
           // service name the BFF's `services` binding targets, so the BFF

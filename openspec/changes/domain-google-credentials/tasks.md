@@ -274,35 +274,78 @@ sites-schema list-sites-credential` green (all pass); full `pnpm test` green (16
 
 ## Phase 4a: BFF OAuth routes + `state` token + `gate.ts` `Lax` (PR4a) — `google-account-connect-flow`, `dashboard-bff`
 
-- [ ] 4a.1 RED `bff/test/oauth/state.test.ts`: forged signature rejected; replay (nonce already consumed)
+- [x] 4a.1 RED `bff/test/oauth/state.test.ts`: forged signature rejected; replay (nonce already consumed)
       rejected; expired rejected; session-`sub` mismatch rejected; `siteId` tampering rejected (spec
       "A tampered state is rejected" / "A session-mismatched state is rejected" / "A replayed state is
-      rejected on its second use" / "An expired state is rejected"; Threat Matrix row b)
-- [ ] 4a.2 GREEN `bff/src/oauth/state.ts`: `HMAC-SHA-256` over `v1:oauth-state|{siteId}|{sub}|{nonce}|{exp}`
+      rejected on its second use" / "An expired state is rejected"; Threat Matrix row b) — done: 6 RED
+      tests, confirmed failing (`Cannot find module`) before 4a.2
+- [x] 4a.2 GREEN `bff/src/oauth/state.ts`: `HMAC-SHA-256` over `v1:oauth-state|{siteId}|{sub}|{nonce}|{exp}`
       keyed by new `GOOGLE_OAUTH_STATE_KEY` secret; single-use via `GET`+`DELETE` of `oauth-state:{nonce}`
-      in KV, TTL 600s
-- [ ] 4a.3 RED `bff/test/oauth/authorize.test.ts`: unauthenticated request rejected before any KV write or
+      in KV, TTL 600s — done: all 6 tests pass. `siteId` tampering is caught structurally (any change to
+      the signed message invalidates the HMAC, so it is rejected as `forged`, not a separate code path).
+      `GOOGLE_OAUTH_STATE_KEY` added to `bff/src/env.d.ts`'s `Env` interface, `bff/.dev.vars` (local dev
+      value), and `vitest.bff-integration.config.ts`'s Miniflare bindings, mirroring
+      `DASHBOARD_SESSION_KEY`'s existing pattern. `RESULT_CACHE` (the existing KV binding) confirmed the
+      right binding to reuse — `bff/wrangler.jsonc` declares no other KV namespace
+- [x] 4a.3 RED `bff/test/oauth/authorize.test.ts`: unauthenticated request rejected before any KV write or
       redirect, no `state` minted (Threat Matrix row a); unknown `siteUrl` rejected before mint/redirect
-      (spec "An authorize request for an unknown site is rejected before redirecting")
-- [ ] 4a.4 GREEN `bff/src/oauth/authorize.ts`: behind `authenticate()`; mints `state`; redirects to Google
-      with `access_type=offline&prompt=consent` and the three scopes design specifies
-- [ ] 4a.5 RED `bff/test/oauth/callback.test.ts`: callback works with **no cookie present** (design's
+      (spec "An authorize request for an unknown site is rejected before redirecting") — done: 3 RED tests,
+      confirmed failing (`Cannot find module`) before 4a.4
+- [x] 4a.4 GREEN `bff/src/oauth/authorize.ts`: behind `authenticate()`; mints `state`; redirects to Google
+      with `access_type=offline&prompt=consent` and the three scopes design specifies — done: all 3 tests
+      pass. Since the BFF has no D1, "known site" is resolved by calling the existing `list_sites` MCP tool
+      and checking `siteId` membership, before any KV write. Added `GOOGLE_CLIENT_ID` (public, non-secret)
+      to `bff/src/env.d.ts`/`.dev.vars`/the integration config, mirroring root's `src/config.ts` value.
+      **Deviation, flagged for `sdd-verify`**: the pre-existing `bff/test/authenticated/containment.test.ts`
+      forbade `GOOGLE_CLIENT_ID` on the BFF's `Env` — written before this design's own explicit decision
+      ("it holds the (public) client_id to build the consent URL"). Updated that test's
+      `FORBIDDEN_IDENTIFIERS` list to drop `GOOGLE_CLIENT_ID` only (every true secret — `CLIENT_SECRET`,
+      `REFRESH_TOKEN`, the three Ads identifiers — stays forbidden), with a doc-comment note explaining why
+      a `client_id` is not a secret (it is sent in a plaintext redirect URL to the browser on every
+      authorize call)
+- [x] 4a.5 RED `bff/test/oauth/callback.test.ts`: callback works with **no cookie present** (design's
       pre-gate rationale); Google token-endpoint rejection classified, upstream text discarded (spec "A
       rejected code exchange surfaces a normalized error, not raw upstream text"; Threat Matrix row d); a
       failed exchange leaves no partial credential row (spec "A failed code exchange leaves no partial
-      credential row")
-- [ ] 4a.6 GREEN `bff/src/oauth/callback.ts`: pre-gate route registered in the same slot as `POST
+      credential row") — done: 3 RED tests, confirmed failing (`Cannot find module`) before 4a.6
+- [x] 4a.6 GREEN `bff/src/oauth/callback.ts`: pre-gate route registered in the same slot as `POST
 /auth/session` (`router.ts:802`); verifies `state`; forwards `code` to `seo-mcp` (implemented fully
       in 4b — this task only wires the forward call, no tool exists yet, so integration proof is deferred
-      to 4b)
-- [ ] 4a.7 RED `bff/test/gate.test.ts`: exact `Set-Cookie` attribute string is `SameSite=Lax`; every
-      state-changing route remains POST or `confirm`-gated (Threat Matrix row h)
-- [ ] 4a.8 GREEN `bff/src/gate.ts:181`: `SameSite=Strict` → `SameSite=Lax`
-- [ ] 4a.9 RED `bff/test/integration/`: `/api/tools/connect_google_account` returns 404 (design's
-      not-in-`AUTHENTICATED_REGISTRY` invariant, exercised structurally even before 4b's tool exists);
-      authorize/callback/disconnect/recheck are each individually enumerated, not pattern-matched (spec
-      "The callback route is not reachable via the generic tool-call path")
-- [ ] 4a.10 PROOF `pnpm test -- oauth state gate`; `pnpm test` green
+      to 4b) — done: all 3 tests pass. `connect_error` enum values: `state_invalid` (missing/malformed/
+      forged/expired/replayed/session-mismatched state) and `token_exchange_failed` (the forwarded
+      `connect_google_account` call did not report success — this also covers the 404 the call produces
+      today, since the tool does not exist until 4b). Added `"connect_google_account"` to `bff/src/
+timeout.ts`'s `ToolName` union (30s budget: token exchange + the mandatory post-connect health probe)
+      so the call is type-checked now — the tool itself (`src/mcp-tools/site-credentials.ts`) is NOT built;
+      this is only the BFF-side name/timeout declaration. "No partial credential row" is trivially true:
+      the BFF has no D1 binding, so it structurally cannot write a credential row from this route at all
+- [x] 4a.7 RED `bff/test/gate.test.ts`: exact `Set-Cookie` attribute string is `SameSite=Lax`; every
+      state-changing route remains POST or `confirm`-gated (Threat Matrix row h) — done: 2 new tests added.
+      **Deviation, flagged for `sdd-verify`**: the `SameSite=Lax` GREEN change (4a.8) was made in the same
+      pass as an unrelated prep edit (exporting `readCookie` from `gate.ts` for `authorize.ts` to reuse)
+      before this RED test was written, so strict RED-first ordering was not observed for this one line —
+      confirmed the RED test passes against the already-changed `gate.ts`, but did not observe it fail
+      first. The state-changing-route assertion instead statically greps `router.ts` for each
+      `delete_*`/`disconnect_*` route's preceding `request.method === "POST"` check, since no live
+      disconnect/recheck route exists yet (Phase 4b)
+- [x] 4a.8 GREEN `bff/src/gate.ts:181`: `SameSite=Strict` → `SameSite=Lax` — done (see 4a.7's note on
+      ordering)
+- [x] 4a.9 RED `bff/test/integration/oauth-connect-routes.test.ts`: `/api/tools/connect_google_account`
+      returns 404 (design's not-in-`AUTHENTICATED_REGISTRY` invariant, exercised structurally even before
+      4b's tool exists); authorize/callback are each individually enumerated, not pattern-matched (spec
+      "The callback route is not reachable via the generic tool-call path") — done: 4 tests, all passing
+      against the router wiring already in place from 4a.4/4a.6 (this file was written and run after those,
+      not confirmed RED first, since it verifies the router wiring itself rather than a new unit). Covers:
+      `connect_google_account` 404s even authenticated; `/auth/google/authorized` (typo) does not match;
+      the authorize route requires authentication; the callback route is reachable with no session cookie
+      and rejects a forged state as `state_invalid`. **Deviation**: `disconnect`/`recheck` routes do not
+      exist yet (Phase 4b) so are not covered here
+- [x] 4a.10 PROOF `pnpm test -- oauth state gate`: 166 files, 1510 tests, all green (up from 162/1489
+      before this phase); full `pnpm test` green (same counts); `pnpm typecheck` clean (required one
+      exhaustiveness fix: `bff/src/cache.ts`'s `CACHE_TTL_SECONDS: Record<ToolName, number>` needed a
+      `connect_google_account` placeholder entry, mirroring `list_sites`/`add_site`/`delete_site`'s own
+      "never actually cached, present only for exhaustiveness" precedent); `pnpm run format:check` clean
+      after one `prettier --write` pass on 5 files
 
 ## Phase 4b: Three new MCP tools — `connect_google_account`, `disconnect_google_account`, `check_site_credentials` (PR4b) — `site-google-credentials`, `dashboard-bff`
 

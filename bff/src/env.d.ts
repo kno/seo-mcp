@@ -19,4 +19,8 @@ interface Env {
   DASHBOARD_SESSION_KEY: string;
   /** Shared MCP bearer token, injected only on the `SEO_MCP` service-binding fetch. */
   MCP_AUTH_TOKEN: string;
+  /** HMAC signing key for the OAuth `state` token (`bff/src/oauth/state.ts`), deliberately separate from `DASHBOARD_SESSION_KEY`. */
+  GOOGLE_OAUTH_STATE_KEY: string;
+  /** The app's Google OAuth client ID — public, safe to hold in the BFF to build the consent-screen redirect URL. Mirrors `src/config.ts`'s `GOOGLE_CLIENT_ID`. */
+  GOOGLE_CLIENT_ID: string;
 }

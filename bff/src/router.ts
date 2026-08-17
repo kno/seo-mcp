@@ -5,9 +5,15 @@
  * deep links) is deliberately NOT gated — a fresh visitor must be able to
  * load the page containing the login form, or they could never submit it;
  * the shell holds no data of its own, only `/api/*` ever reaches `SEO_MCP`
- * or any credential. `POST /auth/session` is the one `/api/`-adjacent
- * exception: it is the login endpoint itself, so it cannot require a prior
- * session.
+ * or any credential. Three `/api/`-adjacent exceptions exist: `POST
+ * /auth/session` (the login endpoint itself, so it cannot require a prior
+ * session), `GET /auth/google/callback` (`google-account-connect-flow`'s
+ * OAuth callback — pre-gate, authorized by the signed `state` token rather
+ * than the session cookie, since Google's cross-site redirect to it is not
+ * guaranteed to carry one), and `GET /auth/google/authorize` (gated by
+ * `authenticate()`, same as `/api/*`, but its own path is not under
+ * `/api/` since it manages the `state` round-trip rather than proxying an
+ * MCP tool call).
  *
  * Each tool route validates its own inputs with a Zod schema mirroring
  * `src/server.ts`'s `inputSchema` for that tool exactly (same fields, same
@@ -63,6 +69,8 @@
 
 import * as z from "zod/v4";
 import { authenticate, createSession } from "./gate";
+import { handleOauthAuthorize } from "./oauth/authorize";
+import { handleOauthCallback } from "./oauth/callback";
 import { bffErrorResponse, type BffErrorCode } from "./errors";
 import { callTool, type McpClientResult } from "./mcp-client";
 import { TOOL_TIMEOUT_MS, type ToolName } from "./timeout";
@@ -805,19 +813,43 @@ export async function handleRequest(
     return createSession(request, env);
   }
 
+  // `google-account-connect-flow`: the OAuth callback is a SECOND pre-gate
+  // route, in the same spirit as `POST /auth/session` above — Google's
+  // cross-site 302 to this route is not guaranteed to carry the dashboard
+  // session cookie, so this route authorizes itself via the signed,
+  // single-use `state` token instead (`bff/src/oauth/callback.ts`), never
+  // via `authenticate()`. Explicitly enumerated, never reachable through
+  // the generic `/api/tools/{tool}` dispatch path below.
+  if (request.method === "GET" && url.pathname === "/auth/google/callback") {
+    return handleOauthCallback(request, env, undefined);
+  }
+
   // The SPA shell itself (`/`, hashed assets, unknown deep links) is
   // never gated — a fresh visitor must be able to load the page
   // containing the login form, or they could never submit it. Only
-  // `/api/*` ever reaches SEO_MCP or any credential, so only `/api/*` is
-  // gated. `run_worker_first: true` on the `assets` binding still routes
-  // this request to this Worker rather than letting the Asset Worker's
-  // own SPA fallback intercept it.
-  if (url.pathname.startsWith("/api/")) {
+  // `/api/*` (and the OAuth authorize route below, which manages its own
+  // `site_credentials` state rather than proxying a tool call) ever
+  // reaches SEO_MCP or any credential, so only those are gated.
+  // `run_worker_first: true` on the `assets` binding still routes this
+  // request to this Worker rather than letting the Asset Worker's own SPA
+  // fallback intercept it.
+  const requiresGate =
+    url.pathname.startsWith("/api/") ||
+    url.pathname === "/auth/google/authorize";
+  if (requiresGate) {
     const outcome = await authenticate(request, env);
     if (outcome === "unavailable") return bffErrorResponse("gate_unavailable");
     if (outcome === "denied") return bffErrorResponse("gate_unauthorized");
   } else {
     return env.ASSETS.fetch(request);
+  }
+
+  // `google-account-connect-flow`: authorize route, explicitly enumerated
+  // (never pattern-matched), a second route class distinct from the
+  // tool-proxy routes below — it manages the `state` token round-trip, not
+  // an MCP tool call.
+  if (request.method === "GET" && url.pathname === "/auth/google/authorize") {
+    return handleOauthAuthorize(request, env, undefined);
   }
 
   // The one secret-bearing route accepts POST with a JSON body, so a

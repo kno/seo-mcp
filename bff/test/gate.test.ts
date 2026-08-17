@@ -121,4 +121,38 @@ describe("createSession — timing-safe credential comparison", () => {
     const response = await createSession(request, env);
     expect(response.status).toBe(400);
   });
+
+  it("issues the session cookie with the exact SameSite=Lax attribute (Threat Matrix row h)", async () => {
+    const env = fakeEnv();
+    const request = new Request("https://bff.example/auth/session", {
+      method: "POST",
+      body: JSON.stringify({ secret: env.DASHBOARD_SECRET }),
+    });
+    const response = await createSession(request, env);
+    const setCookie = response.headers.get("set-cookie");
+    expect(setCookie).toContain("SameSite=Lax");
+    expect(setCookie).not.toContain("SameSite=Strict");
+  });
+});
+
+describe("router.ts — every state-changing route remains POST or confirm-gated (Threat Matrix row h)", () => {
+  it("every /api/tools/{delete_*} route is registered POST-only in router.ts", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const source = readFileSync(join(__dirname, "../src/router.ts"), "utf8");
+    const stateChangingPaths = [
+      "/api/tools/delete_search_console_snapshot",
+      "/api/tools/delete_crawl_snapshot",
+      "/api/tools/delete_site",
+    ];
+    for (const path of stateChangingPaths) {
+      const anchor = source.indexOf(`url.pathname === "${path}"`);
+      expect(anchor).toBeGreaterThan(-1);
+      const precedingSlice = source.slice(0, anchor);
+      const lastMethodCheckIndex = precedingSlice.lastIndexOf(
+        'request.method === "POST"',
+      );
+      expect(lastMethodCheckIndex).toBeGreaterThan(-1);
+    }
+  });
 });

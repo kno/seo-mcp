@@ -118,7 +118,15 @@ export type ToolName =
   | "delete_crawl_snapshot"
   | "list_sites"
   | "add_site"
-  | "delete_site";
+  | "delete_site"
+  // `google-account-connect-flow` (PR4a) forwards the OAuth `code` to this
+  // tool; `dashboard-bff`'s spec requires a timeout above the combined
+  // worst case of a Google token exchange plus the mandatory post-connect
+  // health probe (Phase 3's `runConnectHealthCheck`). The tool itself is
+  // NOT built until Phase 4b — this entry exists so `bff/src/oauth/
+  // callback.ts` can call it with a type-checked `ToolName` now; the call
+  // 404s at runtime until 4b lands, by design.
+  | "connect_google_account";
 
 export const TOOL_TIMEOUT_MS: Record<ToolName, number> = {
   health: 5000,
@@ -152,6 +160,10 @@ export const TOOL_TIMEOUT_MS: Record<ToolName, number> = {
   list_sites: 10_000,
   add_site: 10_000,
   delete_site: 10_000,
+  // Token exchange + the mandatory synchronous post-connect health probe
+  // (two Google calls, `dashboard-bff`'s "at least 25 seconds" budget for
+  // token exchange plus tool latency) — 30s leaves a small margin above.
+  connect_google_account: 30_000,
 };
 
 export type TimeoutResult<T> =
