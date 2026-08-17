@@ -258,11 +258,24 @@ async function sha256Hex(input: string): Promise<string> {
     .join("");
 }
 
+/**
+ * `accountKey`, when provided (authenticated routes only —
+ * `domain-google-credentials`, Phase 5), scopes the key per resolved Google
+ * account so `get_keyword_metrics`/`search_console_query`/etc. for
+ * identical args under two different accounts never share a cache entry
+ * (design.md, "the second cross-account leak"). Every non-authenticated
+ * caller (`dispatch()`, `router.ts`) omits it, keeping their existing
+ * unscoped `v1:{tool}:{hash}` key exactly as-is.
+ */
 export async function cacheKey(
   tool: ToolName,
   inputs: unknown,
+  accountKey?: string,
 ): Promise<string> {
-  return `v1:${tool}:${await sha256Hex(canonicalJson(inputs))}`;
+  const hash = await sha256Hex(canonicalJson(inputs));
+  return accountKey === undefined
+    ? `v1:${tool}:${hash}`
+    : `v1:${tool}:${accountKey}:${hash}`;
 }
 
 /**

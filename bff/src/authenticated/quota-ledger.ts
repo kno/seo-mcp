@@ -5,12 +5,19 @@
  * bucket, applied to a SECOND, independently exhaustible budget (Google's
  * own per-source quota, not the MCP's 60-req/60s bucket).
  *
- * Key shape: `q1:{source}:{windowStart}`, where `windowStart` is a
- * day-aligned (24h) bucket boundary in epoch milliseconds — daily, to
+ * Key shape: `q1:{source}:{accountKey}:{windowStart}`, where `windowStart`
+ * is a day-aligned (24h) bucket boundary in epoch milliseconds — daily, to
  * match `AUTH_SOURCE_BUDGET`'s "daily soft budget" semantics
  * (`bff/wrangler.jsonc`). The window need not align to local midnight; it
  * only needs to be a stable, deterministic 24h bucket, which
  * `Math.floor(now / LEDGER_WINDOW_MS) * LEDGER_WINDOW_MS` gives for free.
+ *
+ * `accountKey` (`domain-google-credentials`, Phase 5) buckets the ledger per
+ * resolved Google account — two sites resolving to the SAME account share
+ * ONE bucket (`account-scope.ts#resolveAccountForRoute`'s `accountKey` is
+ * identical for both), two sites on two different accounts never share a
+ * bucket. Without this, Google-side quota exhaustion for one connected
+ * account would be reported as if it applied to every other account too.
  *
  * Three invariants this module (together with its ONE call site in
  * `router.ts`) enforces, per design.md's "Decision: BFF-side upstream
@@ -41,24 +48,25 @@ function windowStart(now: number): number {
   return Math.floor(now / LEDGER_WINDOW_MS) * LEDGER_WINDOW_MS;
 }
 
-function ledgerKey(source: string, now: number): string {
-  return `q1:${source}:${windowStart(now)}`;
+function ledgerKey(source: string, accountKey: string, now: number): string {
+  return `q1:${source}:${accountKey}:${windowStart(now)}`;
 }
 
 /**
- * Increments `source`'s counter for the window containing `now`. Any KV
- * failure (missing binding, throwing `get`/`put`, malformed stored value)
- * is swallowed — a ledger write failure MUST NOT fail the caller's
+ * Increments `source`'s counter for `accountKey`'s window containing `now`.
+ * Any KV failure (missing binding, throwing `get`/`put`, malformed stored
+ * value) is swallowed — a ledger write failure MUST NOT fail the caller's
  * request, exactly like `cache.ts#putCached`.
  */
 export async function incrementLedger(
   kv: KVNamespace | undefined,
   source: string,
+  accountKey: string = "global",
   now: number = Date.now(),
 ): Promise<void> {
   if (!kv) return;
   try {
-    const key = ledgerKey(source, now);
+    const key = ledgerKey(source, accountKey, now);
     const raw = await kv.get(key);
     const current = raw === null ? 0 : Number(raw);
     const count = Number.isFinite(current) ? current + 1 : 1;
@@ -88,9 +96,10 @@ export async function recordUpstreamAttempt(
   ctx: ExecutionContext | undefined,
   kv: KVNamespace | undefined,
   source: string,
+  accountKey: string = "global",
   now: number = Date.now(),
 ): Promise<void> {
-  const attempt = incrementLedger(kv, source, now);
+  const attempt = incrementLedger(kv, source, accountKey, now);
   if (ctx) {
     ctx.waitUntil(attempt);
     return;
@@ -121,11 +130,12 @@ export async function getQuotaEstimate(
   kv: KVNamespace | undefined,
   source: string,
   budget: number,
+  accountKey: string = "global",
   now: number = Date.now(),
 ): Promise<QuotaEstimate> {
   if (!kv) return { source, atLeast: 0, budget, basis: "unavailable" };
   try {
-    const raw = await kv.get(ledgerKey(source, now));
+    const raw = await kv.get(ledgerKey(source, accountKey, now));
     const atLeast = raw === null ? 0 : Number(raw);
     return {
       source,

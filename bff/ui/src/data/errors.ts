@@ -197,6 +197,30 @@ export const ERROR_PRESENTATION: Record<BffErrorCode, ErrorPresentation> = {
     retry: { kind: "manual" },
     operatorActionRequired: false,
   },
+  // `domain-google-credentials` (Phase 5): a pre-call gate decision
+  // (`bff/src/authenticated/account-scope.ts#gateSiteCredential`), never a
+  // classification of upstream Google error text. Full UI wiring (which
+  // view renders each state) is Phase 6 (`site-google-credentials`, UI
+  // surface) — deliberately out of Phase 5's scope. These minimal entries
+  // exist only so this exhaustive `Record` compiles once the union grows.
+  site_credential_not_connected: {
+    code: "site_credential_not_connected",
+    title: "No Google account connected",
+    description:
+      "This site has no working Google account connected. This requires operator action.",
+    placement: "panel",
+    retry: { kind: "disabled-permanent" },
+    operatorActionRequired: true,
+  },
+  site_credential_unhealthy: {
+    code: "site_credential_unhealthy",
+    title: "Google account failed its last health check",
+    description:
+      "This site's Google account failed its last health check. This requires operator action.",
+    placement: "panel",
+    retry: { kind: "disabled-permanent" },
+    operatorActionRequired: true,
+  },
 };
 
 function unmappedPresentation(error: BffError): ErrorPresentation {

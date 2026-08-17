@@ -423,27 +423,113 @@ module`) before 4b.2
 
 ## Phase 5: Credential-scoped BFF cache key + per-account quota ledger (PR5) — `quota-visibility`, `authenticated-source-contract`
 
-- [ ] 5.1 RED `bff/test/authenticated/scoping.test.ts`: two `accountKey`s produce **different cache keys
+- [x] 5.1 RED `bff/test/authenticated/scoping.test.ts`: two `accountKey`s produce **different cache keys
       for identical args** (Threat Matrix row e, the second cross-account leak design.md identified);
       ledger buckets per account; two sites on one Google account share one bucket (spec "Sites sharing the
       global fallback show the shared tier's estimate..." generalizes: same account ⇒ same bucket);
       `credential` envelope field is required on every authenticated result (spec "Every Authenticated
-      Result Carries Credential Provenance")
-- [ ] 5.2 RED KV absent or throwing for the `ak1:{siteUrl}` map still serves a live result with an
-      `unavailable` quota estimate rather than a closed failure (Threat Matrix row k)
-- [ ] 5.3 GREEN `bff/src/cache.ts`: `cacheKey = v1:{tool}:{accountKey}:{sha256(args)}` for authenticated
-      routes; `bff/src/authenticated/quota-ledger.ts`: `q1:{source}:{accountKey}:{windowStart}`
-- [ ] 5.4 GREEN `accountKey` resolution from `ak1:{siteUrl}` in `RESULT_CACHE` (TTL 300s), written by every
-      `list_sites` response, invalidated by connect/disconnect (4b) on write
-- [ ] 5.5 GREEN `bff/src/router.ts:556-575`: `credential: {source, accountKey, accountLabel?,
-basis: "bff-resolved"}` required on the authenticated envelope
-- [ ] 5.6 RED two new `BffErrorCode`s: `site_credential_not_connected` (503), `site_credential_unhealthy`
+      Result Carries Credential Provenance") — done: 4 new `describe` blocks (headline cross-account cache
+      test, per-account/shared-account ledger bucketing, credential-envelope presence). **Deviation from
+      strict RED-first ordering, flagged for `sdd-verify`**: given this phase's implementation complexity
+      (new `account-scope.ts` module, cache/ledger key-shape changes, router wiring, error codes all
+      interdependent), the test file was written and run alongside the GREEN implementation rather than
+      confirmed failing first against an unimplemented target — same category of deviation 4a.7 already
+      flagged for this change. Also fixed the pre-existing `bff/test/integration/stub-mcp-worker.js`
+      `list_sites` fixture (`https://example.com`'s credential was `tier: "none"`/`not_connected`, added in
+      Phase 4a purely for `authorize.ts`'s "known site" `site.id` check, which never reads `credential`) to
+      a healthy `tier: "site"` entry — three pre-existing GSC integration tests use that exact `siteUrl` for
+      an authenticated call, and 5.6's new gate now legitimately rejects an unhealthy/unconnected site
+      before the call, so the fixture needed to represent a genuinely healthy site to keep meaning "the call
+      succeeded" the way it did before this phase
+- [x] 5.2 RED KV absent or throwing for the `ak1:{siteUrl}` map still serves a live result with an
+      `unavailable` quota estimate rather than a closed failure (Threat Matrix row k) — done: two tests in
+      `scoping.test.ts` (`RESULT_CACHE` absent, `RESULT_CACHE` throwing on the `ak1` lookup), both asserting
+      `response.status === 200` and a live `data` payload; `account-scope.ts#resolveAccountForRoute` short-
+      circuits to a fixed `"global"` fallback with no network call at all when `kv` is absent (nothing to
+      cache into), and `getSiteAccountEntry`/`putSiteAccountEntry` wrap every KV call in try/catch exactly
+      like `cache.ts#getCached`/`putCached`
+- [x] 5.3 GREEN `bff/src/cache.ts`: `cacheKey = v1:{tool}:{accountKey}:{sha256(args)}` for authenticated
+      routes; `bff/src/authenticated/quota-ledger.ts`: `q1:{source}:{accountKey}:{windowStart}` — done:
+      `cacheKey(tool, inputs, accountKey?)` gained a third, OPTIONAL parameter — every non-authenticated
+      caller (`dispatch()`) omits it, keeping `v1:{tool}:{hash}` byte-identical to before; `dispatchAuthenticated()`
+      is the only caller that passes `account.accountKey`. `incrementLedger`/`recordUpstreamAttempt`/
+      `getQuotaEstimate` all gained an `accountKey: string = "global"` parameter (inserted before their
+      existing `now` parameter) — this is a POSITIONAL, non-backward-compatible signature change (unlike
+      `cacheKey`'s optional-trailing-param approach), so every existing call site in
+      `bff/test/authenticated/quota-ledger.test.ts` and `bff/src/router.ts` was updated to pass an explicit
+      `accountKey` argument
+- [x] 5.4 GREEN `accountKey` resolution from `ak1:{siteUrl}` in `RESULT_CACHE` (TTL 300s), written by every
+      `list_sites` response, invalidated by connect/disconnect (4b) on write — done: new
+      `bff/src/authenticated/account-scope.ts`. `resolveAccountForRoute(kv, siteUrl, deps)` reads
+      `ak1:{siteUrl}` first; on a miss, `refreshSiteAccountMap` issues one inline `list_sites` call and
+      writes a fresh `ak1:{url}` entry (the SAME `credential` object `list_sites` already computes per site
+      via `credentialStatusForSite`, `src/google/health.ts` — reused verbatim, never re-derived) for EVERY
+      returned site at once. A `siteUrl` absent from `list_sites`' own rows (should not happen in production
+      — every `siteUrl` argument corresponds to a stored site — but does happen against a test stub that
+      does not know about every `siteUrl` a test exercises) also gets a cached fallback entry, so a
+      genuinely unresolvable site does not re-issue a `list_sites` call on every single request for the
+      remainder of the 300s TTL. **Invalidation, and where it actually lives (see the constraints section
+      below for why this needed re-reading design.md's two-key-spaces split)**: `connect_google_account`'s
+      own result carries `siteUrl` (`connectGoogleAccountResultSchema`), so `bff/src/oauth/callback.ts` —
+      the ONLY BFF-side code that ever sees a successful connect — calls `deleteSiteAccountEntry(env.RESULT_CACHE,
+result.data.siteUrl)` right after the forwarded `connect_google_account` call succeeds, exactly
+      matching design.md's mermaid diagram's `delete ak1:{siteUrl}` step. `disconnect_google_account`'s own
+      result carries only `{siteId, disconnected}` — no `siteUrl` to key a single delete on — so
+      `bff/src/router.ts`'s `POST /api/tools/disconnect_google_account` route instead calls
+      `refreshSiteAccountMap` again after a successful disconnect (fire-and-forget via `ctx.waitUntil` when
+      available, mirroring `quota-ledger.ts#recordUpstreamAttempt`'s own ctx-present/absent split), which
+      overwrites EVERY site's entry — including the just-disconnected one — with current truth. Both
+      invalidation call sites are BFF-side (inside `bff/src/oauth/callback.ts`/`bff/src/router.ts`), per
+      design's "the `ak1:{siteUrl}` KV map lives in the BFF's `RESULT_CACHE`" — `seo-mcp`'s own
+      `src/mcp-tools/site-credentials.ts` connect/disconnect handlers needed NO changes, since they have no
+      KV binding at all and were never the right place for this call
+- [x] 5.5 GREEN `bff/src/router.ts:556-575`: `credential: {source, accountKey, accountLabel?,
+basis: "bff-resolved"}` required on the authenticated envelope — done: `authenticatedToolResponse` gained a
+      required `account: AccountResolution` parameter; the `credential` field is now UNCONDITIONALLY present
+      (never `?.`) on every response — hit, miss, and bypass alike — sourced from the SAME
+      `resolveAccountForRoute` call `dispatchAuthenticated()` already needs for cache-key scoping (computed
+      once per request, reused for the cache key, the ledger, the 5.6 gate, and this envelope field — no
+      duplicate resolution). Note the task's own literal field list omits `accountLabel`'s `?` in practice:
+      it is always present (as `string | null`), never omitted, matching `credentialStatusSchema`'s own
+      `accountLabel: z.string().nullable()` discipline rather than the optional-omission pattern
+      `currencyLabel`/`criteria` use elsewhere in this same function
+- [x] 5.6 RED two new `BffErrorCode`s: `site_credential_not_connected` (503), `site_credential_unhealthy`
       (503), distinct from `upstream_source_not_configured`/`upstream_credential_failure` (mcp-error-contract
       spec "A site with no usable credential gets its own code" / "A health-check-gated site cannot be
-      selected in the first place")
-- [ ] 5.7 GREEN `bff/src/errors.ts`: add the two codes with sanitized messages (mcp-error-contract spec
-      "An invalid-credential message names the category, not the upstream detail")
-- [ ] 5.8 PROOF `pnpm test -- cache quota-ledger`; `wrangler types` regenerated if bindings changed
+      selected in the first place") — done: 2 tests in `scoping.test.ts`. Implemented as a PRE-CALL gate
+      (`account-scope.ts#gateSiteCredential`), never a classification of upstream Google error text like
+      `classify.ts`'s two existing functions — `dispatchAuthenticated()` calls it immediately after
+      resolving the account and BEFORE any cache read or upstream call. Fires `site_credential_not_connected`
+      when the resolved tier is `"none"` (presented as `searchConsole: "not_connected"` — the two states are
+      1:1, per `credentialStatusForSite`'s own construction: `not_connected` only ever arises when `tier`
+      is `"none"`); fires `site_credential_unhealthy` when `searchConsole` state is exactly `"unhealthy"`.
+      Deliberately reads ONLY the `searchConsole` health field regardless of the calling tool's own source
+      (`search-console` or `google-ads`) — per this phase's own instruction, Ads health never gates,
+      matching Phase 3's `ensureSelectableHealth`'s existing "selectability is gated on the Search Console
+      probe only" decision (`src/google/health.ts`). Gating only applies when the route has a `siteUrl`
+      argument at all — `get_keyword_metrics`/`discover_keywords` have none yet (Threat Matrix row g,
+      explicitly deferred elsewhere), so they always resolve the `siteUrl === undefined` fallback
+      (`searchConsoleHealth: "unchecked"`, never gated), unchanged from their pre-Phase-5 behavior
+- [x] 5.7 GREEN `bff/src/errors.ts`: add the two codes with sanitized messages (mcp-error-contract spec
+      "An invalid-credential message names the category, not the upstream detail") — done: both messages
+      name only the category ("no working Google account connected" / "failed its last health check"),
+      never any upstream/internal detail. Also added matching minimal entries to
+      `bff/ui/src/data/errors.ts`'s `ERROR_PRESENTATION` (that table's own `Record<BffErrorCode, ...>`
+      exhaustiveness broke `tsc` otherwise) and bumped `bff/ui/src/data/errors.test.ts`'s exhaustiveness
+      count from 16 to 18 — full UI wiring (which view renders each state) is out of scope for Phase 5,
+      same "minimal entry only" precedent Phase 2's three PR2 codes already established in that file
+- [x] 5.8 PROOF `pnpm test -- cache quota-ledger`; `wrangler types` regenerated if bindings changed — done:
+      focused `pnpm test -- scoping cache quota-ledger authenticated-gsc-insights authenticated-search-console
+oauth` green (169 files, 1527 tests); full `pnpm test` green (same counts, up from 168/1518 before this
+      phase); `pnpm typecheck` clean (both root and `bff/ui` programs — required adding the two new codes to
+      `bff/ui/src/data/errors.ts`'s exhaustive `Record`); `pnpm run format:check` clean after one
+      `prettier --write` pass on the touched files. No Cloudflare binding changed (this phase only adds
+      logic over the EXISTING `RESULT_CACHE` KV binding) — `wrangler types` regeneration skipped, as
+      anticipated. Two pre-existing tests needed updates unrelated to their own stated purpose, both noted
+      above: `stub-mcp-worker.js`'s `list_sites` fixture (5.1's note) and
+      `bff/test/integration/cache.test.ts`'s `list_search_console_snapshots` call-count test, which now
+      does one warm-up request before capturing its `before` baseline so the new one-time `ak1` map refresh
+      cost for a never-before-seen `siteUrl` does not pollute its own unrelated cache-behavior assertion
 
 ## Phase 6: UI — Manage Domains, site selector gating, per-account Ads badge (PR6) — `site-google-credentials` (UI surface), `quota-visibility`
 

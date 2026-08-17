@@ -39,9 +39,15 @@ describe("incrementLedger", () => {
   it("increments the counter for the source's current window", async () => {
     const kv = fakeKv();
     const now = Date.parse("2026-08-13T00:00:00Z");
-    await incrementLedger(kv, "search-console", now);
-    await incrementLedger(kv, "search-console", now);
-    const estimate = await getQuotaEstimate(kv, "search-console", 300, now);
+    await incrementLedger(kv, "search-console", "acct-a", now);
+    await incrementLedger(kv, "search-console", "acct-a", now);
+    const estimate = await getQuotaEstimate(
+      kv,
+      "search-console",
+      300,
+      "acct-a",
+      now,
+    );
     expect(estimate.atLeast).toBe(2);
     expect(estimate.basis).toBe("bff-observed");
   });
@@ -49,20 +55,20 @@ describe("incrementLedger", () => {
   it("keys separate sources independently", async () => {
     const kv = fakeKv();
     const now = Date.now();
-    await incrementLedger(kv, "search-console", now);
-    const other = await getQuotaEstimate(kv, "google-ads", 300, now);
+    await incrementLedger(kv, "search-console", "acct-a", now);
+    const other = await getQuotaEstimate(kv, "google-ads", 300, "acct-a", now);
     expect(other.atLeast).toBe(0);
   });
 
   it("never throws when the KV binding throws", async () => {
     await expect(
-      incrementLedger(throwingKv(), "search-console", Date.now()),
+      incrementLedger(throwingKv(), "search-console", "acct-a", Date.now()),
     ).resolves.toBeUndefined();
   });
 
   it("is a no-op (never throws) when the KV binding is absent", async () => {
     await expect(
-      incrementLedger(undefined, "search-console", Date.now()),
+      incrementLedger(undefined, "search-console", "acct-a", Date.now()),
     ).resolves.toBeUndefined();
   });
 });
@@ -140,20 +146,42 @@ describe("recordUpstreamAttempt — fire-and-forget via ctx.waitUntil when ctx i
       passThroughOnException: () => {},
     } as unknown as ExecutionContext;
 
-    await recordUpstreamAttempt(ctx, kv, "search-console", Date.now());
+    await recordUpstreamAttempt(
+      ctx,
+      kv,
+      "search-console",
+      "acct-a",
+      Date.now(),
+    );
     // recordUpstreamAttempt resolved without this test ever awaiting the
     // ledger write directly — the only way it could complete the KV write
     // is through the promise handed to ctx.waitUntil.
     expect(pending).toHaveLength(1);
     await Promise.all(pending);
-    const estimate = await getQuotaEstimate(kv, "search-console", 300);
+    const estimate = await getQuotaEstimate(
+      kv,
+      "search-console",
+      300,
+      "acct-a",
+    );
     expect(estimate.atLeast).toBe(1);
   });
 
   it("awaits the increment inline when ctx is absent (test-only fallback)", async () => {
     const kv = fakeKv();
-    await recordUpstreamAttempt(undefined, kv, "search-console", Date.now());
-    const estimate = await getQuotaEstimate(kv, "search-console", 300);
+    await recordUpstreamAttempt(
+      undefined,
+      kv,
+      "search-console",
+      "acct-a",
+      Date.now(),
+    );
+    const estimate = await getQuotaEstimate(
+      kv,
+      "search-console",
+      300,
+      "acct-a",
+    );
     expect(estimate.atLeast).toBe(1);
   });
 });

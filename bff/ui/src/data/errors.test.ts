@@ -9,9 +9,9 @@ describe("ERROR_PRESENTATION", () => {
     // (a missing key fails `tsc`) is enforced by `errors.ts`'s own type
     // annotation and is verified separately (see apply-progress).
     const codes = Object.keys(ERROR_PRESENTATION) as BffErrorCode[];
-    expect(codes).toHaveLength(16);
+    expect(codes).toHaveLength(18);
     const titles = new Set(codes.map((code) => ERROR_PRESENTATION[code].title));
-    expect(titles.size).toBe(16);
+    expect(titles.size).toBe(18);
   });
 });
 

@@ -27,7 +27,9 @@ export type BffErrorCode =
   | "upstream_credential_failure"
   | "upstream_source_quota"
   | "upstream_storage_not_configured"
-  | "insufficient_snapshots";
+  | "insufficient_snapshots"
+  | "site_credential_not_connected"
+  | "site_credential_unhealthy";
 
 export interface BffError {
   code: BffErrorCode;
@@ -129,6 +131,21 @@ export const ERROR_TABLE: Record<BffErrorCode, ErrorTableEntry> = {
     status: 422,
     message:
       "At least two stored snapshots are required to compare. Capture another snapshot first.",
+  },
+  // `domain-google-credentials` (Phase 5) — a pre-call GATE decision
+  // (`bff/src/authenticated/account-scope.ts#gateSiteCredential`), never a
+  // classification of upstream Google error text, distinct from
+  // `upstream_source_not_configured`/`upstream_credential_failure` (which
+  // both describe a failure discovered DURING an attempted call). Messages
+  // name the category, never the raw upstream detail, matching every other
+  // code's sanitization discipline in this table.
+  site_credential_not_connected: {
+    status: 503,
+    message: "This site has no working Google account connected.",
+  },
+  site_credential_unhealthy: {
+    status: 503,
+    message: "This site's Google account failed its last health check.",
   },
 };
 

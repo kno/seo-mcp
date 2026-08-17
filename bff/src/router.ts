@@ -123,6 +123,13 @@ import {
   type QuotaEstimate,
 } from "./authenticated/quota-ledger";
 import type { EffectiveCriteria } from "./authenticated/criteria";
+import {
+  deleteSiteAccountEntry,
+  gateSiteCredential,
+  refreshSiteAccountMap,
+  resolveAccountForRoute,
+  type AccountResolution,
+} from "./authenticated/account-scope";
 
 const crawlPageInputSchema = z.object({
   url: z.url().describe("Public HTTP or HTTPS page URL"),
@@ -574,6 +581,17 @@ async function dispatch<TInput, TResult>(
  *   This is a BFF-ENVELOPE field sourced from config, never read from the
  *   tool's own payload — `KeywordMetric` carries no currency field at all
  *   (verified: `src/google/ads.ts:9-16`).
+ * - `credential`, REQUIRED on every response (`domain-google-credentials`,
+ *   Phase 5, `authenticated-source-contract` "Every Authenticated Result
+ *   Carries Credential Provenance"): `{ source: "site" | "global",
+ *   accountKey, accountLabel, basis: "bff-resolved" }`, sourced from
+ *   `account-scope.ts#resolveAccountForRoute` — itself reusing `list_sites`'
+ *   already-computed `credential` field (`credentialStatusForSite`,
+ *   `src/google/health.ts`) rather than re-deriving anything (design.md,
+ *   "Decision: provenance rides the BFF envelope, not sixteen output
+ *   schemas"). `basis: "bff-resolved"` is deliberate, honest labelling: the
+ *   value comes from the BFF's 300s-TTL map, not from the code path that
+ *   actually chose the credential.
  * - `criteria`, present ONLY for a `seo-intelligence-view` route with an
  *   `effectiveCriteria` resolver (`authenticated/registry.ts`, PR10) — the
  *   BFF-echoed EFFECTIVE (post-default-resolution) request criteria, `basis:
@@ -589,6 +607,7 @@ function authenticatedToolResponse<T>(
   resultAge: number,
   sourceFreshness: ReturnType<typeof deriveSourceFreshness>,
   quota: QuotaEstimate,
+  account: AccountResolution,
   currencyLabel?: string,
   criteria?: EffectiveCriteria,
 ): Response {
@@ -599,6 +618,12 @@ function authenticatedToolResponse<T>(
     resultAge,
     sourceFreshness,
     quota,
+    credential: {
+      source: account.source,
+      accountKey: account.accountKey,
+      accountLabel: account.accountLabel,
+      basis: "bff-resolved",
+    },
     ...(currencyLabel !== undefined ? { currencyLabel } : {}),
     ...(criteria !== undefined ? { criteria } : {}),
   });
@@ -666,7 +691,31 @@ async function dispatchAuthenticated(
   const route = getAuthenticatedRoute(toolName);
   if (!route) return new Response("Not found", { status: 404 });
 
-  const key = await cacheKey(toolName, args);
+  // `domain-google-credentials`, Phase 5: resolved BEFORE the cache key, so
+  // the key itself can be scoped by the account that will answer the call
+  // (`account-scope.ts`'s doc comment — the second cross-account leak). Only
+  // routes with a `siteUrl` argument are site-scoped at all today —
+  // `get_keyword_metrics`/`discover_keywords` have none yet (threat matrix
+  // row g, deferred), so they resolve `resolveAccountForRoute`'s
+  // `siteUrl === undefined` fallback, unchanged from their pre-Phase-5
+  // behavior in every observable way except carrying the new `credential`
+  // envelope field.
+  const siteUrl = typeof args.siteUrl === "string" ? args.siteUrl : undefined;
+  const account = await resolveAccountForRoute(env.RESULT_CACHE, siteUrl, {
+    seoMcp: env.SEO_MCP,
+    mcpOrigin: env.MCP_ORIGIN,
+    token: env.MCP_AUTH_TOKEN,
+    validateUpstreamResults: validateUpstreamResultsFlag(env),
+  });
+
+  // Task 5.6: a site-scoped call resolving to no usable credential at all,
+  // or to a site whose Search Console health is unhealthy, is rejected
+  // BEFORE any cache read or upstream call — see `gateSiteCredential`'s doc
+  // comment for why Ads health never gates.
+  const gateCode = gateSiteCredential(account);
+  if (gateCode) return bffErrorResponse(gateCode);
+
+  const key = await cacheKey(toolName, args, account.accountKey);
   const budget = env.AUTH_SOURCE_BUDGET[route.source] ?? 0;
   const lagDays = route.lagDays ?? GSC_REPORTING_LAG_DAYS;
 
@@ -682,7 +731,12 @@ async function dispatchAuthenticated(
       : undefined;
 
   const readQuotaEstimate = () =>
-    getQuotaEstimate(env.RESULT_CACHE, route.source, budget);
+    getQuotaEstimate(
+      env.RESULT_CACHE,
+      route.source,
+      budget,
+      account.accountKey,
+    );
 
   // `seo-intelligence-view` (PR10) only — see `authenticatedToolResponse`'s
   // doc comment. Computed once from the validated request args, reused on
@@ -719,7 +773,12 @@ async function dispatchAuthenticated(
   // never for a D1-only route, which spends no Google quota at all).
   const trackedCallUpstream = async () => {
     if (route.callsGoogleUpstream) {
-      await recordUpstreamAttempt(ctx, env.RESULT_CACHE, route.source);
+      await recordUpstreamAttempt(
+        ctx,
+        env.RESULT_CACHE,
+        route.source,
+        account.accountKey,
+      );
     }
     return callUpstream();
   };
@@ -747,6 +806,7 @@ async function dispatchAuthenticated(
       0,
       sourceFreshness,
       await readQuotaEstimate(),
+      account,
       currencyLabel,
       criteria,
     );
@@ -767,6 +827,7 @@ async function dispatchAuthenticated(
         cached.resultAge,
         sourceFreshness,
         await readQuotaEstimate(),
+        account,
         currencyLabel,
         criteria,
       );
@@ -817,6 +878,7 @@ async function dispatchAuthenticated(
     0,
     sourceFreshness,
     await readQuotaEstimate(),
+    account,
     currencyLabel,
     criteria,
   );
@@ -959,7 +1021,7 @@ export async function handleRequest(
   ) {
     const parsed = await parseBody(request, disconnectGoogleAccountInputSchema);
     if (!parsed.ok) return bffErrorResponse("invalid_input");
-    return dispatch(
+    const response = await dispatch(
       request,
       url,
       env,
@@ -967,6 +1029,25 @@ export async function handleRequest(
       parsed.data,
       disconnectGoogleAccountResultSchema,
     );
+    // `domain-google-credentials`, Phase 5: `disconnect_google_account`'s own
+    // result carries no `siteUrl` (`disconnectGoogleAccountResultSchema` has
+    // only `siteId`/`disconnected`) to key a single `ak1:{siteUrl}` delete
+    // on, unlike `connect_google_account` (`bff/src/oauth/callback.ts`) — a
+    // blanket `refreshSiteAccountMap` refresh instead overwrites every
+    // site's entry, including the just-disconnected one, with current
+    // truth. Fire-and-forget via `ctx.waitUntil` when available, mirroring
+    // `quota-ledger.ts#recordUpstreamAttempt`'s own ctx-present/absent split.
+    if (response.ok) {
+      const refresh = refreshSiteAccountMap(env.RESULT_CACHE, {
+        seoMcp: env.SEO_MCP,
+        mcpOrigin: env.MCP_ORIGIN,
+        token: env.MCP_AUTH_TOKEN,
+        validateUpstreamResults: validateUpstreamResultsFlag(env),
+      });
+      if (ctx) ctx.waitUntil(refresh);
+      else await refresh;
+    }
+    return response;
   }
 
   // `site-google-credentials`, Phase 4b. POST-only, JSON body — mirrors its

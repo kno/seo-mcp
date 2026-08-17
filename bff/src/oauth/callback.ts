@@ -24,6 +24,7 @@
  */
 import { callTool } from "../mcp-client";
 import { verifyState, type OauthStateDependencies } from "./state";
+import { deleteSiteAccountEntry } from "../authenticated/account-scope";
 import * as z from "zod/v4";
 
 export type ConnectErrorCode = "state_invalid" | "token_exchange_failed";
@@ -82,6 +83,18 @@ export async function handleOauthCallback(
     },
   );
   if (!result.ok) return redirectWithError(url.origin, "token_exchange_failed");
+
+  // `domain-google-credentials`, Phase 5: invalidate the `ak1:{siteUrl}`
+  // site->account map entry so a just-connected site's cached mapping never
+  // goes stale for the remainder of its 300s TTL (design.md's mermaid
+  // diagram, "delete ak1:{siteUrl}"). `connect_google_account`'s own result
+  // carries `siteUrl` (`connectGoogleAccountResultSchema`), unlike
+  // `disconnect_google_account`'s — see `account-scope.ts`'s doc comment for
+  // why the disconnect route instead does a blanket `refreshSiteAccountMap`.
+  const connected = result.data as { siteUrl?: unknown };
+  if (typeof connected.siteUrl === "string") {
+    await deleteSiteAccountEntry(env.RESULT_CACHE, connected.siteUrl);
+  }
 
   return redirectConnected(url.origin);
 }

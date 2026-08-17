@@ -438,6 +438,17 @@ const TOOL_RESULTS = {
  * `validateUpstreamResults: true`, unlike `connect_google_account`'s own
  * call, which passes `false`) — so this MUST satisfy the real schema, not
  * an arbitrary shape.
+ *
+ * `credential.tier: "site"` / `searchConsole: "healthy"` (Phase 5,
+ * `domain-google-credentials`) — this is the SAME `https://example.com`
+ * every pre-existing `authenticated-search-console`/`authenticated-gsc-
+ * insights` integration test targets, and Phase 5's `account-scope.ts`
+ * gate (`gateSiteCredential`) now consults this exact fixture before
+ * letting an authenticated call through. `authorize.ts`'s "known site"
+ * check (the reason this fixture exists at all) only reads `site.id`, never
+ * `credential`, so a healthy tier here is free to choose and keeps every
+ * pre-Phase-5 authenticated-call fixture meaningful ("the call succeeded"
+ * now also means "the site legitimately has a working credential").
  */
 TOOL_RESULTS.list_sites = {
   count: 1,
@@ -448,12 +459,12 @@ TOOL_RESULTS.list_sites = {
       label: null,
       createdAt: "2026-01-01T00:00:00.000Z",
       credential: {
-        tier: "none",
-        accountLabel: null,
-        accountKey: null,
+        tier: "site",
+        accountLabel: "stub-owner@example.com",
+        accountKey: "stub-account",
         health: {
-          searchConsole: { state: "not_connected" },
-          googleAds: { state: "not_connected" },
+          searchConsole: { state: "healthy" },
+          googleAds: { state: "healthy" },
         },
       },
     },

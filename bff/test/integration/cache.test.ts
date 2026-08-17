@@ -159,9 +159,17 @@ describe("BFF result cache (integration, real KV)", () => {
   });
 
   it("never caches list_search_console_snapshots (a deleted snapshot must never keep appearing in a stale cached list until its TTL elapses)", async () => {
-    const before = await stubCallCount();
     const path =
       "/api/tools/list_search_console_snapshots?siteUrl=https%3A%2F%2Fcache-never.example";
+    // Warm-up: this siteUrl's first-ever authenticated call resolves its
+    // `ak1:{siteUrl}` account-scope entry via one EXTRA `list_sites` call
+    // (`domain-google-credentials`, Phase 5, `account-scope.ts`) — spend
+    // that one-time cost here, before capturing `before`, so this test's
+    // own call-count assertions below isolate `list_search_console_
+    // snapshots`'s never-cached behavior from that unrelated cost.
+    await SELF.fetch(await authenticatedRequest(path));
+
+    const before = await stubCallCount();
 
     const first = await SELF.fetch(await authenticatedRequest(path));
     const firstBody = (await first.json()) as { cacheStatus: string };
