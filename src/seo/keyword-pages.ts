@@ -1,6 +1,7 @@
 import type * as z from "zod/v4";
-import { LIMITS, type Env } from "../config";
+import { LIMITS } from "../config";
 import { searchConsoleQuery, type GscRow } from "../google/search-console";
+import type { GoogleOAuthCredentials } from "../google/credential-types";
 import {
   contentGapSchema,
   findContentGapsResultSchema,
@@ -122,7 +123,7 @@ export interface MapKeywordsToPagesParams {
 
 export async function mapKeywordsToPagesForSite(
   params: MapKeywordsToPagesParams,
-  env: Env,
+  credentials: GoogleOAuthCredentials,
   fetcher?: typeof fetch,
   now?: () => number,
 ): Promise<z.infer<typeof mapKeywordsToPagesResultSchema>> {
@@ -134,7 +135,7 @@ export async function mapKeywordsToPagesForSite(
       dimensions: ["query", "page"],
       rowLimit: LIMITS.maxGscRows,
     },
-    env,
+    credentials,
     fetcher,
     now,
   );
@@ -164,7 +165,7 @@ export interface FindContentGapsParams {
 
 export async function findContentGapsForSite(
   params: FindContentGapsParams,
-  env: Env,
+  credentials: GoogleOAuthCredentials,
   fetcher?: typeof fetch,
   now?: () => number,
 ): Promise<z.infer<typeof findContentGapsResultSchema>> {
@@ -176,7 +177,7 @@ export async function findContentGapsForSite(
       dimensions: ["query", "page"],
       rowLimit: LIMITS.maxGscRows,
     },
-    env,
+    credentials,
     fetcher,
     now,
   );

@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import { LIMITS, type Env } from "../config";
 import { searchConsoleQuery } from "../google/search-console";
+import { resolveSiteCredentials } from "../google/credentials";
 import {
   findStrikingDistanceKeywords,
   findLowCtrOpportunities,
@@ -57,11 +58,12 @@ export function registerSearchConsoleTools(server: McpServer, env: Env): void {
     },
     async ({ siteUrl, startDate, endDate, dimensions, rowLimit }) => {
       try {
+        const { credentials } = await resolveSiteCredentials(env, siteUrl);
         return jsonResult(
           gscQueryResultSchema,
           await searchConsoleQuery(
             { siteUrl, startDate, endDate, dimensions, rowLimit },
-            env,
+            credentials,
           ),
         );
       } catch (error) {
@@ -96,6 +98,7 @@ export function registerSearchConsoleTools(server: McpServer, env: Env): void {
       limit,
     }) => {
       try {
+        const { credentials } = await resolveSiteCredentials(env, siteUrl);
         return jsonResult(
           opportunityResultSchema,
           await findStrikingDistanceKeywords(
@@ -108,7 +111,7 @@ export function registerSearchConsoleTools(server: McpServer, env: Env): void {
               minImpressions,
               limit,
             },
-            env,
+            credentials,
           ),
         );
       } catch (e) {
@@ -143,6 +146,7 @@ export function registerSearchConsoleTools(server: McpServer, env: Env): void {
       limit,
     }) => {
       try {
+        const { credentials } = await resolveSiteCredentials(env, siteUrl);
         return jsonResult(
           opportunityResultSchema,
           await findLowCtrOpportunities(
@@ -155,7 +159,7 @@ export function registerSearchConsoleTools(server: McpServer, env: Env): void {
               maxCtr,
               limit,
             },
-            env,
+            credentials,
           ),
         );
       } catch (e) {
@@ -193,6 +197,7 @@ export function registerSearchConsoleTools(server: McpServer, env: Env): void {
       if (!env.DB)
         return errorResult(new Error("D1 storage is not configured"));
       try {
+        const { credentials } = await resolveSiteCredentials(env, siteUrl);
         const result = await searchConsoleQuery(
           {
             siteUrl,
@@ -201,7 +206,7 @@ export function registerSearchConsoleTools(server: McpServer, env: Env): void {
             dimensions,
             rowLimit: LIMITS.maxSnapshotRows,
           },
-          env,
+          credentials,
         );
         const capturedAt = new Date().toISOString();
         const { snapshotId, rowCount } = await storeGscSnapshot(env.DB, {

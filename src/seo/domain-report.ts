@@ -3,6 +3,7 @@ import type { Env } from "../config";
 import { crawlSite } from "../crawl/site";
 import type { SiteCrawlResult } from "../crawl/site";
 import { findSeoOpportunities } from "./intelligence";
+import { resolveSiteCredentials } from "../google/credentials";
 import {
   domainReportSchema,
   domainSearchSchema,
@@ -63,6 +64,10 @@ export async function analyzeDomain(
 
   if (params.gscProperty && params.startDate && params.endDate) {
     try {
+      const { credentials } = await resolveSiteCredentials(
+        env,
+        params.gscProperty,
+      );
       const result = await findSeoOpportunities(
         {
           siteUrl: params.gscProperty,
@@ -70,7 +75,7 @@ export async function analyzeDomain(
           endDate: params.endDate,
           limit: params.opportunityLimit,
         },
-        env,
+        credentials,
         fetcher,
         now,
       );

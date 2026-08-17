@@ -1,6 +1,7 @@
 import type * as z from "zod/v4";
 import { LIMITS, type Env } from "../config";
 import { getGoogleAccessToken } from "./auth";
+import { globalCredentials } from "./credential-types";
 import {
   keywordMetricSchema,
   keywordMetricsResultSchema,
@@ -68,7 +69,14 @@ async function adsPost(
   }
   const customerId = rawCustomerId.replace(/\D/g, "");
 
-  const token = await getGoogleAccessToken(env, fetcher, now);
+  // Ads tools have no `siteUrl` in this change's scope — always the global
+  // (app-level) tier; the developer token / customer-ID fallback stay on
+  // `env` since those are app-level, not per-account.
+  const token = await getGoogleAccessToken(
+    globalCredentials(env),
+    fetcher,
+    now,
+  );
 
   const headers: Record<string, string> = {
     authorization: `Bearer ${token}`,

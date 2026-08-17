@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { searchConsoleQuery } from "../src/google/search-console";
 import { resetGoogleTokenCache } from "../src/google/auth";
-import type { Env } from "../src/config";
+import type { GoogleOAuthCredentials } from "../src/google/credentials";
 
-const env: Env = {
-  GOOGLE_CLIENT_ID: "client-id",
-  GOOGLE_CLIENT_SECRET: "client-secret",
-  GOOGLE_REFRESH_TOKEN: "refresh-token",
+const credentials: GoogleOAuthCredentials = {
+  clientId: "client-id",
+  clientSecret: "client-secret",
+  refreshToken: "refresh-token",
 };
 
 beforeEach(() => {
@@ -53,7 +53,7 @@ describe("searchConsoleQuery", () => {
         startDate: "2026-01-01",
         endDate: "2026-01-31",
       },
-      env,
+      credentials,
       fetcher,
     );
 
@@ -96,7 +96,7 @@ describe("searchConsoleQuery", () => {
         endDate: "2026-01-31",
         rowLimit: 5000,
       },
-      env,
+      credentials,
       fetcher,
     );
 
@@ -116,7 +116,7 @@ describe("searchConsoleQuery", () => {
         startDate: "2026-01-01",
         endDate: "2026-01-31",
       },
-      env,
+      credentials,
       fetcher,
     );
 
@@ -144,7 +144,7 @@ describe("searchConsoleQuery", () => {
           startDate: "2026-01-01",
           endDate: "2026-01-31",
         },
-        env,
+        credentials,
         fetcher,
       ),
     ).rejects.toThrow("User does not have sufficient permission");

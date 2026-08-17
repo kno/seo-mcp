@@ -1,6 +1,7 @@
 import type * as z from "zod/v4";
-import { LIMITS, type Env } from "../config";
+import { LIMITS } from "../config";
 import { searchConsoleQuery, type GscRow } from "../google/search-console";
+import type { GoogleOAuthCredentials } from "../google/credential-types";
 import {
   strikingDistanceKeywords,
   lowCtrOpportunities,
@@ -167,7 +168,7 @@ export interface CannibalizationParams {
 
 export async function findKeywordCannibalization(
   params: CannibalizationParams,
-  env: Env,
+  credentials: GoogleOAuthCredentials,
   fetcher?: typeof fetch,
   now?: () => number,
 ): Promise<z.infer<typeof findKeywordCannibalizationResultSchema>> {
@@ -179,7 +180,7 @@ export async function findKeywordCannibalization(
       dimensions: ["query", "page"],
       rowLimit: LIMITS.maxGscRows,
     },
-    env,
+    credentials,
     fetcher,
     now,
   );
@@ -207,7 +208,7 @@ export interface SeoOpportunitiesParams {
 
 export async function findSeoOpportunities(
   params: SeoOpportunitiesParams,
-  env: Env,
+  credentials: GoogleOAuthCredentials,
   fetcher?: typeof fetch,
   now?: () => number,
 ): Promise<z.infer<typeof findSeoOpportunitiesResultSchema>> {
@@ -219,7 +220,7 @@ export async function findSeoOpportunities(
       dimensions: ["query", "page"],
       rowLimit: LIMITS.maxGscRows,
     },
-    env,
+    credentials,
     fetcher,
     now,
   );

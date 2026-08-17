@@ -1,6 +1,7 @@
 import type * as z from "zod/v4";
-import { LIMITS, type Env } from "../config";
+import { LIMITS } from "../config";
 import { getGoogleAccessToken } from "./auth";
+import type { GoogleOAuthCredentials } from "./credential-types";
 import {
   gscDimensionSchema,
   gscQueryResultSchema,
@@ -23,11 +24,11 @@ interface GscQueryParams {
 
 export async function searchConsoleQuery(
   params: GscQueryParams,
-  env: Env,
+  credentials: GoogleOAuthCredentials,
   fetcher: typeof fetch = fetch,
   now?: () => number,
 ): Promise<GscQueryResult> {
-  const token = await getGoogleAccessToken(env, fetcher, now);
+  const token = await getGoogleAccessToken(credentials, fetcher, now);
   const dimensions = params.dimensions?.length
     ? params.dimensions
     : ["query", "page"];

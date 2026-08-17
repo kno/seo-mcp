@@ -1,6 +1,7 @@
 import type * as z from "zod/v4";
-import { LIMITS, type Env } from "../config";
+import { LIMITS } from "../config";
 import { searchConsoleQuery, type GscRow } from "./search-console";
+import type { GoogleOAuthCredentials } from "./credential-types";
 import { opportunityResultSchema } from "../schemas/opportunities";
 
 // ---------------------------------------------------------------------------
@@ -92,7 +93,7 @@ export interface StrikingDistanceParams {
 
 export async function findStrikingDistanceKeywords(
   params: StrikingDistanceParams,
-  env: Env,
+  credentials: GoogleOAuthCredentials,
   fetcher?: typeof fetch,
   now?: () => number,
 ): Promise<OpportunityResult> {
@@ -110,7 +111,7 @@ export async function findStrikingDistanceKeywords(
       dimensions,
       rowLimit: LIMITS.maxGscRows,
     },
-    env,
+    credentials,
     fetcher,
     now,
   );
@@ -146,7 +147,7 @@ export interface LowCtrParams {
 
 export async function findLowCtrOpportunities(
   params: LowCtrParams,
-  env: Env,
+  credentials: GoogleOAuthCredentials,
   fetcher?: typeof fetch,
   now?: () => number,
 ): Promise<OpportunityResult> {
@@ -164,7 +165,7 @@ export async function findLowCtrOpportunities(
       dimensions,
       rowLimit: LIMITS.maxGscRows,
     },
-    env,
+    credentials,
     fetcher,
     now,
   );

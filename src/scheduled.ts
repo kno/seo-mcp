@@ -1,5 +1,6 @@
 import { LIMITS, type Env } from "./config";
 import { searchConsoleQuery } from "./google/search-console";
+import { resolveSiteCredentials } from "./google/credentials";
 import { storeGscSnapshot } from "./db/gsc-store";
 
 const DAY_MS = 86_400_000;
@@ -51,6 +52,7 @@ export async function runScheduledSnapshots(
   for (const property of properties) {
     attempted += 1;
     try {
+      const { credentials } = await resolveSiteCredentials(env, property);
       const r = await searchConsoleQuery(
         {
           siteUrl: property,
@@ -59,7 +61,7 @@ export async function runScheduledSnapshots(
           dimensions: ["query", "page"],
           rowLimit: LIMITS.maxSnapshotRows,
         },
-        env,
+        credentials,
         fetcher,
         now,
       );

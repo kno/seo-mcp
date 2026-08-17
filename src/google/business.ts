@@ -1,5 +1,6 @@
 import { LIMITS, type Env } from "../config";
 import { getGoogleAccessToken } from "./auth";
+import { globalCredentials } from "./credential-types";
 
 // ---------------------------------------------------------------------------
 // Google Business Profile is served by four fragmented host services.
@@ -34,7 +35,13 @@ async function businessRequest<T = unknown>(
   env: Env,
   { body, fetcher = fetch, now }: BusinessRequestOptions = {},
 ): Promise<T> {
-  const token = await getGoogleAccessToken(env, fetcher, now);
+  // Business Profile is explicitly out of scope for per-site credentials —
+  // always the global env tier.
+  const token = await getGoogleAccessToken(
+    globalCredentials(env),
+    fetcher,
+    now,
+  );
 
   const headers: Record<string, string> = {
     authorization: `Bearer ${token}`,

@@ -6,13 +6,13 @@ import {
   findContentGapsForSite,
 } from "../src/seo/keyword-pages";
 import { resetGoogleTokenCache } from "../src/google/auth";
-import type { Env } from "../src/config";
+import type { GoogleOAuthCredentials } from "../src/google/credential-types";
 import type { GscRow } from "../src/google/search-console";
 
-const env: Env = {
-  GOOGLE_CLIENT_ID: "client-id",
-  GOOGLE_CLIENT_SECRET: "client-secret",
-  GOOGLE_REFRESH_TOKEN: "refresh-token",
+const credentials: GoogleOAuthCredentials = {
+  clientId: "client-id",
+  clientSecret: "client-secret",
+  refreshToken: "refresh-token",
 };
 
 beforeEach(() => {
@@ -214,7 +214,7 @@ describe("mapKeywordsToPagesForSite", () => {
         startDate: "2026-01-01",
         endDate: "2026-01-31",
       },
-      env,
+      credentials,
       fetcher,
     );
     const gscCall = fetcher.mock.calls.find((c) =>
@@ -232,7 +232,7 @@ describe("mapKeywordsToPagesForSite", () => {
         startDate: "2026-01-01",
         endDate: "2026-01-31",
       },
-      env,
+      credentials,
       fetcher,
     );
     expect(result.count).toBe(1);
@@ -276,7 +276,7 @@ describe("findContentGapsForSite", () => {
         startDate: "2026-01-01",
         endDate: "2026-01-31",
       },
-      env,
+      credentials,
       fetcher,
     );
     const gscCall = fetcher.mock.calls.find((c) =>
@@ -294,7 +294,7 @@ describe("findContentGapsForSite", () => {
         startDate: "2026-01-01",
         endDate: "2026-01-31",
       },
-      env,
+      credentials,
       fetcher,
     );
     expect(result.count).toBe(1);

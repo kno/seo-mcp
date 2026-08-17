@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import type { Env } from "../config";
+import { resolveSiteCredentials } from "../google/credentials";
 import {
   findKeywordCannibalization,
   findSeoOpportunities,
@@ -36,11 +37,12 @@ export function registerIntelligenceTools(server: McpServer, env: Env): void {
     },
     async ({ siteUrl, startDate, endDate, minImpressions, limit }) => {
       try {
+        const { credentials } = await resolveSiteCredentials(env, siteUrl);
         return jsonResult(
           findKeywordCannibalizationResultSchema,
           await findKeywordCannibalization(
             { siteUrl, startDate, endDate, minImpressions, limit },
-            env,
+            credentials,
           ),
         );
       } catch (e) {
@@ -64,11 +66,12 @@ export function registerIntelligenceTools(server: McpServer, env: Env): void {
     },
     async ({ siteUrl, startDate, endDate, limit }) => {
       try {
+        const { credentials } = await resolveSiteCredentials(env, siteUrl);
         return jsonResult(
           findSeoOpportunitiesResultSchema,
           await findSeoOpportunities(
             { siteUrl, startDate, endDate, limit },
-            env,
+            credentials,
           ),
         );
       } catch (e) {
@@ -93,11 +96,12 @@ export function registerIntelligenceTools(server: McpServer, env: Env): void {
     },
     async ({ siteUrl, startDate, endDate, limit, topQueriesPerPage }) => {
       try {
+        const { credentials } = await resolveSiteCredentials(env, siteUrl);
         return jsonResult(
           mapKeywordsToPagesResultSchema,
           await mapKeywordsToPagesForSite(
             { siteUrl, startDate, endDate, limit, topQueriesPerPage },
-            env,
+            credentials,
           ),
         );
       } catch (e) {
@@ -130,11 +134,12 @@ export function registerIntelligenceTools(server: McpServer, env: Env): void {
       limit,
     }) => {
       try {
+        const { credentials } = await resolveSiteCredentials(env, siteUrl);
         return jsonResult(
           findContentGapsResultSchema,
           await findContentGapsForSite(
             { siteUrl, startDate, endDate, minPosition, minImpressions, limit },
-            env,
+            credentials,
           ),
         );
       } catch (e) {

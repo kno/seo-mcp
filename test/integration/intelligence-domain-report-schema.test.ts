@@ -11,6 +11,14 @@ vi.mock("../../src/seo/keyword-pages", () => ({
 vi.mock("../../src/seo/domain-report", () => ({
   analyzeDomain: vi.fn(),
 }));
+vi.mock("../../src/google/credentials", () => ({
+  resolveSiteCredentials: vi.fn().mockResolvedValue({
+    credentials: { clientId: "c", clientSecret: "s", refreshToken: "r" },
+    source: "global",
+    accountKey: "global",
+    accountLabel: null,
+  }),
+}));
 
 import {
   findKeywordCannibalization,

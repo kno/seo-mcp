@@ -31,6 +31,17 @@ export async function listSites(db: D1Database): Promise<Site[]> {
   return results.map(toSite);
 }
 
+export async function getSiteByUrl(
+  db: D1Database,
+  url: string,
+): Promise<Site | null> {
+  const row = await db
+    .prepare("SELECT id, url, label, created_at FROM sites WHERE url = ?")
+    .bind(url)
+    .first<SiteRecord>();
+  return row ? toSite(row) : null;
+}
+
 /**
  * Inserts a new site. `INSERT OR IGNORE` on the unique `url` column makes
  * a duplicate add a no-op rather than an error — mirrors

@@ -16,6 +16,14 @@ vi.mock("../../src/seo/gsc-diff", () => ({
 vi.mock("../../src/google/search-console", () => ({
   searchConsoleQuery: vi.fn(),
 }));
+vi.mock("../../src/google/credentials", () => ({
+  resolveSiteCredentials: vi.fn().mockResolvedValue({
+    credentials: { clientId: "c", clientSecret: "s", refreshToken: "r" },
+    source: "global",
+    accountKey: "global",
+    accountLabel: null,
+  }),
+}));
 
 import {
   findStrikingDistanceKeywords,

@@ -6,13 +6,13 @@ import {
   findLowCtrOpportunities,
 } from "../src/google/opportunities";
 import { resetGoogleTokenCache } from "../src/google/auth";
-import type { Env } from "../src/config";
+import type { GoogleOAuthCredentials } from "../src/google/credential-types";
 import type { GscRow } from "../src/google/search-console";
 
-const env: Env = {
-  GOOGLE_CLIENT_ID: "client-id",
-  GOOGLE_CLIENT_SECRET: "client-secret",
-  GOOGLE_REFRESH_TOKEN: "refresh-token",
+const credentials: GoogleOAuthCredentials = {
+  clientId: "client-id",
+  clientSecret: "client-secret",
+  refreshToken: "refresh-token",
 };
 
 beforeEach(() => {
@@ -237,7 +237,7 @@ describe("findStrikingDistanceKeywords", () => {
         startDate: "2026-01-01",
         endDate: "2026-01-31",
       },
-      env,
+      credentials,
       fetcher,
     );
 
@@ -257,7 +257,7 @@ describe("findStrikingDistanceKeywords", () => {
         startDate: "2026-01-01",
         endDate: "2026-01-31",
       },
-      env,
+      credentials,
       fetcher,
     );
 
@@ -280,7 +280,7 @@ describe("findStrikingDistanceKeywords", () => {
         minImpressions: 5,
         limit: 10,
       },
-      env,
+      credentials,
       fetcher,
     );
 
@@ -301,7 +301,7 @@ describe("findStrikingDistanceKeywords", () => {
         startDate: "2026-01-01",
         endDate: "2026-01-31",
       },
-      env,
+      credentials,
       fetcher,
     );
 
@@ -317,7 +317,7 @@ describe("findStrikingDistanceKeywords", () => {
         startDate: "2026-01-01",
         endDate: "2026-01-31",
       },
-      env,
+      credentials,
       fetcher,
     );
 
@@ -377,7 +377,7 @@ describe("findLowCtrOpportunities", () => {
         startDate: "2026-01-01",
         endDate: "2026-01-31",
       },
-      env,
+      credentials,
       fetcher,
     );
 
@@ -397,7 +397,7 @@ describe("findLowCtrOpportunities", () => {
         startDate: "2026-01-01",
         endDate: "2026-01-31",
       },
-      env,
+      credentials,
       fetcher,
     );
 
@@ -418,7 +418,7 @@ describe("findLowCtrOpportunities", () => {
         maxCtr: 0.03,
         limit: 15,
       },
-      env,
+      credentials,
       fetcher,
     );
 
@@ -439,7 +439,7 @@ describe("findLowCtrOpportunities", () => {
         startDate: "2026-01-01",
         endDate: "2026-01-31",
       },
-      env,
+      credentials,
       fetcher,
     );
 
@@ -455,7 +455,7 @@ describe("findLowCtrOpportunities", () => {
         startDate: "2026-01-01",
         endDate: "2026-01-31",
       },
-      env,
+      credentials,
       fetcher,
     );
 

@@ -116,30 +116,88 @@ bff/worker-configuration.d.ts`), scoped to the BFF worker only. The root `seo-mc
 
 ## Phase 2: `resolveSiteCredentials` + keyed token cache + call-site ripple (PR2) — `site-google-credentials`, `authenticated-source-contract`
 
-- [ ] 2.1 RED `test/google/credentials.test.ts`: site-tier resolves entirely site fields, `credentialSource:
+- [x] 2.1 RED `test/google/credentials.test.ts`: site-tier resolves entirely site fields, `credentialSource:
 "site"` (spec "A connected site resolves to its own credentials"); global fallback resolves entirely
       global fields, `credentialSource: "global"` (spec "An unconnected site falls back to the global
       tier"); tiers never mix (spec "Tiers are never mixed"); neither tier usable ⇒
       `credentialSource: "none"`, no partial-set call attempted (spec "Neither tier has usable
       credentials"); literal `"Google credentials are not configured"` still thrown verbatim when
-      resolution has nothing to report
-- [ ] 2.2 GREEN `src/google/credentials.ts`: `GoogleOAuthCredentials`, `ResolvedCredential`,
-      `resolveSiteCredentials(env, siteUrl)`, `credentialKey`/`accountKey` derivation exactly per design's
-      two-key-space table
-- [ ] 2.3 RED `test/google/auth.test.ts`: **two credential sets never share a cached access token**
+      resolution has nothing to report — done: 7 RED tests, confirmed failing (`Cannot find module`) before
+      2.2
+- [x] 2.2 GREEN `src/google/credentials.ts`: `GoogleOAuthCredentials`, `ResolvedCredential`,
+      `resolveSiteCredentials(env, siteUrl)` — done: site tier decrypts via Phase 1's
+      `credential-cipher.ts`/`site-credential-store.ts`, falls through to global on any decrypt failure
+      (never mixes tiers), throws the verbatim `"Google credentials are not configured"` literal when
+      neither tier resolves (this is how `credentialSource: "none"` is represented at this layer — the
+      design's own `ResolvedCredential.source` type is `"site" | "global"` only, so "none" is a thrown
+      exception, not a returned value; also added `globalCredentials(env)` for `business.ts`/`ads.ts`, and
+      `getSiteByUrl` to `src/db/site-store.ts` to resolve a site's row from its URL). **Deviation from
+      design's literal type table**: `credentialKey`/`accountKey` derivation is NOT in this file — see 2.4's
+      note; `credentialKey` is computed inside `src/google/auth.ts` only (never leaves it, per design),
+      and `accountKey` for the site tier is read directly from the stored `site_credentials.account_key`
+      column (computed once at connect time in Phase 4b), not re-derived here
+- [x] 2.3 RED `test/google/auth.test.ts`: **two credential sets never share a cached access token**
       (headline test, Threat Matrix row f); expiry eviction; bound at `MAX_CACHED_TOKENS = 8`;
       `credentialKey` differs when only `refresh_token` differs; a RED test asserts no response/log/cache
-      value contains a `credentialKey`-shaped value (Threat Matrix row c)
-- [ ] 2.4 GREEN `src/google/auth.ts`: narrow `getGoogleAccessToken(credentials, fetcher?, now?)` signature;
-      `Map<credentialKey, {token, expiresAtMs}>` keyed cache, bounded eviction; `resetGoogleTokenCache()`
-      kept for tests
-- [ ] 2.5 GREEN ripple: `src/google/search-console.ts:30` (`searchConsoleQuery(params, credentials, ...)`
+      value contains a `credentialKey`-shaped value (Threat Matrix row c) — done: 9 RED tests (5 ported
+      from the superseded `test/google-auth.test.ts`, 4 new), confirmed 8/9 failing before 2.4
+- [x] 2.4 GREEN `src/google/auth.ts`: narrow `getGoogleAccessToken(credentials, fetcher?, now?)` signature;
+      `Map<credentialKey, {token, expiresAtMs}>` keyed cache, bounded eviction (evict expired first, then
+      oldest via `Map` insertion order); `resetGoogleTokenCache()` kept for tests — done: all 9 tests pass.
+      Deleted the superseded `test/google-auth.test.ts` (root-level, pre-Phase-2 signature)
+- [x] 2.5 GREEN ripple: `src/google/search-console.ts:30` (`searchConsoleQuery(params, credentials, ...)`
       replaces `env`); `src/google/ads.ts:71` (`adsPost(env, credentials, ...)` keeps `env` for
       app-level developer-token/customer-ID fallback); `src/google/business.ts:37` calls
-      `globalCredentials(env)`, otherwise unchanged
-- [ ] 2.6 PROOF `test/integration/`: behavior-identical round-trip for every call site while no
+      `globalCredentials(env)`, otherwise unchanged — done, with one structural deviation discovered mid-slice
+      (see below), plus the call-site choices the assignment asked to flag explicitly: - **`search-console.ts` callers**: minimal-diff choice was to resolve credentials at the smallest
+      possible scope. `opportunities.ts`/`seo/intelligence.ts`/`seo/keyword-pages.ts`'s exported wrapper
+      functions themselves now take `credentials: GoogleOAuthCredentials` (mirroring
+      `searchConsoleQuery`'s own signature change) instead of `env: Env`; the `resolveSiteCredentials(env,
+siteUrl)` call moved up to their callers — `mcp-tools/search-console.ts`, `mcp-tools/intelligence.ts`,
+      `src/scheduled.ts`, and `src/seo/domain-report.ts` (which resolves inside its existing try/catch, so
+      a resolution failure surfaces as `gscError` exactly like a query failure already did). - **`adsPost`'s no-siteUrl constraint**: `adsPost` keeps its exact external signature (still `env:
+Env` as its first param, per the assignment). Internally it calls `globalCredentials(env)` directly
+      — NOT `resolveSiteCredentials(env, undefined)` — for a reason discovered only during typecheck (see
+      deviation below): Ads has no `siteUrl` in this change's scope, so it should never touch the
+      site-tier D1 path at all, not even one that resolves to a no-op. - **Structural deviation (discovered via `pnpm run typecheck`, not anticipated in design.md)**:
+      `src/types/index.ts` is a type-only re-export barrel consumed by `bff/ui`'s DOM-only tsconfig (no
+      `@cloudflare/workers-types`), and it re-exports result types from `search-console.ts`, `ads.ts`,
+      `opportunities.ts`, `intelligence.ts`, and `keyword-pages.ts`. Giving any of those files a static
+      import — even `import type` — of the original single `src/google/credentials.ts` (which internally
+      imports `../db/site-store`/`../db/site-credential-store`, both D1-generic-typed) pulled
+      `D1Database` generics into `bff/ui`'s type-check program, which has no types for them
+      (`TS2347: Untyped function calls may not accept type arguments` on `.first<T>()`/`.all<T>()`).
+      This is the exact same constraint the codebase already documents in `src/types/index.ts`'s own
+      comments for `Site`/`StoredSnapshot`/`StoredCrawlSnapshot`/`DomainReport` (published from schema
+      modules, not their D1 store modules) — Phase 2 just newly triggered it for the Google-source files.
+      **Fix**: split `src/google/credentials.ts` into `src/google/credential-types.ts` (zero imports
+      beyond `type Env`; holds `GoogleOAuthCredentials`, `ResolvedCredential`, `globalTier`,
+      `globalCredentials` — safe for `bff/ui`) and `src/google/credentials.ts` (the D1-touching
+      `resolveSiteCredentials`/`siteTier`, re-exporting the types for callers that need both). Every file
+      reachable from `src/types/index.ts` imports only `credential-types.ts`; only
+      `mcp-tools/search-console.ts`, `mcp-tools/intelligence.ts`, `src/scheduled.ts`, and
+      `src/seo/domain-report.ts` (none reachable from `bff/ui`) import the real `credentials.ts`. This
+      was NOT caught by `pnpm test` — only `pnpm run typecheck`'s second command (`tsc --noEmit -p
+bff/ui`) surfaces it, because `bff/ui/tsconfig.json`'s `include` doesn't list these files directly
+      but TypeScript still type-checks anything reachable by import - Updated every ripple test accordingly: `test/search-console.test.ts`, `test/opportunities.test.ts`,
+      `test/intelligence.test.ts`, `test/keyword-pages.test.ts` now construct a `GoogleOAuthCredentials`
+      object instead of an `Env`-shaped one and pass it positionally; `test/domain-report.test.ts`
+      required no change (`analyzeDomain`'s own signature is unchanged). Two schema-registration
+      integration tests that mock `search-console`/`intelligence`/`keyword-pages` wholesale
+      (`test/integration/search-console-schema.test.ts`,
+      `test/integration/opportunities-gsc-snapshots-schema.test.ts`,
+      `test/integration/intelligence-domain-report-schema.test.ts`) also mock
+      `src/google/credentials` now, since the real (unmocked) `resolveSiteCredentials` would otherwise
+      run against their bare-bones fake `env` and throw before reaching the mocked function
+- [x] 2.6 PROOF `test/integration/`: behavior-identical round-trip for every call site while no
       `site_credentials` row exists anywhere — this slice alone closes the cross-account token-cache leak
-      (proposal Risk table row 1); `pnpm test -- credentials auth` green
+      (proposal Risk table row 1) — done: added `test/integration/credentials-resolution.test.ts` (5 tests,
+      real Miniflare D1, no `site_credentials` row) proving `resolveSiteCredentials` falls back to global,
+      and that `searchConsoleQuery`, `getKeywordMetrics` (Ads), and `listBusinessLocations` (Business
+      Profile) all still complete end-to-end through the resolved global credentials. Full `pnpm test`
+      green (159 files, 1461 tests); `pnpm typecheck` clean (both the root and `bff/ui` programs — see
+      2.5's deviation note); `pnpm run format:check` clean after one `prettier --write` pass on the 6 new/
+      changed files
 
 ## Phase 3: Health probes + state machine + `list_sites` status (PR3) — `site-google-credentials`
 
