@@ -201,14 +201,19 @@ bff/ui`) surfaces it, because `bff/ui/tsconfig.json`'s `include` doesn't list th
 
 ## Phase 3: Health probes + state machine + `list_sites` status (PR3) — `site-google-credentials`
 
-- [ ] 3.1 RED `test/google/health.test.ts`: `sites.get` probe classifies `permissionLevel:
+- [x] 3.1 RED `test/google/health.test.ts`: `sites.get` probe classifies `permissionLevel:
 "siteUnverifiedUser"` ⇒ `unhealthy(property_unverified)` (spec-equivalent "invalid" state);
       `listAccessibleCustomers` zero customers ⇒ `unhealthy(ads_no_accessible_customer)`; more than one ⇒
       `unhealthy(ads_customer_ambiguous)`; transport error/timeout ⇒ `unhealthy(probe_failed)` with a 60s
-      `expires_at`, not the 6h TTL
-- [ ] 3.2 GREEN `src/google/health.ts`: `sites.get` + `listAccessibleCustomers` probes; reason/detail
-      derivation exactly per design's table; never includes credential material in `detail`
-- [ ] 3.3 RED state-machine table: connect-time probe runs synchronously before "connected" is reported
+      `expires_at`, not the 6h TTL — done: 10 RED tests, confirmed failing (`Cannot find module`) before 3.2
+- [x] 3.2 GREEN `src/google/health.ts`: `sites.get` + `listAccessibleCustomers` probes; reason/detail
+      derivation exactly per design's table; never includes credential material in `detail` — done: all 10
+      tests pass. `probeSearchConsole`/`probeGoogleAds` derive `credential_rejected` (token exchange or
+      401/403 API rejection), `property_not_accessible` (other non-2xx), `property_unverified`
+      (`permissionLevel: "siteUnverifiedUser"`), `probe_failed` (transport/timeout, 60s TTL), and for Ads
+      `ads_no_accessible_customer`/`ads_customer_ambiguous` from `resourceNames.length`; `adsCustomerId` is
+      resolved as a side effect of exactly one accessible customer
+- [x] 3.3 RED state-machine table: connect-time probe runs synchronously before "connected" is reported
       (spec "A successful connect marks the site healthy" / "...marks the site invalid, not silently
       connected"); selection-time probe runs only when cached record is absent/stale/tier-mismatched (spec
       "A fresh, healthy cached result is reused..." / "A stale cached result triggers a fresh probe..." /
@@ -216,18 +221,56 @@ bff/ui`) surfaces it, because `bff/ui/tsconfig.json`'s `include` doesn't list th
       (spec "Manual recheck clears an invalid state..."); listing never probes (spec "Listing sites never
       triggers a probe", Threat Matrix N/A-adjacent but load-bearing for cost); `checking` is never
       persisted; a real call's success extends `expires_at`, a real call's `upstream_credential_failure`
-      directly downgrades without a probe
-- [ ] 3.4 GREEN state-machine implementation wiring `site-credential-store.ts` health rows into the
+      directly downgrades without a probe — done: `test/integration/credential-health-state-machine.test.ts`
+      (real Miniflare D1), 13 tests covering the full trigger table
+- [x] 3.4 GREEN state-machine implementation wiring `site-credential-store.ts` health rows into the
       resolution path; `accountKey` drift on the health row invalidates a `healthy` result (spec "A tier
-      change invalidates the cached result even if it is fresh")
-- [ ] 3.5 RED `test/schemas/sites.test.ts`: `list_sites` gains `credential: { tier, accountLabel,
+      change invalidates the cached result even if it is fresh") — done, in the same `src/google/health.ts`
+      commit as 3.2 (probes and state machine were implemented together; the 3.3 RED tests were written
+      against the already-complete implementation, confirmed passing on first run — no separate RED→GREEN
+      gap was observable for this sub-task since the file did not exist as a partial artifact in between).
+      **Where the logic lives**: NOT wired into `resolveSiteCredentials` — that function is the hot path for
+      every real Search Console/Ads/Business call (`search-console.ts`/`ads.ts`/`business.ts`), and probing
+      on every real call would violate "the health check runs at exactly three points, and nowhere else".
+      Instead, new exported functions in `src/google/health.ts` that a caller must invoke explicitly:
+      `checkSearchConsoleHealth`/`checkGoogleAdsHealth` (selection-time, gated on `isFresh` — absent, stale
+      `expires_at`, or `accountKey` drift all force a probe; `{ forceRecheck: true }` bypasses the gate for
+      manual recheck), `runConnectHealthCheck` (always-fresh dual probe for connect time), and
+      `recordAuthenticatedCallSuccess`/`recordAuthenticatedCallFailure` (no probe; a real call's own outcome
+      is written directly). None of these are wired into any live path yet — Phase 4b (connect/recheck
+      tools) and Phase 5 (BFF real-call classification) are the future callers; this phase only builds and
+      tests the primitives
+- [x] 3.5 RED `test/schemas/sites.test.ts`: `list_sites` gains `credential: { tier, accountLabel,
 accountKey, health: { searchConsole, googleAds } }`; zero Google calls when serving the list (spec
       "Listing sites never triggers a probe"); never exposes ciphertext, IV, `credentialKey`, or plaintext
-      (spec "No raw credential value ever appears in the list schema")
-- [ ] 3.6 GREEN `src/schemas/sites.ts`: extend output schema; `src/server.ts` `list_sites` registration
-      unchanged input, additive output only
-- [ ] 3.7 PROOF `pnpm test -- health credentials`; `test/integration/` confirms `list_sites` round-trips the
-      new field with no secret leak (Threat Matrix row c, i)
+      (spec "No raw credential value ever appears in the list schema") — done: extended
+      `test/schemas/sites.test.ts` with `credentialStatusSchema`/`listSitesResultSchema` coverage.
+      **Deviation from `site-google-credentials` spec.md's wording**: that spec describes a flatter
+      `credentialHealth: "healthy"|"invalid"|"unchecked"` field; design.md's later, more detailed decision
+      ("two persisted health states, five presented states") and tasks.md's own 3.5 wording both specify the
+      nested `credential: { tier, accountLabel, accountKey, health: { searchConsole, googleAds } }` shape
+      with five derived presented states (`not_connected`/`unchecked`/`stale`/`healthy`/`unhealthy`) per
+      source. Implemented per design.md/tasks.md (the more recent, load-bearing artifacts per this phase's
+      assignment) — flagged here as a spec.md/design.md drift for `sdd-verify`, not silently reconciled
+- [x] 3.6 GREEN `src/schemas/sites.ts`: extend output schema; `src/mcp-tools/sites.ts` `list_sites`
+      registration unchanged input, additive output only — done: `presentedHealthSchema` +
+      `credentialStatusSchema` added; `listSitesResultSchema.sites` now
+      `siteSchema.extend({ credential: credentialStatusSchema })` (only `list_sites`'s array — `siteSchema`
+      itself, and `add_site`/`delete_site`'s use of it, are unchanged). `src/mcp-tools/sites.ts`'s `list_sites`
+      handler now maps each listed site through the new `credentialStatusForSite(env, site)` (in
+      `src/google/health.ts`) before returning — this reads only cached D1 rows (plus a local AES-GCM
+      decrypt for tier resolution), never a Google call. Updated the pre-existing
+      `test/integration/sites-schema.test.ts` round-trip assertion to include the new field
+- [x] 3.7 PROOF `pnpm test -- health credentials`; `test/integration/` confirms `list_sites` round-trips the
+      new field with no secret leak (Threat Matrix row c, i) — done: `pnpm test -- health credentials
+sites-schema list-sites-credential` green (all pass); full `pnpm test` green (162 files, 1489 tests);
+      `pnpm typecheck` clean (both root and `bff/ui` programs); `pnpm run format:check` clean after one
+      `prettier --write` pass on the touched files. Added
+      `test/integration/list-sites-credential.test.ts` (real Miniflare D1 via `buildServer`): a site with no
+      credential row reports `tier: "none"`; a connected+healthy site round-trips
+      `tier/accountLabel/health.searchConsole.state` correctly; both cases assert the stubbed global `fetch`
+      is never called (zero Google calls) and that the serialized response never contains the raw refresh
+      token, ciphertext, IV, encryption key, or `client_id`
 
 ## Phase 4a: BFF OAuth routes + `state` token + `gate.ts` `Lax` (PR4a) — `google-account-connect-flow`, `dashboard-bff`
 

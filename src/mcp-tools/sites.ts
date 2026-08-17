@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import type { Env } from "../config";
 import { listSites, addSite, deleteSite } from "../db/site-store";
+import { credentialStatusForSite } from "../google/health";
 import {
   listSitesResultSchema,
   addSiteResultSchema,
@@ -23,9 +24,15 @@ export function registerSitesTools(server: McpServer, env: Env): void {
         return errorResult(new Error("D1 storage is not configured"));
       try {
         const sites = await listSites(env.DB);
+        const sitesWithCredential = await Promise.all(
+          sites.map(async (site) => ({
+            ...site,
+            credential: await credentialStatusForSite(env, site),
+          })),
+        );
         return jsonResult(listSitesResultSchema, {
-          count: sites.length,
-          sites,
+          count: sitesWithCredential.length,
+          sites: sitesWithCredential,
         });
       } catch (e) {
         return errorResult(e);

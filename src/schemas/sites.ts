@@ -19,10 +19,45 @@ export type Site = z.infer<typeof siteSchema>;
 // site tool registrations actually return.
 // ---------------------------------------------------------------------------
 
+/**
+ * Presented health state — the five derived-at-read-time states from
+ * `src/google/health.ts` (`checking` is UI/response-only and never
+ * persisted, so it never appears here either; the read path either has a
+ * fresh probe result or one of these five). `reason`/`checkedAt` are
+ * present only when they meaningfully apply (absent for `healthy` and
+ * `not_connected`).
+ */
+export const presentedHealthSchema = z.object({
+  state: z.enum([
+    "not_connected",
+    "unchecked",
+    "stale",
+    "healthy",
+    "unhealthy",
+  ]),
+  reason: z.string().nullable().optional(),
+  checkedAt: z.string().nullable().optional(),
+});
+
+/**
+ * Per-site credential status for `list_sites`. Reads only cached D1 rows —
+ * never a live Google call — and never exposes `client_id`, `client_secret`,
+ * `refresh_token`, `credentialKey`, ciphertext, or IV.
+ */
+export const credentialStatusSchema = z.object({
+  tier: z.enum(["site", "global", "none"]),
+  accountLabel: z.string().nullable(),
+  accountKey: z.string().nullable(),
+  health: z.object({
+    searchConsole: presentedHealthSchema,
+    googleAds: presentedHealthSchema,
+  }),
+});
+
 export const listSitesResultSchema = z.object({
   // OBJECT ROOT — required by the SDK
   count: z.number().int().min(0),
-  sites: z.array(siteSchema),
+  sites: z.array(siteSchema.extend({ credential: credentialStatusSchema })),
 });
 export type ListSitesResult = z.infer<typeof listSitesResultSchema>;
 

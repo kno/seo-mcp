@@ -60,7 +60,23 @@ describe("list_sites registration exposes an outputSchema", () => {
     const response = await tool.handler({}, {});
 
     expect(response.isError).toBeUndefined();
-    expect(response.structuredContent).toEqual({ count: 1, sites });
+    expect(response.structuredContent).toEqual({
+      count: 1,
+      sites: [
+        {
+          ...sites[0],
+          credential: {
+            tier: "none",
+            accountLabel: null,
+            accountKey: null,
+            health: {
+              searchConsole: { state: "not_connected" },
+              googleAds: { state: "not_connected" },
+            },
+          },
+        },
+      ],
+    });
   });
 
   it("reports D1-not-configured when DB is absent", async () => {

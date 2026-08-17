@@ -51,4 +51,5 @@ export const LIMITS = {
   maxCrawlDiffRows: 100,
   maxBusinessReviews: 50,
   businessTimeoutMs: 20_000,
+  credentialHealthProbeTimeoutMs: 10_000,
 } as const;
