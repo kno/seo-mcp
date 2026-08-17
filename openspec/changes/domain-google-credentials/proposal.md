@@ -15,7 +15,7 @@ not own in Search Console is impossible without minting a new refresh token by h
 Playground and re-running `wrangler secret put` — which also overwrites the previous domain's access.
 
 A domain owner should be able to click **Connect Google Account** for their site, consent in Google's own
-screen, and have the dashboard read *their* Search Console and Keyword Planner data — with the resulting
+screen, and have the dashboard read _their_ Search Console and Keyword Planner data — with the resulting
 refresh token never visible to any browser, log line, or export.
 
 ## Scope
@@ -41,14 +41,14 @@ refresh token never visible to any browser, log line, or export.
 
 ### Out of Scope
 
-| Deferred | Rationale |
-| --- | --- |
-| **Google Business Profile (all six `business_*` tools)** | Keep using the global env secrets exactly as today. They key off Business *location resource names*, never a website URL, and are deliberately absent from `bff/src/authenticated/registry.ts:6-15` — unreachable through the dashboard regardless. A future change owns them. |
-| **`PAGESPEED_API_KEY`** | Stays global/env-level. `analyze_pagespeed`'s existing per-call override (`src/pagespeed/client.ts:110-132`) is a separate, already-shipped mechanism and is unaffected. |
-| **An explicit `siteUrl` parameter on the Ads tools** | Resolved: Ads binds implicitly to the active site (see Approach). `cluster_keywords` needs no Google credential at all and is untouched. |
-| **Encryption-key rotation / re-encryption tooling** | Genuinely new surface; a rotation procedure is a follow-up once one key is proven in production. |
-| **Multi-tenant dashboard auth (per-user login)** | Still one dashboard owner. This change makes *Google accounts* per-domain, not *dashboard users*. |
-| **Removing the global credential tier** | Retained deliberately as a fallback (see Approach); its removal is a follow-up change. |
+| Deferred                                                 | Rationale                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Google Business Profile (all six `business_*` tools)** | Keep using the global env secrets exactly as today. They key off Business _location resource names_, never a website URL, and are deliberately absent from `bff/src/authenticated/registry.ts:6-15` — unreachable through the dashboard regardless. A future change owns them. |
+| **`PAGESPEED_API_KEY`**                                  | Stays global/env-level. `analyze_pagespeed`'s existing per-call override (`src/pagespeed/client.ts:110-132`) is a separate, already-shipped mechanism and is unaffected.                                                                                                       |
+| **An explicit `siteUrl` parameter on the Ads tools**     | Resolved: Ads binds implicitly to the active site (see Approach). `cluster_keywords` needs no Google credential at all and is untouched.                                                                                                                                       |
+| **Encryption-key rotation / re-encryption tooling**      | Genuinely new surface; a rotation procedure is a follow-up once one key is proven in production.                                                                                                                                                                               |
+| **Multi-tenant dashboard auth (per-user login)**         | Still one dashboard owner. This change makes _Google accounts_ per-domain, not _dashboard users_.                                                                                                                                                                              |
+| **Removing the global credential tier**                  | Retained deliberately as a fallback (see Approach); its removal is a follow-up change.                                                                                                                                                                                         |
 
 ## Capabilities
 
@@ -101,29 +101,29 @@ built — one credential-input path only.
 
 ## Affected Areas
 
-| Area | Impact | Description |
-| --- | --- | --- |
-| `bff/src/router.ts` | Modified | Authorize + callback + disconnect routes. **Higher risk: request-facing auth surface.** |
-| `bff/src/crypto/` (new) | New | AES-GCM encrypt/decrypt helpers; first encryption code in the repo. |
-| `src/google/auth.ts` | Modified | Narrow credential parameter; keyed, bounded token cache. **Higher risk: shared choke point.** |
-| `src/google/search-console.ts`, `src/google/ads.ts`, `src/google/business.ts` | Modified | Call-site signature updates only (`business.ts` keeps global credentials). |
-| `src/db/site-store.ts`, `src/schemas/sites.ts`, `migrations/0004_*.sql` (new) | New/Modified | Credential row read/write; output schema exposes `connected` boolean only, never secrets. |
-| `src/config.ts` | Modified | New `DOMAIN_CREDENTIAL_ENCRYPTION_KEY` + OAuth client binding; regenerate via `wrangler types`. |
-| `bff/ui/src/containers/ManageDomainsContainer.tsx`, `bff/ui/src/app/SiteContext.tsx` | Modified | Connect/Disconnect controls; active-site binding for Ads. |
-| `src/http/*`, `src/security/*`, `src/pagespeed/*` | Unchanged | Drift here is a scope escalation. |
+| Area                                                                                 | Impact       | Description                                                                                     |
+| ------------------------------------------------------------------------------------ | ------------ | ----------------------------------------------------------------------------------------------- |
+| `bff/src/router.ts`                                                                  | Modified     | Authorize + callback + disconnect routes. **Higher risk: request-facing auth surface.**         |
+| `bff/src/crypto/` (new)                                                              | New          | AES-GCM encrypt/decrypt helpers; first encryption code in the repo.                             |
+| `src/google/auth.ts`                                                                 | Modified     | Narrow credential parameter; keyed, bounded token cache. **Higher risk: shared choke point.**   |
+| `src/google/search-console.ts`, `src/google/ads.ts`, `src/google/business.ts`        | Modified     | Call-site signature updates only (`business.ts` keeps global credentials).                      |
+| `src/db/site-store.ts`, `src/schemas/sites.ts`, `migrations/0004_*.sql` (new)        | New/Modified | Credential row read/write; output schema exposes `connected` boolean only, never secrets.       |
+| `src/config.ts`                                                                      | Modified     | New `DOMAIN_CREDENTIAL_ENCRYPTION_KEY` + OAuth client binding; regenerate via `wrangler types`. |
+| `bff/ui/src/containers/ManageDomainsContainer.tsx`, `bff/ui/src/app/SiteContext.tsx` | Modified     | Connect/Disconnect controls; active-site binding for Ads.                                       |
+| `src/http/*`, `src/security/*`, `src/pagespeed/*`                                    | Unchanged    | Drift here is a scope escalation.                                                               |
 
 ## Risks
 
-| Risk | Likelihood | Mitigation |
-| --- | --- | --- |
-| Cached access token from account A served to account B | High if cache unfixed | Keyed+bounded cache is In Scope item 4, with a RED test asserting two credential sets never share a token. |
-| Refresh token leaks into a response, redirect URL, log, or export | Med | Never echoed; only a `connected` boolean in any output schema; follow `bff/src/mcp-client.ts:83-96`'s log discipline (never args/bodies); tests assert absence in every body, header, cache value, export, and log line. |
-| Google token-endpoint error text echoed verbatim, revealing partial credential state | Med | Classify to a `BffErrorCode`, discard upstream text — same rule `dashboard-insights` applied to `gscError`. |
-| CSRF / authorization-code injection on the callback | Med | Signed, single-use, expiring `state` bound to session + `siteUrl`; reject unbound or replayed callbacks. |
-| First AES-GCM code in the repo, no precedent to copy | Med | Dedicated unit tests (round-trip, tampered ciphertext, wrong key, IV uniqueness) before any storage path is wired. |
-| Encryption key lost or rotated | Low-Med | All stored credentials become undecryptable → sites read as not connected and must reconnect; documented explicitly, rotation tooling deferred. |
-| Silent fallback to the operator's account misreads as "my data" | Med | `credentialSource` provenance is mandatory in every authenticated result. |
-| D1 migration applied to a deployment mid-rollout | Low | Additive `CREATE TABLE IF NOT EXISTS` only; no column drop, no existing-row rewrite. |
+| Risk                                                                                 | Likelihood            | Mitigation                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Cached access token from account A served to account B                               | High if cache unfixed | Keyed+bounded cache is In Scope item 4, with a RED test asserting two credential sets never share a token.                                                                                                               |
+| Refresh token leaks into a response, redirect URL, log, or export                    | Med                   | Never echoed; only a `connected` boolean in any output schema; follow `bff/src/mcp-client.ts:83-96`'s log discipline (never args/bodies); tests assert absence in every body, header, cache value, export, and log line. |
+| Google token-endpoint error text echoed verbatim, revealing partial credential state | Med                   | Classify to a `BffErrorCode`, discard upstream text — same rule `dashboard-insights` applied to `gscError`.                                                                                                              |
+| CSRF / authorization-code injection on the callback                                  | Med                   | Signed, single-use, expiring `state` bound to session + `siteUrl`; reject unbound or replayed callbacks.                                                                                                                 |
+| First AES-GCM code in the repo, no precedent to copy                                 | Med                   | Dedicated unit tests (round-trip, tampered ciphertext, wrong key, IV uniqueness) before any storage path is wired.                                                                                                       |
+| Encryption key lost or rotated                                                       | Low-Med               | All stored credentials become undecryptable → sites read as not connected and must reconnect; documented explicitly, rotation tooling deferred.                                                                          |
+| Silent fallback to the operator's account misreads as "my data"                      | Med                   | `credentialSource` provenance is mandatory in every authenticated result.                                                                                                                                                |
+| D1 migration applied to a deployment mid-rollout                                     | Low                   | Additive `CREATE TABLE IF NOT EXISTS` only; no column drop, no existing-row rewrite.                                                                                                                                     |
 
 ## Rollback Plan
 

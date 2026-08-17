@@ -6,16 +6,16 @@ RED (failing test) → GREEN (smallest implementation), test command `pnpm test`
 
 ## Review Workload Forecast
 
-| Field                    | Value                                                      |
-| ------------------------ | ----------------------------------------------------------- |
-| Estimated changed lines  | ~2,900-3,500 total; see per-slice estimate below            |
+| Field                    | Value                                                        |
+| ------------------------ | ------------------------------------------------------------ |
+| Estimated changed lines  | ~2,900-3,500 total; see per-slice estimate below             |
 | Review budget            | 800 lines/PR                                                 |
 | 400/800-line budget risk | High for Slice 4; Medium for Slices 1, 3, 6; Low for 0, 2, 5 |
 | Chained PRs recommended  | Yes                                                          |
 | Suggested split          | PR0 → PR1 → PR2 → PR3 → PR4a → PR4b → PR5 → PR6, stacked     |
 | Delivery strategy        | ask-on-risk                                                  |
 | Chain strategy           | stacked-to-main (proposed — confirm with user; see note)     |
-| Test command              | `pnpm test`                                                  |
+| Test command             | `pnpm test`                                                  |
 
 Decision needed before apply: Yes
 Chained PRs recommended: Yes
@@ -36,16 +36,16 @@ without 4b's tools; 4b's tools are unreachable without 4a's routes) while keepin
 
 ### Suggested Work Units
 
-| Unit | Goal                                                      | PR   | Focused test command                          | Runtime harness                                     | Rollback boundary                                                     |
-| ---- | ---------------------------------------------------------- | ---- | ---------------------------------------------- | ---------------------------------------------------- | ---------------------------------------------------------------------- |
-| 0    | Deploy `seo-dashboard-bff` w/ real KV                     | PR0  | N/A — infra, not code test                    | `wrangler deployments list --name seo-dashboard-bff` | Not applicable (deploy only, no revert needed beyond `wrangler rollback`) |
-| 1    | Migration + crypto + store (no reader)                    | PR1  | `pnpm test -- credential-cipher site-credential-store` | N/A — no reader wired; structural unit tests only          | Drop the two new files + migration; unread by any live path            |
-| 2    | `resolveSiteCredentials` + keyed token cache + call sites | PR2  | `pnpm test -- credentials auth`               | `test/integration/` MCP round-trip (behavior-identical) | Revert `auth.ts`/`credentials.ts`; call sites revert to `env`-shaped signature |
-| 3    | Health probes + state machine + `list_sites` status      | PR3  | `pnpm test -- health credentials`             | `test/integration/` mocked GSC/Ads probe endpoints  | Drop `health.ts`; `list_sites` drops `credential` field                |
-| 4a   | BFF OAuth routes + `state` token + `gate.ts` `Lax`        | PR4a | `pnpm test -- oauth state gate`               | `bff/test/integration/` mocked Google token endpoint | Remove `bff/src/oauth/*`; router drops 2 routes; `gate.ts` reverts to `Strict` |
-| 4b   | 3 new MCP tools (`connect/disconnect/check`)              | PR4b | `pnpm test -- site-credentials`               | `bff/test/integration/` full authorize→callback→connected round-trip | Drop `src/mcp-tools/site-credentials.ts`; PR4a routes 404 with no tool to call |
-| 5    | Credential-scoped BFF cache key + per-account ledger      | PR5  | `pnpm test -- cache quota-ledger`             | `bff/test/integration/` KV, two `accountKey`s        | Revert cache-key/ledger-key derivation to unscoped form                |
-| 6    | UI: Connect/Disconnect/Re-check, status column, gating    | PR6  | `pnpm test -- manage-domains site-context ads-quota-badge` | `bff/test/integration/` full route + a11y pass | Shell disabled/legacy view state; no server contract change            |
+| Unit | Goal                                                      | PR   | Focused test command                                       | Runtime harness                                                      | Rollback boundary                                                              |
+| ---- | --------------------------------------------------------- | ---- | ---------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| 0    | Deploy `seo-dashboard-bff` w/ real KV                     | PR0  | N/A — infra, not code test                                 | `wrangler deployments list --name seo-dashboard-bff`                 | Not applicable (deploy only, no revert needed beyond `wrangler rollback`)      |
+| 1    | Migration + crypto + store (no reader)                    | PR1  | `pnpm test -- credential-cipher site-credential-store`     | N/A — no reader wired; structural unit tests only                    | Drop the two new files + migration; unread by any live path                    |
+| 2    | `resolveSiteCredentials` + keyed token cache + call sites | PR2  | `pnpm test -- credentials auth`                            | `test/integration/` MCP round-trip (behavior-identical)              | Revert `auth.ts`/`credentials.ts`; call sites revert to `env`-shaped signature |
+| 3    | Health probes + state machine + `list_sites` status       | PR3  | `pnpm test -- health credentials`                          | `test/integration/` mocked GSC/Ads probe endpoints                   | Drop `health.ts`; `list_sites` drops `credential` field                        |
+| 4a   | BFF OAuth routes + `state` token + `gate.ts` `Lax`        | PR4a | `pnpm test -- oauth state gate`                            | `bff/test/integration/` mocked Google token endpoint                 | Remove `bff/src/oauth/*`; router drops 2 routes; `gate.ts` reverts to `Strict` |
+| 4b   | 3 new MCP tools (`connect/disconnect/check`)              | PR4b | `pnpm test -- site-credentials`                            | `bff/test/integration/` full authorize→callback→connected round-trip | Drop `src/mcp-tools/site-credentials.ts`; PR4a routes 404 with no tool to call |
+| 5    | Credential-scoped BFF cache key + per-account ledger      | PR5  | `pnpm test -- cache quota-ledger`                          | `bff/test/integration/` KV, two `accountKey`s                        | Revert cache-key/ledger-key derivation to unscoped form                        |
+| 6    | UI: Connect/Disconnect/Re-check, status column, gating    | PR6  | `pnpm test -- manage-domains site-context ads-quota-badge` | `bff/test/integration/` full route + a11y pass                       | Shell disabled/legacy view state; no server contract change                    |
 
 Each PR is RED → GREEN → PROOF. RED = failing behavior test first. GREEN = smallest implementation.
 PROOF = `pnpm test` green plus the unit's focused command and runtime harness.
@@ -61,7 +61,7 @@ real origin and the OAuth client's redirect URIs are registered — flag this ex
 - [x] 0.1 Create the real Cloudflare KV namespace for `RESULT_CACHE` and replace the placeholder id in
       `bff/wrangler.jsonc:18` — done: namespace `a6e48a991b694ab3b96dc719b527a457`
 - [x] 0.2 Deploy `seo-dashboard-bff` (`wrangler deploy` from `bff/`); confirm `wrangler deployments list
-      --name seo-dashboard-bff` returns a live deployment (currently "Worker not found") — done:
+--name seo-dashboard-bff` returns a live deployment (currently "Worker not found") — done:
       `https://seo-dashboard-bff.seo-mpc.workers.dev`. `MCP_AUTH_TOKEN` rotated on both `seo-mcp` and
       `seo-dashboard-bff` to a shared new value (the prior production value was not recoverable from
       Cloudflare); `DASHBOARD_SECRET`/`DASHBOARD_SESSION_KEY` freshly generated for this deployment.
@@ -78,14 +78,14 @@ real origin and the OAuth client's redirect URIs are registered — flag this ex
 ## Phase 1: Migration + crypto + store, no reader (PR1) — `site-google-credentials`
 
 - [ ] 1.1 Create `migrations/0004_site_credentials.sql`: additive `CREATE TABLE IF NOT EXISTS
-      site_credentials` + `site_credential_health`, per design's exact schema; apply locally and confirm
+site_credentials` + `site_credential_health`, per design's exact schema; apply locally and confirm
       idempotent re-apply
 - [ ] 1.2 RED `test/crypto/credential-cipher.test.ts`: round-trip encrypt/decrypt; tampered ciphertext
       fails closed (Threat Matrix row c, spec "A tampered ciphertext fails closed"); wrong key fails; wrong
       AAD (site B's `additionalData`) fails; IV differs across two writes of the same plaintext (spec "Each
       write uses a unique IV")
 - [ ] 1.3 GREEN `src/crypto/credential-cipher.ts`: AES-GCM-256 encrypt/decrypt, `subtle.importKey("raw",
-      …, { name: "AES-GCM" }, false, ["encrypt","decrypt"])`, random 12-byte IV per write,
+…, { name: "AES-GCM" }, false, ["encrypt","decrypt"])`, random 12-byte IV per write,
       `additionalData = "site:{site_id}:refresh_token"`
 - [ ] 1.4 RED `test/db/site-credential-store.test.ts`: write persists ciphertext+IV never plaintext (spec
       "Refresh token is encrypted before the D1 write"); `deleteSite` batch-deletes both
@@ -100,7 +100,7 @@ real origin and the OAuth client's redirect URIs are registered — flag this ex
 ## Phase 2: `resolveSiteCredentials` + keyed token cache + call-site ripple (PR2) — `site-google-credentials`, `authenticated-source-contract`
 
 - [ ] 2.1 RED `test/google/credentials.test.ts`: site-tier resolves entirely site fields, `credentialSource:
-      "site"` (spec "A connected site resolves to its own credentials"); global fallback resolves entirely
+"site"` (spec "A connected site resolves to its own credentials"); global fallback resolves entirely
       global fields, `credentialSource: "global"` (spec "An unconnected site falls back to the global
       tier"); tiers never mix (spec "Tiers are never mixed"); neither tier usable ⇒
       `credentialSource: "none"`, no partial-set call attempted (spec "Neither tier has usable
@@ -127,7 +127,7 @@ real origin and the OAuth client's redirect URIs are registered — flag this ex
 ## Phase 3: Health probes + state machine + `list_sites` status (PR3) — `site-google-credentials`
 
 - [ ] 3.1 RED `test/google/health.test.ts`: `sites.get` probe classifies `permissionLevel:
-      "siteUnverifiedUser"` ⇒ `unhealthy(property_unverified)` (spec-equivalent "invalid" state);
+"siteUnverifiedUser"` ⇒ `unhealthy(property_unverified)` (spec-equivalent "invalid" state);
       `listAccessibleCustomers` zero customers ⇒ `unhealthy(ads_no_accessible_customer)`; more than one ⇒
       `unhealthy(ads_customer_ambiguous)`; transport error/timeout ⇒ `unhealthy(probe_failed)` with a 60s
       `expires_at`, not the 6h TTL
@@ -146,7 +146,7 @@ real origin and the OAuth client's redirect URIs are registered — flag this ex
       resolution path; `accountKey` drift on the health row invalidates a `healthy` result (spec "A tier
       change invalidates the cached result even if it is fresh")
 - [ ] 3.5 RED `test/schemas/sites.test.ts`: `list_sites` gains `credential: { tier, accountLabel,
-      accountKey, health: { searchConsole, googleAds } }`; zero Google calls when serving the list (spec
+accountKey, health: { searchConsole, googleAds } }`; zero Google calls when serving the list (spec
       "Listing sites never triggers a probe"); never exposes ciphertext, IV, `credentialKey`, or plaintext
       (spec "No raw credential value ever appears in the list schema")
 - [ ] 3.6 GREEN `src/schemas/sites.ts`: extend output schema; `src/server.ts` `list_sites` registration
@@ -174,7 +174,7 @@ real origin and the OAuth client's redirect URIs are registered — flag this ex
       failed exchange leaves no partial credential row (spec "A failed code exchange leaves no partial
       credential row")
 - [ ] 4a.6 GREEN `bff/src/oauth/callback.ts`: pre-gate route registered in the same slot as `POST
-      /auth/session` (`router.ts:802`); verifies `state`; forwards `code` to `seo-mcp` (implemented fully
+/auth/session` (`router.ts:802`); verifies `state`; forwards `code` to `seo-mcp` (implemented fully
       in 4b — this task only wires the forward call, no tool exists yet, so integration proof is deferred
       to 4b)
 - [ ] 4a.7 RED `bff/test/gate.test.ts`: exact `Set-Cookie` attribute string is `SameSite=Lax`; every
@@ -206,7 +206,7 @@ real origin and the OAuth client's redirect URIs are registered — flag this ex
       state without a new OAuth round-trip")
 - [ ] 4b.6 GREEN `check_site_credentials({siteId})`
 - [ ] 4b.7 GREEN wire `bff/src/router.ts`: `POST /api/tools/disconnect_google_account`, `POST
-      /api/tools/check_site_credentials` (both behind `authenticate()`); `bff/src/oauth/callback.ts` (4a.6)
+/api/tools/check_site_credentials` (both behind `authenticate()`); `bff/src/oauth/callback.ts` (4a.6)
       now calls `connect_google_account` for real
 - [ ] 4b.8 RED `bff/test/integration/oauth-round-trip.test.ts`: mocked Google token endpoint; full
       authorize→callback→connected round-trip; a decoy refresh token set in the **stub** env appears in no
@@ -230,7 +230,7 @@ real origin and the OAuth client's redirect URIs are registered — flag this ex
 - [ ] 5.4 GREEN `accountKey` resolution from `ak1:{siteUrl}` in `RESULT_CACHE` (TTL 300s), written by every
       `list_sites` response, invalidated by connect/disconnect (4b) on write
 - [ ] 5.5 GREEN `bff/src/router.ts:556-575`: `credential: {source, accountKey, accountLabel?,
-      basis: "bff-resolved"}` required on the authenticated envelope
+basis: "bff-resolved"}` required on the authenticated envelope
 - [ ] 5.6 RED two new `BffErrorCode`s: `site_credential_not_connected` (503), `site_credential_unhealthy`
       (503), distinct from `upstream_source_not_configured`/`upstream_credential_failure` (mcp-error-contract
       spec "A site with no usable credential gets its own code" / "A health-check-gated site cannot be
@@ -258,23 +258,23 @@ real origin and the OAuth client's redirect URIs are registered — flag this ex
       independent quota estimates" / "Switching to an invalid site clears the quota estimate...")
 - [ ] 6.7 GREEN `AdsQuotaBadge.tsx`: per-account label + estimate sourced from Phase 5's scoped ledger
 - [ ] 6.8 PROOF a11y + keyboard-only navigation pass; `pnpm test -- manage-domains site-context
-      ads-quota-badge`; full `pnpm test` and `pnpm typecheck` green
+ads-quota-badge`; full `pnpm test` and `pnpm typecheck` green
 
 ## Threat Matrix Traceability
 
-| Row | Covered by task(s) |
-| --- | --- |
-| a | 4a.3 |
-| b | 4a.1 |
-| c | 1.2, 2.3, 3.5, 4b.1, 4b.8 |
-| d | 4a.5 |
-| e | 5.1 |
-| f | 2.3 |
-| g | (design row g — `x-seo-active-site` header spoofing) — deferred to `sdd-apply` wiring of `buildServer(env, {activeSiteUrl})`; add a RED test asserting absent header ⇒ global tier under Phase 2's `resolveSiteCredentials` call sites |
-| h | 4a.7 |
-| i | 3.5, 6.4 |
-| j | 1.4 |
-| k | 5.2 |
+| Row | Covered by task(s)                                                                                                                                                                                                                     |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a   | 4a.3                                                                                                                                                                                                                                   |
+| b   | 4a.1                                                                                                                                                                                                                                   |
+| c   | 1.2, 2.3, 3.5, 4b.1, 4b.8                                                                                                                                                                                                              |
+| d   | 4a.5                                                                                                                                                                                                                                   |
+| e   | 5.1                                                                                                                                                                                                                                    |
+| f   | 2.3                                                                                                                                                                                                                                    |
+| g   | (design row g — `x-seo-active-site` header spoofing) — deferred to `sdd-apply` wiring of `buildServer(env, {activeSiteUrl})`; add a RED test asserting absent header ⇒ global tier under Phase 2's `resolveSiteCredentials` call sites |
+| h   | 4a.7                                                                                                                                                                                                                                   |
+| i   | 3.5, 6.4                                                                                                                                                                                                                               |
+| j   | 1.4                                                                                                                                                                                                                                    |
+| k   | 5.2                                                                                                                                                                                                                                    |
 
 ## Recorded follow-ups (deliberately NOT tasked here)
 
