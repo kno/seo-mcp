@@ -11,7 +11,10 @@ import { StateRegion } from "../molecules/StateRegion";
 import type { RegionState } from "../molecules/StateRegion";
 import { SourceFreshnessBadge } from "../molecules/SourceFreshnessBadge";
 import { AdsQuotaBadge } from "../molecules/AdsQuotaBadge";
-import type { QuotaEstimateView } from "../molecules/AdsQuotaBadge";
+import type {
+  AccountCredentialView,
+  QuotaEstimateView,
+} from "../molecules/AdsQuotaBadge";
 import {
   KeywordMetricsForm,
   type KeywordMetricsFormInput,
@@ -50,6 +53,7 @@ interface AuthenticatedKeywordResponse<T> {
   readonly resultAge: number;
   readonly sourceFreshness: SourceFreshness;
   readonly quota: QuotaEstimateView;
+  readonly credential: AccountCredentialView;
   readonly currencyLabel?: string;
 }
 
@@ -75,6 +79,9 @@ function MetricsTab() {
   const [result, setResult] = useState<KeywordMetricsResult | null>(null);
   const [freshness, setFreshness] = useState<SourceFreshness | null>(null);
   const [quota, setQuota] = useState<QuotaEstimateView | null>(null);
+  const [credential, setCredential] = useState<AccountCredentialView | null>(
+    null,
+  );
   const [currencyLabel, setCurrencyLabel] = useState<string | undefined>(
     undefined,
   );
@@ -97,6 +104,7 @@ function MetricsTab() {
     setResult(null);
     setFreshness(null);
     setQuota(null);
+    setCredential(null);
     setInFlight(true);
     setState({ phase: "loading" });
 
@@ -126,6 +134,7 @@ function MetricsTab() {
     setResult(response.data);
     setFreshness(response.sourceFreshness);
     setQuota(response.quota);
+    setCredential(response.credential);
     setCurrencyLabel(response.currencyLabel);
     setState({
       phase: "ready",
@@ -141,7 +150,7 @@ function MetricsTab() {
       <KeywordMetricsForm onSubmit={handleSubmit} disabled={inFlight} />
       {state && (
         <StateRegion label="Keyword metrics" state={state}>
-          {result && freshness && quota && (
+          {result && freshness && quota && credential && (
             <div className="region-body">
               <div
                 className="field-row"
@@ -149,7 +158,7 @@ function MetricsTab() {
                 aria-label="Result freshness and quota"
               >
                 <SourceFreshnessBadge freshness={freshness} />
-                <AdsQuotaBadge quota={quota} />
+                <AdsQuotaBadge quota={quota} credential={credential} />
               </div>
               <KeywordMetricsTable
                 result={result}
@@ -172,6 +181,9 @@ function DiscoverTab({
   const [result, setResult] = useState<KeywordMetricsResult | null>(null);
   const [freshness, setFreshness] = useState<SourceFreshness | null>(null);
   const [quota, setQuota] = useState<QuotaEstimateView | null>(null);
+  const [credential, setCredential] = useState<AccountCredentialView | null>(
+    null,
+  );
   const [currencyLabel, setCurrencyLabel] = useState<string | undefined>(
     undefined,
   );
@@ -194,6 +206,7 @@ function DiscoverTab({
     setResult(null);
     setFreshness(null);
     setQuota(null);
+    setCredential(null);
     setInFlight(true);
     setState({ phase: "loading" });
 
@@ -225,6 +238,7 @@ function DiscoverTab({
     setResult(response.data);
     setFreshness(response.sourceFreshness);
     setQuota(response.quota);
+    setCredential(response.credential);
     setCurrencyLabel(response.currencyLabel);
     onDiscovered(response.data.keywords.map((metric) => metric.keyword));
     setState({
@@ -241,7 +255,7 @@ function DiscoverTab({
       <KeywordDiscoveryForm onSubmit={handleSubmit} disabled={inFlight} />
       {state && (
         <StateRegion label="Discover keywords" state={state}>
-          {result && freshness && quota && (
+          {result && freshness && quota && credential && (
             <div className="region-body">
               <div
                 className="field-row"
@@ -249,7 +263,7 @@ function DiscoverTab({
                 aria-label="Result freshness and quota"
               >
                 <SourceFreshnessBadge freshness={freshness} />
-                <AdsQuotaBadge quota={quota} />
+                <AdsQuotaBadge quota={quota} credential={credential} />
               </div>
               <KeywordMetricsTable
                 result={result}

@@ -533,24 +533,61 @@ oauth` green (169 files, 1527 tests); full `pnpm test` green (same counts, up fr
 
 ## Phase 6: UI — Manage Domains, site selector gating, per-account Ads badge (PR6) — `site-google-credentials` (UI surface), `quota-visibility`
 
-- [ ] 6.1 RED `ManageDomainsContainer` renders connection tier and health status as **two distinct elements
+- [x] 6.1 RED `ManageDomainsContainer` renders connection tier and health status as **two distinct elements
       with distinct accessible names**, never one element conflating both (spec "A connected but invalid
-      site is visibly distinct from both 'connected' and 'not connected'")
-- [ ] 6.2 RED Connect/Disconnect/Re-check controls exist per row; Disconnect requires the existing
-      confirm-gate UI pattern; Re-check bypasses no user-visible cache indicator
-- [ ] 6.3 GREEN `ManageDomainsContainer.tsx`: status column + three actions wired to Phase 4b's tools and
-      Phase 3's `list_sites.credential` field
-- [ ] 6.4 RED `SiteContext` selector disables any non-`healthy` site with the reason in the accessible name
+      site is visibly distinct from both 'connected' and 'not connected'") — done:
+      `ManageDomainsContainer.test.tsx` "status column" describe block asserts `tier-{id}`/`health-{id}`
+      are different elements with different `aria-label`s, and that unhealthy-connected/never-connected
+      report distinct text
+- [x] 6.2 RED Connect/Disconnect/Re-check controls exist per row; Disconnect requires the existing
+      confirm-gate UI pattern; Re-check bypasses no user-visible cache indicator — done: RED tests for the
+      Connect `<a href="/auth/google/authorize?siteId=...">` link, the two-click Disconnect confirm gate
+      (independent `pendingDisconnectId`, verified not to cross-arm Delete), and a Recheck-wording
+      assertion that the button text never contains "cached"
+- [x] 6.3 GREEN `ManageDomainsContainer.tsx`: status column + three actions wired to Phase 4b's tools and
+      Phase 3's `list_sites.credential` field — done: added Connection/Health/Google account/Recheck
+      columns; Connect is a plain navigation `<a>` (not a fetch); Disconnect/Recheck call
+      `SiteContext`'s new `disconnectSite`/`recheckSite`, both of which POST via `requestTool(...,
+{postJson: true})` and refetch the site list on success, mirroring `addSite`'s existing pattern
+- [x] 6.4 RED `SiteContext` selector disables any non-`healthy` site with the reason in the accessible name
       (spec "An invalid site cannot be selected"); no timer/focus/visibility handler issues a probe
-      (design's health-check table, last row; `no-polling.test.ts` convention)
-- [ ] 6.5 GREEN `SiteContext.tsx`: gate selection on `credentialHealth`/health state from Phase 3
-- [ ] 6.6 RED `AdsQuotaBadge` names the account (`owner@example.com`, or "operator's shared account" for
+      (design's health-check table, last row; `no-polling.test.ts` convention) — done: `App.test.tsx`
+      "domain selector health gating" RED tests assert the `<option>` is `disabled` with the reason in its
+      own text content (native `<option>` has inconsistent `aria-label` support in ATs, so the reason rides
+      the accessible name via visible text instead), and that a defeated-`disabled`-attribute selection
+      attempt is still rejected by the context-level gate; `SiteContext.test.tsx`'s new "health gating"
+      describe block asserts `setActiveSite` itself rejects a non-healthy site. `no-polling.test.ts`
+      structurally re-scanned the new code (no `setInterval`/`visibilitychange`/focus-listener added)
+- [x] 6.5 GREEN `SiteContext.tsx`: gate selection on `credentialHealth`/health state from Phase 3 — done:
+      `sites` is now typed `SiteWithCredential` (`ListSitesResult["sites"][number]`, never a hand-rolled
+      duplicate shape); added `isSiteSelectable`/`describeHealthState`/`describeCredentialTier` (shared with
+      `ManageDomainsContainer` and `App.tsx`'s selector) and gated `setActiveSite` to reject a selection
+      attempt naming a non-`healthy` site (`url === null` clear and an unresolvable `url` both fail open)
+- [x] 6.6 RED `AdsQuotaBadge` names the account (`owner@example.com`, or "operator's shared account" for
       `global`); switching active site updates the estimate to the new account's own volume, never carries
       over the previous site's figure (quota-visibility spec "Two sites on different accounts show
-      independent quota estimates" / "Switching to an invalid site clears the quota estimate...")
-- [ ] 6.7 GREEN `AdsQuotaBadge.tsx`: per-account label + estimate sourced from Phase 5's scoped ledger
-- [ ] 6.8 PROOF a11y + keyboard-only navigation pass; `pnpm test -- manage-domains site-context
-ads-quota-badge`; full `pnpm test` and `pnpm typecheck` green
+      independent quota estimates" / "Switching to an invalid site clears the quota estimate...") — done:
+      RED tests assert the site-tier label names the connected email, the global tier reads "operator's
+      shared account" (never the literal word "global"), and a `rerender` with a new `credential`/`quota`
+      prop pair shows only the new account's figure with no trace of the previous one (this component is
+      purely prop-driven, so "never carries over" is a real assertion, not a tautology)
+- [x] 6.7 GREEN `AdsQuotaBadge.tsx`: per-account label + estimate sourced from Phase 5's scoped ledger —
+      done: added a required `credential: {source, accountLabel}` prop (mirrors the envelope's `credential`
+      field per its own doc comment, re-derived locally rather than imported, matching this module's
+      existing Workers-import-avoidance discipline); `KeywordResearchContainer`'s two authenticated tabs now
+      track/reset/pass `credential` alongside `quota` on every request, submission, and abort. Per the
+      session brief: `get_keyword_metrics`/`discover_keywords` still resolve the GLOBAL tier unconditionally
+      (Threat Matrix row g, deferred) — the badge correctly DISPLAYS whatever `credential` the response
+      carries; it does not (and per the brief, must not) fix that binding gap
+- [x] 6.8 PROOF a11y + keyboard-only navigation pass; `pnpm test -- manage-domains site-context
+ads-quota-badge`; full `pnpm test` and `pnpm typecheck` green — done: a11y verified two ways — (1)
+      `App.test.tsx`'s existing axe pass now also covers the gated selector (unchanged zero-violations), and
+      (2) explicit `getByRole("combobox"/"button"/"link", {name: ...})`/accessible-name assertions
+      throughout the new tests (never relying on `aria-label` alone on `<option>`, given its inconsistent AT
+      support). Keyboard reachability relies on the existing native `<button>`/`<a>`/`<select>` elements
+      (no custom widgets introduced), consistent with `App.test.tsx`'s existing Tab-only-navigation
+      coverage. `pnpm test`: 169 files / 1541 tests passed. `pnpm run typecheck`: clean (root +
+      `bff/ui`). `pnpm run format:check`: clean after one `prettier --write` pass on the four touched files
 
 ## Threat Matrix Traceability
 

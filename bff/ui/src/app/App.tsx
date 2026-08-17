@@ -9,7 +9,12 @@ import { SeoIntelligenceContainer } from "../containers/SeoIntelligenceContainer
 import { HistoryContainer } from "../containers/HistoryContainer";
 import { LoginContainer } from "../containers/LoginContainer";
 import { ManageDomainsContainer } from "../containers/ManageDomainsContainer";
-import { SiteProvider, useSiteContext } from "./SiteContext";
+import {
+  describeHealthState,
+  isSiteSelectable,
+  SiteProvider,
+  useSiteContext,
+} from "./SiteContext";
 
 /**
  * Root shell: header, title, primary navigation, and a minimal hash router.
@@ -111,11 +116,22 @@ function DomainSelector() {
         value={activeSite ?? ""}
         onChange={(event) => setActiveSite(event.currentTarget.value || null)}
       >
-        {sites.map((site) => (
-          <option key={site.id} value={site.url}>
-            {site.label ? `${site.label} (${site.url})` : site.url}
-          </option>
-        ))}
+        {sites.map((site) => {
+          const label = site.label ? `${site.label} (${site.url})` : site.url;
+          const selectable = isSiteSelectable(site);
+          // The reason lives in the option's own text — its accessible
+          // name — rather than an `aria-label`, since native `<option>`
+          // elements have inconsistent assistive-technology support for
+          // that attribute (task 6.4: "the reason in the accessible name").
+          const optionLabel = selectable
+            ? label
+            : `${label} — ${describeHealthState(site.credential.health.searchConsole)}`;
+          return (
+            <option key={site.id} value={site.url} disabled={!selectable}>
+              {optionLabel}
+            </option>
+          );
+        })}
       </select>
     </div>
   );

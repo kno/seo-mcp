@@ -5,6 +5,26 @@ import { SiteProvider, useActiveSite, useSiteContext } from "./SiteContext";
 
 const STORAGE_KEY = "seo-mcp:active-site";
 
+const HEALTHY_CREDENTIAL = {
+  tier: "site" as const,
+  accountLabel: "owner@example.com",
+  accountKey: "k1",
+  health: {
+    searchConsole: { state: "healthy" as const },
+    googleAds: { state: "healthy" as const },
+  },
+};
+
+const UNHEALTHY_CREDENTIAL = {
+  tier: "site" as const,
+  accountLabel: "owner@example.com",
+  accountKey: "k1",
+  health: {
+    searchConsole: { state: "unhealthy" as const, reason: "revoked" },
+    googleAds: { state: "unhealthy" as const },
+  },
+};
+
 function TestConsumer() {
   const { sites, activeSite, setActiveSite, addSite, deleteSite, loading } =
     useSiteContext();
@@ -66,12 +86,14 @@ describe("SiteProvider", () => {
               url: "https://a.com",
               label: null,
               createdAt: "2026-01-01T00:00:00.000Z",
+              credential: HEALTHY_CREDENTIAL,
             },
             {
               id: 2,
               url: "https://b.com",
               label: null,
               createdAt: "2026-01-02T00:00:00.000Z",
+              credential: HEALTHY_CREDENTIAL,
             },
           ],
         },
@@ -114,6 +136,7 @@ describe("SiteProvider", () => {
               url: "https://a.com",
               label: null,
               createdAt: "2026-01-01T00:00:00.000Z",
+              credential: HEALTHY_CREDENTIAL,
             },
           ],
         },
@@ -148,12 +171,14 @@ describe("SiteProvider", () => {
               url: "https://a.com",
               label: null,
               createdAt: "2026-01-01T00:00:00.000Z",
+              credential: HEALTHY_CREDENTIAL,
             },
             {
               id: 2,
               url: "https://b.com",
               label: null,
               createdAt: "2026-01-02T00:00:00.000Z",
+              credential: HEALTHY_CREDENTIAL,
             },
           ],
         },
@@ -221,6 +246,7 @@ describe("SiteProvider", () => {
               url: "https://new.com",
               label: "New",
               createdAt: "2026-01-01T00:00:00.000Z",
+              credential: HEALTHY_CREDENTIAL,
             },
           },
           cacheStatus: "bypass",
@@ -237,6 +263,7 @@ describe("SiteProvider", () => {
                 url: "https://new.com",
                 label: "New",
                 createdAt: "2026-01-01T00:00:00.000Z",
+                credential: HEALTHY_CREDENTIAL,
               },
             ],
           },
@@ -283,6 +310,7 @@ describe("SiteProvider", () => {
                 url: "https://a.com",
                 label: null,
                 createdAt: "2026-01-01T00:00:00.000Z",
+                credential: HEALTHY_CREDENTIAL,
               },
             ],
           },
@@ -358,6 +386,7 @@ describe("useActiveSite", () => {
               url: "https://a.com",
               label: null,
               createdAt: "2026-01-01T00:00:00.000Z",
+              credential: HEALTHY_CREDENTIAL,
             },
           ],
         },
@@ -377,5 +406,281 @@ describe("useActiveSite", () => {
     );
 
     expect(screen.getByTestId("active")).toHaveTextContent("https://a.com");
+  });
+});
+
+describe("setActiveSite health gating (task 6.4/6.5 — 'An invalid site cannot be selected')", () => {
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    global.fetch = vi.fn();
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    window.localStorage.clear();
+  });
+
+  function GatedConsumer() {
+    const { sites, activeSite, setActiveSite } = useSiteContext();
+    return (
+      <div>
+        <p data-testid="active-site">{activeSite ?? "(none)"}</p>
+        <button
+          type="button"
+          onClick={() => setActiveSite("https://unhealthy.com")}
+        >
+          select-unhealthy
+        </button>
+        <p data-testid="site-count">{sites.length}</p>
+      </div>
+    );
+  }
+
+  it("rejects selecting a site whose Search Console health is unhealthy — the active site does not change", async () => {
+    vi.mocked(global.fetch).mockResolvedValue(
+      jsonResponse({
+        data: {
+          count: 2,
+          sites: [
+            {
+              id: 1,
+              url: "https://healthy.com",
+              label: null,
+              createdAt: "2026-01-01T00:00:00.000Z",
+              credential: HEALTHY_CREDENTIAL,
+            },
+            {
+              id: 2,
+              url: "https://unhealthy.com",
+              label: null,
+              createdAt: "2026-01-02T00:00:00.000Z",
+              credential: UNHEALTHY_CREDENTIAL,
+            },
+          ],
+        },
+        cacheStatus: "bypass",
+        resultAge: 0,
+      }),
+    );
+    const user = userEvent.setup();
+
+    render(
+      <SiteProvider>
+        <GatedConsumer />
+      </SiteProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("site-count")).toHaveTextContent("2"),
+    );
+    expect(screen.getByTestId("active-site")).toHaveTextContent(
+      "https://healthy.com",
+    );
+
+    await user.click(screen.getByRole("button", { name: "select-unhealthy" }));
+
+    expect(screen.getByTestId("active-site")).toHaveTextContent(
+      "https://healthy.com",
+    );
+    expect(window.localStorage.getItem(STORAGE_KEY)).not.toBe(
+      "https://unhealthy.com",
+    );
+  });
+});
+
+describe("disconnectSite / recheckSite", () => {
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    global.fetch = vi.fn();
+    window.localStorage.clear();
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    window.localStorage.clear();
+  });
+
+  function ActionsConsumer() {
+    const { sites, disconnectSite, recheckSite } = useSiteContext();
+    return (
+      <div>
+        <ul data-testid="sites">
+          {sites.map((site) => (
+            <li key={site.id}>
+              {site.url}:{site.credential.health.searchConsole.state}
+            </li>
+          ))}
+        </ul>
+        {sites[0] && (
+          <>
+            <button
+              type="button"
+              onClick={(event) => disconnectSite(event, sites[0].id)}
+            >
+              disconnect-first
+            </button>
+            <button
+              type="button"
+              onClick={(event) => recheckSite(event, sites[0].id)}
+            >
+              recheck-first
+            </button>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  it("disconnectSite POSTs to disconnect_google_account with confirm:true and refetches the list", async () => {
+    vi.mocked(global.fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: {
+            count: 1,
+            sites: [
+              {
+                id: 1,
+                url: "https://a.com",
+                label: null,
+                createdAt: "2026-01-01T00:00:00.000Z",
+                credential: HEALTHY_CREDENTIAL,
+              },
+            ],
+          },
+          cacheStatus: "bypass",
+          resultAge: 0,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: { siteId: 1, disconnected: true },
+          cacheStatus: "bypass",
+          resultAge: 0,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: {
+            count: 1,
+            sites: [
+              {
+                id: 1,
+                url: "https://a.com",
+                label: null,
+                createdAt: "2026-01-01T00:00:00.000Z",
+                credential: {
+                  tier: "global",
+                  accountLabel: null,
+                  accountKey: "global",
+                  health: {
+                    searchConsole: { state: "unchecked" },
+                    googleAds: { state: "unchecked" },
+                  },
+                },
+              },
+            ],
+          },
+          cacheStatus: "bypass",
+          resultAge: 0,
+        }),
+      );
+    const user = userEvent.setup();
+
+    render(
+      <SiteProvider>
+        <ActionsConsumer />
+      </SiteProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("sites").textContent).toContain("healthy"),
+    );
+
+    await user.click(screen.getByRole("button", { name: "disconnect-first" }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("sites").textContent).toContain("unchecked"),
+    );
+    const disconnectCall = vi
+      .mocked(global.fetch)
+      .mock.calls.find(
+        ([u]) => String(u) === "/api/tools/disconnect_google_account",
+      );
+    expect(disconnectCall).toBeDefined();
+    expect(disconnectCall![1]).toMatchObject({ method: "POST" });
+    const body = JSON.parse(String((disconnectCall![1] as RequestInit).body));
+    expect(body).toMatchObject({ siteId: 1, confirm: true });
+  });
+
+  it("recheckSite POSTs to check_site_credentials with forceRecheck:true and refetches the list", async () => {
+    vi.mocked(global.fetch)
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: {
+            count: 1,
+            sites: [
+              {
+                id: 1,
+                url: "https://a.com",
+                label: null,
+                createdAt: "2026-01-01T00:00:00.000Z",
+                credential: UNHEALTHY_CREDENTIAL,
+              },
+            ],
+          },
+          cacheStatus: "bypass",
+          resultAge: 0,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: { siteId: 1, ...HEALTHY_CREDENTIAL },
+          cacheStatus: "bypass",
+          resultAge: 0,
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: {
+            count: 1,
+            sites: [
+              {
+                id: 1,
+                url: "https://a.com",
+                label: null,
+                createdAt: "2026-01-01T00:00:00.000Z",
+                credential: HEALTHY_CREDENTIAL,
+              },
+            ],
+          },
+          cacheStatus: "bypass",
+          resultAge: 0,
+        }),
+      );
+    const user = userEvent.setup();
+
+    render(
+      <SiteProvider>
+        <ActionsConsumer />
+      </SiteProvider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("sites").textContent).toContain("unhealthy"),
+    );
+
+    await user.click(screen.getByRole("button", { name: "recheck-first" }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("sites").textContent).toContain(":healthy"),
+    );
+    const recheckCall = vi
+      .mocked(global.fetch)
+      .mock.calls.find(
+        ([u]) => String(u) === "/api/tools/check_site_credentials",
+      );
+    expect(recheckCall).toBeDefined();
+    const body = JSON.parse(String((recheckCall![1] as RequestInit).body));
+    expect(body).toMatchObject({ siteId: 1, forceRecheck: true });
   });
 });

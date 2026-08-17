@@ -33,25 +33,53 @@ export interface QuotaEstimateView {
   readonly basis: "bff-observed" | "unavailable";
 }
 
-export function describeAdsQuotaEstimate(quota: QuotaEstimateView): string {
-  if (quota.basis === "unavailable") {
-    return "Google Ads call volume for this window is currently unavailable.";
+/**
+ * `domain-google-credentials` Phase 6 / `quota-visibility`'s "The quota
+ * estimate is labeled with which account it describes" requirement:
+ * mirrors the authenticated envelope's `credential` field
+ * (`router.ts#authenticatedToolResponse`'s doc comment) closely enough to
+ * name the account, without importing anything Workers-only — same
+ * re-derive-the-shape-locally discipline this module's own top doc comment
+ * already applies to `QuotaEstimateView`.
+ */
+export interface AccountCredentialView {
+  readonly source: "site" | "global";
+  readonly accountLabel: string | null;
+}
+
+/** "operator's shared account" for the global tier — never a bare number,
+ * and never the literal string "global" a user has no context for. */
+function describeAccount(credential: AccountCredentialView): string {
+  if (credential.source === "site" && credential.accountLabel) {
+    return credential.accountLabel;
   }
-  return `At least ${quota.atLeast} Google Ads calls used in this window (soft budget: ${quota.budget}).`;
+  return "operator's shared account";
+}
+
+export function describeAdsQuotaEstimate(
+  quota: QuotaEstimateView,
+  credential: AccountCredentialView,
+): string {
+  const account = describeAccount(credential);
+  if (quota.basis === "unavailable") {
+    return `Google Ads call volume for ${account} is currently unavailable.`;
+  }
+  return `At least ${quota.atLeast} Google Ads calls used in this window for ${account} (soft budget: ${quota.budget}).`;
 }
 
 export interface AdsQuotaBadgeProps {
   readonly quota: QuotaEstimateView;
+  readonly credential: AccountCredentialView;
 }
 
-export function AdsQuotaBadge({ quota }: AdsQuotaBadgeProps) {
+export function AdsQuotaBadge({ quota, credential }: AdsQuotaBadgeProps) {
   return (
     <span
       className="ads-quota-badge"
       data-testid="quota-badge-google-ads"
       role="status"
     >
-      {describeAdsQuotaEstimate(quota)}
+      {describeAdsQuotaEstimate(quota, credential)}
     </span>
   );
 }

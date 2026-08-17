@@ -44,6 +44,8 @@ const QUOTA = {
   basis: "bff-observed",
 };
 
+const CREDENTIAL = { source: "global", accountLabel: null } as const;
+
 function metricsEnvelope(currencyLabel: string | null = "USD") {
   return {
     data: METRICS_RESULT,
@@ -51,6 +53,7 @@ function metricsEnvelope(currencyLabel: string | null = "USD") {
     resultAge: 0,
     sourceFreshness: FRESHNESS,
     quota: QUOTA,
+    credential: CREDENTIAL,
     ...(currencyLabel !== null ? { currencyLabel } : {}),
   };
 }
@@ -272,6 +275,7 @@ describe("KeywordResearchContainer — missing Ads developer token is distinct f
         resultAge: 0,
         sourceFreshness: FRESHNESS,
         quota: QUOTA,
+        credential: CREDENTIAL,
         currencyLabel: "USD",
       }),
     );

@@ -6,13 +6,71 @@ import {
   useState,
 } from "react";
 import type { MouseEvent, ReactNode } from "react";
-import type { BffError } from "../../../src/errors";
+import type { BffError, BffOk } from "../../../src/errors";
 import type {
   AddSiteResult,
   DeleteSiteResult,
-  Site,
+  ListSitesResult,
 } from "../../../../src/types";
 import { fetchSites, requestTool, userIntent } from "../data/client";
+
+/**
+ * `domain-google-credentials` Phase 6. `Site` alone (the bare `siteSchema`
+ * shape) is stale — every `list_sites` row has carried a `credential`
+ * object since Phase 3 (`src/schemas/sites.ts#listSitesResultSchema`).
+ * Derived from the already-imported `ListSitesResult` rather than a
+ * hand-rolled duplicate shape, so this type can never drift from the real
+ * schema.
+ */
+export type SiteWithCredential = ListSitesResult["sites"][number];
+export type PresentedHealth =
+  SiteWithCredential["credential"]["health"]["searchConsole"];
+
+/**
+ * `site-google-credentials`'s "An unhealthy site cannot be selected"
+ * scenario, restated for the UI: only a `"healthy"` Search Console
+ * resolution is selectable at all — `"stale"`/`"unchecked"` still require a
+ * probe the dashboard cannot itself run (Manage Domains' "Recheck" action
+ * does that), and `"unhealthy"`/`"not_connected"` are definitively unusable.
+ */
+export function isSiteSelectable(site: SiteWithCredential): boolean {
+  return site.credential.health.searchConsole.state === "healthy";
+}
+
+/**
+ * Human-readable health label, shared by `App.tsx`'s domain selector (task
+ * 6.4's "reason in the accessible name") and `ManageDomainsContainer`'s
+ * status column (task 6.1's "two distinct elements... never one element
+ * conflating both") — both need the SAME wording for the SAME state so a
+ * user does not learn two different vocabularies for one fact.
+ */
+export function describeHealthState(health: PresentedHealth): string {
+  switch (health.state) {
+    case "healthy":
+      return "Healthy";
+    case "not_connected":
+      return "Not connected";
+    case "unchecked":
+      return "Not yet verified";
+    case "stale":
+      return "Needs a fresh check";
+    case "unhealthy":
+      return health.reason ? `Unhealthy: ${health.reason}` : "Unhealthy";
+  }
+}
+
+export function describeCredentialTier(
+  tier: SiteWithCredential["credential"]["tier"],
+): string {
+  switch (tier) {
+    case "site":
+      return "Connected";
+    case "global":
+      return "Using shared account";
+    case "none":
+      return "Not connected";
+  }
+}
 
 const STORAGE_KEY = "seo-mcp:active-site";
 
@@ -40,7 +98,7 @@ function writeStoredActiveSite(url: string | null): void {
 }
 
 export interface SiteContextValue {
-  readonly sites: readonly Site[];
+  readonly sites: readonly SiteWithCredential[];
   readonly activeSite: string | null;
   readonly setActiveSite: (url: string | null) => void;
   readonly refreshSites: () => Promise<void>;
@@ -50,6 +108,14 @@ export interface SiteContextValue {
     label?: string,
   ) => Promise<{ readonly ok: boolean; readonly error?: BffError }>;
   readonly deleteSite: (
+    event: MouseEvent<HTMLButtonElement>,
+    siteId: number,
+  ) => Promise<boolean>;
+  readonly disconnectSite: (
+    event: MouseEvent<HTMLButtonElement>,
+    siteId: number,
+  ) => Promise<boolean>;
+  readonly recheckSite: (
     event: MouseEvent<HTMLButtonElement>,
     siteId: number,
   ) => Promise<boolean>;
@@ -69,17 +135,33 @@ const SiteContext = createContext<SiteContextValue | null>(null);
  * or `null` when the list is empty.
  */
 export function SiteProvider({ children }: { readonly children: ReactNode }) {
-  const [sites, setSites] = useState<readonly Site[]>([]);
+  const [sites, setSites] = useState<readonly SiteWithCredential[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<BffError | null>(null);
   const [activeSite, setActiveSiteState] = useState<string | null>(
     readStoredActiveSite,
   );
 
-  const setActiveSite = useCallback((url: string | null) => {
-    setActiveSiteState(url);
-    writeStoredActiveSite(url);
-  }, []);
+  /**
+   * `site-google-credentials`'s "An unhealthy site cannot be selected"
+   * scenario: a selection attempt naming a site that is not currently
+   * `isSiteSelectable` is rejected outright — `activeSite` does not change.
+   * `url === null` (clearing the selection) is always allowed, and a `url`
+   * absent from the current `sites` list (should not happen — the selector
+   * only offers known sites) fails open rather than silently rejecting a
+   * selection this function cannot explain.
+   */
+  const setActiveSite = useCallback(
+    (url: string | null) => {
+      if (url !== null) {
+        const site = sites.find((candidate) => candidate.url === url);
+        if (site && !isSiteSelectable(site)) return;
+      }
+      setActiveSiteState(url);
+      writeStoredActiveSite(url);
+    },
+    [sites],
+  );
 
   const refreshSites = useCallback(async () => {
     setLoading(true);
@@ -137,6 +219,54 @@ export function SiteProvider({ children }: { readonly children: ReactNode }) {
     [],
   );
 
+  /**
+   * `site-google-credentials`'s disconnect confirm-gate (`confirm: true`,
+   * same as `deleteSite` above) via the BFF's own explicitly-registered
+   * disconnect route (`POST /api/tools/disconnect_google_account`, never
+   * the generic tool-proxy path). Unlike `deleteSite`, the row is not
+   * spliced locally — disconnecting changes `credential.tier`/`health`
+   * server-side (re-resolves to `"global"` or `"none"`), which only a
+   * fresh `list_sites` fetch can reflect.
+   */
+  const disconnectSite = useCallback<SiteContextValue["disconnectSite"]>(
+    async (event, siteId) => {
+      const intent = userIntent(event);
+      const response = (await requestTool<{ readonly disconnected: boolean }>(
+        "disconnect_google_account",
+        { siteId, confirm: true },
+        intent,
+        { signal: new AbortController().signal, postJson: true },
+      )) as BffOk<{ readonly disconnected: boolean }> | { error: BffError };
+      if ("error" in response || !response.data.disconnected) return false;
+      await refreshSites();
+      return true;
+    },
+    [refreshSites],
+  );
+
+  /**
+   * Manage Domains' "Recheck" action — `POST /api/tools/check_site_credentials`
+   * with `forceRecheck: true`, bypassing the 6-hour health TTL (spec's
+   * "Manual recheck clears an invalid state without a new OAuth round-trip").
+   * Refetches `sites` on success so the row's health reflects the fresh
+   * probe outcome immediately.
+   */
+  const recheckSite = useCallback<SiteContextValue["recheckSite"]>(
+    async (event, siteId) => {
+      const intent = userIntent(event);
+      const response = (await requestTool<Record<string, unknown>>(
+        "check_site_credentials",
+        { siteId, forceRecheck: true },
+        intent,
+        { signal: new AbortController().signal, postJson: true },
+      )) as BffOk<Record<string, unknown>> | { error: BffError };
+      if ("error" in response) return false;
+      await refreshSites();
+      return true;
+    },
+    [refreshSites],
+  );
+
   return (
     <SiteContext.Provider
       value={{
@@ -146,6 +276,8 @@ export function SiteProvider({ children }: { readonly children: ReactNode }) {
         refreshSites,
         addSite,
         deleteSite,
+        disconnectSite,
+        recheckSite,
         loading,
         error,
       }}

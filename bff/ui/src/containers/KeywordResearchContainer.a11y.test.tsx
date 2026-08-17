@@ -39,6 +39,7 @@ const METRICS_ENVELOPE = {
     budget: 100,
     basis: "bff-observed",
   },
+  credential: { source: "global", accountLabel: null },
   currencyLabel: "USD",
 };
 
