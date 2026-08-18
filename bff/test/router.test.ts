@@ -444,6 +444,90 @@ describe("router — discover_keywords input validation (keyword-research-view, 
   });
 });
 
+describe("router — get_keyword_metrics/discover_keywords bind to the active site via a transport header, not a tool argument (Threat Matrix row g)", () => {
+  function authenticatedFakeEnv(fetchSpy: ReturnType<typeof vi.fn>) {
+    return fakeEnv({
+      RESULT_CACHE: undefined,
+      AUTH_SOURCE_BUDGET: { "search-console": 300, "google-ads": 100 },
+      AUTH_SOURCE_TTL_SECONDS: {
+        "search-console": { closed: 21600, open: 900 },
+        "google-ads": { closed: 21600, open: 21600 },
+      },
+      SEO_MCP: { fetch: fetchSpy } as unknown as Fetcher,
+    });
+  }
+
+  function fetchSpyReturning() {
+    return vi.fn(async (_request: Request) =>
+      Response.json({
+        jsonrpc: "2.0",
+        id: "1",
+        result: {
+          structuredContent: { customerId: "123", count: 0, keywords: [] },
+        },
+      }),
+    );
+  }
+
+  it("forwards siteUrl as the x-seo-active-site header and strips it from the tools/call argument payload", async () => {
+    const fetchSpy = fetchSpyReturning();
+    const env = authenticatedFakeEnv(fetchSpy);
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/get_keyword_metrics?keywords=seo&siteUrl=sc-domain%3Aexample.com",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(200);
+
+    const [upstreamRequest] = fetchSpy.mock.calls[0] as [Request];
+    expect(upstreamRequest.headers.get("x-seo-active-site")).toBe(
+      "sc-domain:example.com",
+    );
+    const upstreamBody = JSON.parse(await upstreamRequest.clone().text()) as {
+      params: { arguments: Record<string, unknown> };
+    };
+    expect(upstreamBody.params.arguments).not.toHaveProperty("siteUrl");
+  });
+
+  it("omits the header and leaves the argument payload unchanged when no siteUrl is given", async () => {
+    const fetchSpy = fetchSpyReturning();
+    const env = authenticatedFakeEnv(fetchSpy);
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/get_keyword_metrics?keywords=seo",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(200);
+
+    const [upstreamRequest] = fetchSpy.mock.calls[0] as [Request];
+    expect(upstreamRequest.headers.get("x-seo-active-site")).toBeNull();
+    const upstreamBody = JSON.parse(await upstreamRequest.clone().text()) as {
+      params: { arguments: Record<string, unknown> };
+    };
+    expect(upstreamBody.params.arguments).not.toHaveProperty("siteUrl");
+  });
+
+  it("discover_keywords also forwards siteUrl as the header and strips it from the argument payload", async () => {
+    const fetchSpy = fetchSpyReturning();
+    const env = authenticatedFakeEnv(fetchSpy);
+    const request = await authenticatedRequest(
+      env,
+      "/api/tools/discover_keywords?seedKeywords=seo&siteUrl=sc-domain%3Aexample.com",
+    );
+    const response = await handleRequest(request, env);
+    expect(response.status).toBe(200);
+
+    const [upstreamRequest] = fetchSpy.mock.calls[0] as [Request];
+    expect(upstreamRequest.headers.get("x-seo-active-site")).toBe(
+      "sc-domain:example.com",
+    );
+    const upstreamBody = JSON.parse(await upstreamRequest.clone().text()) as {
+      params: { arguments: Record<string, unknown> };
+    };
+    expect(upstreamBody.params.arguments).not.toHaveProperty("siteUrl");
+  });
+});
+
 describe("router — cluster_keywords input validation (keyword-research-view, PR8)", () => {
   it("rejects a request missing the required keywords list", async () => {
     const env = fakeEnv();

@@ -1,7 +1,10 @@
 import type * as z from "zod/v4";
 import { LIMITS, type Env } from "../config";
 import { getGoogleAccessToken } from "./auth";
-import { globalCredentials } from "./credential-types";
+import {
+  globalCredentials,
+  type GoogleOAuthCredentials,
+} from "./credential-types";
 import {
   keywordMetricSchema,
   keywordMetricsResultSchema,
@@ -58,6 +61,7 @@ async function adsPost(
   body: Record<string, unknown>,
   fetcher: typeof fetch = fetch,
   now?: () => number,
+  credentials?: GoogleOAuthCredentials,
 ): Promise<{ customerId: string; data: { results?: Array<unknown> } }> {
   if (!env.GOOGLE_ADS_DEVELOPER_TOKEN) {
     throw new Error("Google Ads developer token is not configured");
@@ -69,11 +73,13 @@ async function adsPost(
   }
   const customerId = rawCustomerId.replace(/\D/g, "");
 
-  // Ads tools have no `siteUrl` in this change's scope — always the global
-  // (app-level) tier; the developer token / customer-ID fallback stay on
-  // `env` since those are app-level, not per-account.
+  // The developer token / customer-ID fallback stay on `env` regardless of
+  // which credential tier resolves the OAuth token — those are app-level,
+  // never per-account. `credentials` defaults to the global (app-level)
+  // tier when the caller doesn't resolve a site-scoped one (Threat Matrix
+  // row g).
   const token = await getGoogleAccessToken(
-    globalCredentials(env),
+    credentials ?? globalCredentials(env),
     fetcher,
     now,
   );
@@ -144,6 +150,7 @@ export async function getKeywordMetrics(
   env: Env,
   fetcher: typeof fetch = fetch,
   now?: () => number,
+  credentials?: GoogleOAuthCredentials,
 ): Promise<KeywordMetricsResult> {
   const geoTargetConstants = (params.geoTargetIds ?? [DEFAULT_GEO_TARGET]).map(
     (id) => `geoTargetConstants/${id}`,
@@ -163,6 +170,7 @@ export async function getKeywordMetrics(
     body,
     fetcher,
     now,
+    credentials,
   );
 
   const keywords = ((data.results ?? []) as HistoricalResult[]).map((r) =>
@@ -186,6 +194,7 @@ export async function discoverKeywords(
   env: Env,
   fetcher: typeof fetch = fetch,
   now?: () => number,
+  credentials?: GoogleOAuthCredentials,
 ): Promise<KeywordMetricsResult> {
   const hasKeywords = !!params.seedKeywords && params.seedKeywords.length > 0;
   const hasUrl = !!params.seedUrl;
@@ -221,6 +230,7 @@ export async function discoverKeywords(
     body,
     fetcher,
     now,
+    credentials,
   );
 
   const keywords = ((data.results ?? []) as IdeaResult[])

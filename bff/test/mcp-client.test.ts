@@ -56,6 +56,46 @@ describe("callTool — token injection", () => {
   });
 });
 
+describe("callTool — active-site header injection (Threat Matrix row g)", () => {
+  it("sets x-seo-active-site on the SEO_MCP fetch when activeSiteUrl is provided", async () => {
+    const dependencies = fakeDependencies(
+      () =>
+        jsonRpcResult({
+          structuredContent: {
+            status: "ok",
+            service: "seo-mcp",
+            version: "0.1.0",
+          },
+        }),
+      { activeSiteUrl: "sc-domain:example.com" },
+    );
+    await callTool("health", {}, healthSchema, dependencies);
+    const [upstreamRequest] = (
+      dependencies.seoMcp.fetch as ReturnType<typeof vi.fn>
+    ).mock.calls[0] as [Request];
+    expect(upstreamRequest.headers.get("x-seo-active-site")).toBe(
+      "sc-domain:example.com",
+    );
+  });
+
+  it("omits x-seo-active-site entirely when activeSiteUrl is absent, unchanged from before", async () => {
+    const dependencies = fakeDependencies(() =>
+      jsonRpcResult({
+        structuredContent: {
+          status: "ok",
+          service: "seo-mcp",
+          version: "0.1.0",
+        },
+      }),
+    );
+    await callTool("health", {}, healthSchema, dependencies);
+    const [upstreamRequest] = (
+      dependencies.seoMcp.fetch as ReturnType<typeof vi.fn>
+    ).mock.calls[0] as [Request];
+    expect(upstreamRequest.headers.get("x-seo-active-site")).toBeNull();
+  });
+});
+
 describe("callTool — structuredContent re-validation", () => {
   it("returns the validated result when structuredContent conforms to the shared schema", async () => {
     const dependencies = fakeDependencies(() =>

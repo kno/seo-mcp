@@ -24,8 +24,18 @@ type ToolHandle = {
   }>;
 };
 
+// `get_keyword_metrics`/`discover_keywords` now resolve credentials via
+// `resolveSiteCredentials` before calling the (mocked) `getKeywordMetrics`/
+// `discoverKeywords` — an env with no Google credentials at all would throw
+// there before ever reaching the mock this suite exercises.
+const GLOBAL_ENV = {
+  GOOGLE_CLIENT_ID: "global-client-id",
+  GOOGLE_CLIENT_SECRET: "global-client-secret",
+  GOOGLE_REFRESH_TOKEN: "global-refresh-token",
+};
+
 function registeredTool(name: string): ToolHandle {
-  const server = buildServer({});
+  const server = buildServer(GLOBAL_ENV);
   return (server as unknown as { _registeredTools: Record<string, ToolHandle> })
     ._registeredTools[name];
 }

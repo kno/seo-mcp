@@ -401,11 +401,18 @@ const optionalGeoTargetIdsSchema = z
   .pipe(z.array(z.string()).optional());
 
 // Mirrors `src/server.ts`'s `get_keyword_metrics` inputSchema exactly.
+// `siteUrl` is BFF-level only (Threat Matrix row g, `design.md`'s "Decision:
+// Ads binds to the active site via a transport header, not a new tool
+// param") — `dispatchAuthenticated()` strips it before forwarding args to
+// the actual `tools/call` payload, whose `get_keyword_metrics` inputSchema
+// has no such field, and instead carries it as the `x-seo-active-site`
+// header.
 const getKeywordMetricsInputSchema = z.object({
   keywords: requiredKeywordListSchema(100),
   geoTargetIds: optionalGeoTargetIdsSchema,
   languageId: z.string().optional(),
   customerId: z.string().optional(),
+  siteUrl: z.string().optional(),
 });
 
 // Mirrors `src/server.ts`'s `discover_keywords` inputSchema exactly. The
@@ -421,6 +428,8 @@ const discoverKeywordsInputSchema = z.object({
   languageId: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
   customerId: z.string().optional(),
+  // Same `siteUrl` header-binding as `getKeywordMetricsInputSchema` above.
+  siteUrl: z.string().optional(),
 });
 
 // Mirrors `src/server.ts`'s `cluster_keywords` inputSchema exactly. Not
@@ -693,13 +702,10 @@ async function dispatchAuthenticated(
 
   // `domain-google-credentials`, Phase 5: resolved BEFORE the cache key, so
   // the key itself can be scoped by the account that will answer the call
-  // (`account-scope.ts`'s doc comment — the second cross-account leak). Only
-  // routes with a `siteUrl` argument are site-scoped at all today —
-  // `get_keyword_metrics`/`discover_keywords` have none yet (threat matrix
-  // row g, deferred), so they resolve `resolveAccountForRoute`'s
-  // `siteUrl === undefined` fallback, unchanged from their pre-Phase-5
-  // behavior in every observable way except carrying the new `credential`
-  // envelope field.
+  // (`account-scope.ts`'s doc comment — the second cross-account leak).
+  // `get_keyword_metrics`/`discover_keywords` (Threat Matrix row g) now also
+  // carry a `siteUrl`, but bind to it via the `x-seo-active-site` transport
+  // header rather than a tool argument — see the args-stripping below.
   const siteUrl = typeof args.siteUrl === "string" ? args.siteUrl : undefined;
   const account = await resolveAccountForRoute(env.RESULT_CACHE, siteUrl, {
     seoMcp: env.SEO_MCP,
@@ -747,6 +753,19 @@ async function dispatchAuthenticated(
     ? classifyUpstreamFailure
     : classifyStorageFailure;
 
+  // `get_keyword_metrics`/`discover_keywords`'s actual MCP `inputSchema` has
+  // no `siteUrl` field (Threat Matrix row g) — forwarding it as a tool
+  // argument would be a silent no-op there, but the invariant this change
+  // must hold is that the `tools/call` payload is byte-identical to before,
+  // so it is stripped here rather than relying on the callee to ignore it.
+  const toolArgs =
+    (toolName === "get_keyword_metrics" || toolName === "discover_keywords") &&
+    "siteUrl" in args
+      ? Object.fromEntries(
+          Object.entries(args).filter(([k]) => k !== "siteUrl"),
+        )
+      : args;
+
   // `route.schema` is typed as the UNION of every published schema (so the
   // registry can only ever hold a schema literal imported from
   // `src/types/schemas.ts`, per `registry.ts`'s doc comment) — narrowing it
@@ -754,12 +773,13 @@ async function dispatchAuthenticated(
   // behavior is unaffected: `callTool` still re-validates the real
   // `structuredContent` against this exact schema value.
   const callUpstream = () =>
-    callTool(toolName, args, route.schema as z.ZodType<unknown>, {
+    callTool(toolName, toolArgs, route.schema as z.ZodType<unknown>, {
       seoMcp: env.SEO_MCP,
       mcpOrigin: env.MCP_ORIGIN,
       token: env.MCP_AUTH_TOKEN,
       timeoutMs: route.timeoutMs,
       validateUpstreamResults: validateUpstreamResultsFlag(env),
+      ...(siteUrl ? { activeSiteUrl: siteUrl } : {}),
       classifyFailureText,
       keyHash: key,
     });

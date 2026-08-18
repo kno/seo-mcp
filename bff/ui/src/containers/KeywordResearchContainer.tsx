@@ -7,6 +7,7 @@ import type {
 } from "../../../../src/types";
 import type { SourceFreshness } from "../../../src/authenticated/freshness";
 import { requestTool, userIntent } from "../data/client";
+import { useActiveSite } from "../app/SiteContext";
 import { StateRegion } from "../molecules/StateRegion";
 import type { RegionState } from "../molecules/StateRegion";
 import { SourceFreshnessBadge } from "../molecules/SourceFreshnessBadge";
@@ -75,6 +76,7 @@ function joinIfPresent(
 }
 
 function MetricsTab() {
+  const activeSite = useActiveSite();
   const [state, setState] = useState<RegionState | null>(null);
   const [result, setResult] = useState<KeywordMetricsResult | null>(null);
   const [freshness, setFreshness] = useState<SourceFreshness | null>(null);
@@ -115,6 +117,7 @@ function MetricsTab() {
     if (geoTargetIds !== undefined) args.geoTargetIds = geoTargetIds;
     if (input.languageId !== undefined) args.languageId = input.languageId;
     if (input.customerId !== undefined) args.customerId = input.customerId;
+    if (activeSite) args.siteUrl = activeSite;
 
     const response = (await requestTool<KeywordMetricsResult>(
       "get_keyword_metrics",
@@ -177,6 +180,7 @@ function DiscoverTab({
 }: {
   readonly onDiscovered: (keywords: readonly string[]) => void;
 }) {
+  const activeSite = useActiveSite();
   const [state, setState] = useState<RegionState | null>(null);
   const [result, setResult] = useState<KeywordMetricsResult | null>(null);
   const [freshness, setFreshness] = useState<SourceFreshness | null>(null);
@@ -219,6 +223,7 @@ function DiscoverTab({
     if (input.languageId !== undefined) args.languageId = input.languageId;
     if (input.limit !== undefined) args.limit = input.limit;
     if (input.customerId !== undefined) args.customerId = input.customerId;
+    if (activeSite) args.siteUrl = activeSite;
 
     const response = (await requestTool<KeywordMetricsResult>(
       "discover_keywords",

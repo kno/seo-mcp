@@ -74,6 +74,13 @@ export interface McpClientDependencies {
    * `tool_failed` mapping unchanged.
    */
   classifyFailureText?: (text: string) => BffErrorCode;
+  /**
+   * Threat Matrix row g: the currently-selected site's URL, carried as the
+   * `x-seo-active-site` transport header rather than a tool argument — see
+   * `router.ts#dispatchAuthenticated`'s doc comment. Omitted entirely
+   * (never an empty header) when absent or empty.
+   */
+  activeSiteUrl?: string;
 }
 
 /** Emits one structured `bff.upstream` log line per upstream call — the
@@ -189,6 +196,9 @@ async function performCall<T>(
             "content-type": "application/json",
             accept: "application/json, text/event-stream",
             authorization: `Bearer ${dependencies.token}`,
+            ...(dependencies.activeSiteUrl
+              ? { "x-seo-active-site": dependencies.activeSiteUrl }
+              : {}),
           },
           body: JSON.stringify({
             jsonrpc: "2.0",

@@ -22,7 +22,10 @@ export default {
         response = await protectMcpRequest(request, env, async () => {
           const bounded = await boundMcpRequest(request);
           if (bounded.response) return bounded.response;
-          return createMcpHandler(() => buildServer(env)).fetch(
+          const activeSiteUrl =
+            bounded.request.headers.get("x-seo-active-site") ?? undefined;
+          const requestContext = activeSiteUrl ? { activeSiteUrl } : undefined;
+          return createMcpHandler(() => buildServer(env, requestContext)).fetch(
             bounded.request,
           );
         });

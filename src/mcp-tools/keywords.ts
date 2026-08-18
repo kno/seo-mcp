@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import type { Env } from "../config";
 import { getKeywordMetrics, discoverKeywords } from "../google/ads";
+import { resolveSiteCredentials } from "../google/credentials";
 import { clusterKeywords } from "../seo/keywords";
 import {
   keywordMetricsResultSchema,
@@ -9,7 +10,15 @@ import {
 } from "../schemas/keywords";
 import { jsonResult, errorResult } from "./shared";
 
-export function registerKeywordsTools(server: McpServer, env: Env): void {
+export interface KeywordsRequestContext {
+  activeSiteUrl?: string;
+}
+
+export function registerKeywordsTools(
+  server: McpServer,
+  env: Env,
+  requestContext?: KeywordsRequestContext,
+): void {
   server.registerTool(
     "get_keyword_metrics",
     {
@@ -25,11 +34,18 @@ export function registerKeywordsTools(server: McpServer, env: Env): void {
     },
     async ({ keywords, geoTargetIds, languageId, customerId }) => {
       try {
+        const { credentials } = await resolveSiteCredentials(
+          env,
+          requestContext?.activeSiteUrl,
+        );
         return jsonResult(
           keywordMetricsResultSchema,
           await getKeywordMetrics(
             { keywords, geoTargetIds, languageId, customerId },
             env,
+            undefined,
+            undefined,
+            credentials,
           ),
         );
       } catch (e) {
@@ -62,6 +78,10 @@ export function registerKeywordsTools(server: McpServer, env: Env): void {
       customerId,
     }) => {
       try {
+        const { credentials } = await resolveSiteCredentials(
+          env,
+          requestContext?.activeSiteUrl,
+        );
         return jsonResult(
           keywordMetricsResultSchema,
           await discoverKeywords(
@@ -74,6 +94,9 @@ export function registerKeywordsTools(server: McpServer, env: Env): void {
               customerId,
             },
             env,
+            undefined,
+            undefined,
+            credentials,
           ),
         );
       } catch (e) {
