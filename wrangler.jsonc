@@ -2,6 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "seo-mcp",
   "main": "src/index.ts",
+  "routes": [{ "pattern": "seo-mcp.aitsai.com", "custom_domain": true }],
   "compatibility_date": "2026-08-10",
   "ratelimits": [
     {

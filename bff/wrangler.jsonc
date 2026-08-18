@@ -2,6 +2,7 @@
   "$schema": "../node_modules/wrangler/config-schema.json",
   "name": "seo-dashboard-bff",
   "main": "src/index.ts",
+  "routes": [{ "pattern": "seo-dashboard.aitsai.com", "custom_domain": true }],
   "compatibility_date": "2026-08-10",
   "services": [
     {
