@@ -21,8 +21,9 @@
  */
 import { LIMITS } from "../config";
 import type { Env } from "../config";
-import { getGoogleAccessToken } from "./auth";
+import { getGoogleAccessToken, GoogleAuthError } from "./auth";
 import { resolveSiteCredentials } from "./credentials";
+import { SearchConsoleHttpError } from "./search-console";
 import type {
   GoogleOAuthCredentials,
   ResolvedCredential,
@@ -378,6 +379,72 @@ export async function recordAuthenticatedCallFailure(
     unhealthyOutcome(reason, detail),
     now,
   );
+}
+
+/**
+ * True only for a failure that is itself evidence the credential is bad
+ * (a rejected refresh token, or Search Console returning 401/403) — never
+ * for a network timeout or a malformed-query 400, which say nothing about
+ * credential validity.
+ */
+export function isCredentialRejectedError(error: unknown): boolean {
+  if (error instanceof GoogleAuthError) return true;
+  if (error instanceof SearchConsoleHttpError) {
+    return error.status === 401 || error.status === 403;
+  }
+  return false;
+}
+
+/**
+ * Wraps a real Search Console/Ads call so its own outcome updates credential
+ * health, per this file's header comment — purely additive: the wrapped
+ * call's result/error is always returned/re-thrown unchanged, and a
+ * health-recording write is never allowed to fail the call itself.
+ * `site` is `null` when there is no site to attribute the outcome to (no D1,
+ * or the resolution fell through to the global tier).
+ */
+export async function withCallHealthTracking<T>(
+  db: D1Database | undefined,
+  site: { id: number } | null,
+  source: CredentialHealthSource,
+  resolved: ResolvedCredential,
+  fn: () => Promise<T>,
+  now: () => number = Date.now,
+): Promise<T> {
+  try {
+    const result = await fn();
+    if (db && site) {
+      try {
+        await recordAuthenticatedCallSuccess(
+          db,
+          site.id,
+          source,
+          resolved,
+          now,
+        );
+      } catch {
+        // A health-tracking hiccup must never turn a successful call into a failure.
+      }
+    }
+    return result;
+  } catch (error) {
+    if (db && site && isCredentialRejectedError(error)) {
+      try {
+        await recordAuthenticatedCallFailure(
+          db,
+          site.id,
+          source,
+          resolved,
+          "credential_rejected",
+          error instanceof Error ? error.message : null,
+          now,
+        );
+      } catch {
+        // A health-tracking hiccup must never mask the original error.
+      }
+    }
+    throw error;
+  }
 }
 
 // ---------------------------------------------------------------------------

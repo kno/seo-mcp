@@ -2,6 +2,9 @@ import { McpServer } from "@modelcontextprotocol/server";
 import * as z from "zod/v4";
 import type { Env } from "../config";
 import { resolveSiteCredentials } from "../google/credentials";
+import { withCallHealthTracking } from "../google/health";
+import { getSiteByUrl } from "../db/site-store";
+import type { ResolvedCredential } from "../google/credential-types";
 import {
   findKeywordCannibalization,
   findSeoOpportunities,
@@ -20,6 +23,16 @@ import {
 import { domainReportSchema } from "../schemas/domain-report";
 import { jsonResult, errorResult } from "./shared";
 
+/** Mirrors `search-console.ts`'s `siteForHealth` — see its doc comment. */
+async function siteForHealth(
+  env: Env,
+  siteUrl: string,
+  resolved: ResolvedCredential,
+) {
+  if (!env.DB || resolved.source !== "site") return null;
+  return getSiteByUrl(env.DB, siteUrl);
+}
+
 export function registerIntelligenceTools(server: McpServer, env: Env): void {
   server.registerTool(
     "find_keyword_cannibalization",
@@ -37,12 +50,20 @@ export function registerIntelligenceTools(server: McpServer, env: Env): void {
     },
     async ({ siteUrl, startDate, endDate, minImpressions, limit }) => {
       try {
-        const { credentials } = await resolveSiteCredentials(env, siteUrl);
+        const resolved = await resolveSiteCredentials(env, siteUrl);
+        const site = await siteForHealth(env, siteUrl, resolved);
         return jsonResult(
           findKeywordCannibalizationResultSchema,
-          await findKeywordCannibalization(
-            { siteUrl, startDate, endDate, minImpressions, limit },
-            credentials,
+          await withCallHealthTracking(
+            env.DB,
+            site,
+            "search-console",
+            resolved,
+            () =>
+              findKeywordCannibalization(
+                { siteUrl, startDate, endDate, minImpressions, limit },
+                resolved.credentials,
+              ),
           ),
         );
       } catch (e) {
@@ -66,12 +87,20 @@ export function registerIntelligenceTools(server: McpServer, env: Env): void {
     },
     async ({ siteUrl, startDate, endDate, limit }) => {
       try {
-        const { credentials } = await resolveSiteCredentials(env, siteUrl);
+        const resolved = await resolveSiteCredentials(env, siteUrl);
+        const site = await siteForHealth(env, siteUrl, resolved);
         return jsonResult(
           findSeoOpportunitiesResultSchema,
-          await findSeoOpportunities(
-            { siteUrl, startDate, endDate, limit },
-            credentials,
+          await withCallHealthTracking(
+            env.DB,
+            site,
+            "search-console",
+            resolved,
+            () =>
+              findSeoOpportunities(
+                { siteUrl, startDate, endDate, limit },
+                resolved.credentials,
+              ),
           ),
         );
       } catch (e) {
@@ -96,12 +125,20 @@ export function registerIntelligenceTools(server: McpServer, env: Env): void {
     },
     async ({ siteUrl, startDate, endDate, limit, topQueriesPerPage }) => {
       try {
-        const { credentials } = await resolveSiteCredentials(env, siteUrl);
+        const resolved = await resolveSiteCredentials(env, siteUrl);
+        const site = await siteForHealth(env, siteUrl, resolved);
         return jsonResult(
           mapKeywordsToPagesResultSchema,
-          await mapKeywordsToPagesForSite(
-            { siteUrl, startDate, endDate, limit, topQueriesPerPage },
-            credentials,
+          await withCallHealthTracking(
+            env.DB,
+            site,
+            "search-console",
+            resolved,
+            () =>
+              mapKeywordsToPagesForSite(
+                { siteUrl, startDate, endDate, limit, topQueriesPerPage },
+                resolved.credentials,
+              ),
           ),
         );
       } catch (e) {
@@ -134,12 +171,27 @@ export function registerIntelligenceTools(server: McpServer, env: Env): void {
       limit,
     }) => {
       try {
-        const { credentials } = await resolveSiteCredentials(env, siteUrl);
+        const resolved = await resolveSiteCredentials(env, siteUrl);
+        const site = await siteForHealth(env, siteUrl, resolved);
         return jsonResult(
           findContentGapsResultSchema,
-          await findContentGapsForSite(
-            { siteUrl, startDate, endDate, minPosition, minImpressions, limit },
-            credentials,
+          await withCallHealthTracking(
+            env.DB,
+            site,
+            "search-console",
+            resolved,
+            () =>
+              findContentGapsForSite(
+                {
+                  siteUrl,
+                  startDate,
+                  endDate,
+                  minPosition,
+                  minImpressions,
+                  limit,
+                },
+                resolved.credentials,
+              ),
           ),
         );
       } catch (e) {

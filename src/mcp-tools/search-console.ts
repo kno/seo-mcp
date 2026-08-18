@@ -3,6 +3,9 @@ import * as z from "zod/v4";
 import { LIMITS, type Env } from "../config";
 import { searchConsoleQuery } from "../google/search-console";
 import { resolveSiteCredentials } from "../google/credentials";
+import { withCallHealthTracking } from "../google/health";
+import { getSiteByUrl } from "../db/site-store";
+import type { ResolvedCredential } from "../google/credential-types";
 import {
   findStrikingDistanceKeywords,
   findLowCtrOpportunities,
@@ -24,6 +27,21 @@ import {
   deleteSearchConsoleSnapshotResultSchema,
 } from "../schemas/gsc-snapshots";
 import { jsonResult, errorResult, assertConfirmedDelete } from "./shared";
+
+/**
+ * Real Search Console call's own outcome updates credential health per
+ * `health.ts`'s header comment — only when there is a site-tier credential
+ * to attribute it to (`getSiteByUrl` returns `null` for a global-tier
+ * resolution, which has no `siteId`).
+ */
+async function siteForHealth(
+  env: Env,
+  siteUrl: string,
+  resolved: ResolvedCredential,
+) {
+  if (!env.DB || resolved.source !== "site") return null;
+  return getSiteByUrl(env.DB, siteUrl);
+}
 
 export function registerSearchConsoleTools(server: McpServer, env: Env): void {
   server.registerTool(
@@ -58,12 +76,20 @@ export function registerSearchConsoleTools(server: McpServer, env: Env): void {
     },
     async ({ siteUrl, startDate, endDate, dimensions, rowLimit }) => {
       try {
-        const { credentials } = await resolveSiteCredentials(env, siteUrl);
+        const resolved = await resolveSiteCredentials(env, siteUrl);
+        const site = await siteForHealth(env, siteUrl, resolved);
         return jsonResult(
           gscQueryResultSchema,
-          await searchConsoleQuery(
-            { siteUrl, startDate, endDate, dimensions, rowLimit },
-            credentials,
+          await withCallHealthTracking(
+            env.DB,
+            site,
+            "search-console",
+            resolved,
+            () =>
+              searchConsoleQuery(
+                { siteUrl, startDate, endDate, dimensions, rowLimit },
+                resolved.credentials,
+              ),
           ),
         );
       } catch (error) {
@@ -98,20 +124,28 @@ export function registerSearchConsoleTools(server: McpServer, env: Env): void {
       limit,
     }) => {
       try {
-        const { credentials } = await resolveSiteCredentials(env, siteUrl);
+        const resolved = await resolveSiteCredentials(env, siteUrl);
+        const site = await siteForHealth(env, siteUrl, resolved);
         return jsonResult(
           opportunityResultSchema,
-          await findStrikingDistanceKeywords(
-            {
-              siteUrl,
-              startDate,
-              endDate,
-              minPosition,
-              maxPosition,
-              minImpressions,
-              limit,
-            },
-            credentials,
+          await withCallHealthTracking(
+            env.DB,
+            site,
+            "search-console",
+            resolved,
+            () =>
+              findStrikingDistanceKeywords(
+                {
+                  siteUrl,
+                  startDate,
+                  endDate,
+                  minPosition,
+                  maxPosition,
+                  minImpressions,
+                  limit,
+                },
+                resolved.credentials,
+              ),
           ),
         );
       } catch (e) {
@@ -146,20 +180,28 @@ export function registerSearchConsoleTools(server: McpServer, env: Env): void {
       limit,
     }) => {
       try {
-        const { credentials } = await resolveSiteCredentials(env, siteUrl);
+        const resolved = await resolveSiteCredentials(env, siteUrl);
+        const site = await siteForHealth(env, siteUrl, resolved);
         return jsonResult(
           opportunityResultSchema,
-          await findLowCtrOpportunities(
-            {
-              siteUrl,
-              startDate,
-              endDate,
-              maxPosition,
-              minImpressions,
-              maxCtr,
-              limit,
-            },
-            credentials,
+          await withCallHealthTracking(
+            env.DB,
+            site,
+            "search-console",
+            resolved,
+            () =>
+              findLowCtrOpportunities(
+                {
+                  siteUrl,
+                  startDate,
+                  endDate,
+                  maxPosition,
+                  minImpressions,
+                  maxCtr,
+                  limit,
+                },
+                resolved.credentials,
+              ),
           ),
         );
       } catch (e) {
@@ -197,16 +239,24 @@ export function registerSearchConsoleTools(server: McpServer, env: Env): void {
       if (!env.DB)
         return errorResult(new Error("D1 storage is not configured"));
       try {
-        const { credentials } = await resolveSiteCredentials(env, siteUrl);
-        const result = await searchConsoleQuery(
-          {
-            siteUrl,
-            startDate,
-            endDate,
-            dimensions,
-            rowLimit: LIMITS.maxSnapshotRows,
-          },
-          credentials,
+        const resolved = await resolveSiteCredentials(env, siteUrl);
+        const site = await siteForHealth(env, siteUrl, resolved);
+        const result = await withCallHealthTracking(
+          env.DB,
+          site,
+          "search-console",
+          resolved,
+          () =>
+            searchConsoleQuery(
+              {
+                siteUrl,
+                startDate,
+                endDate,
+                dimensions,
+                rowLimit: LIMITS.maxSnapshotRows,
+              },
+              resolved.credentials,
+            ),
         );
         const capturedAt = new Date().toISOString();
         const { snapshotId, rowCount } = await storeGscSnapshot(env.DB, {

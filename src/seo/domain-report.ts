@@ -4,6 +4,8 @@ import { crawlSite } from "../crawl/site";
 import type { SiteCrawlResult } from "../crawl/site";
 import { findSeoOpportunities } from "./intelligence";
 import { resolveSiteCredentials } from "../google/credentials";
+import { withCallHealthTracking } from "../google/health";
+import { getSiteByUrl } from "../db/site-store";
 import {
   domainReportSchema,
   domainSearchSchema,
@@ -64,20 +66,28 @@ export async function analyzeDomain(
 
   if (params.gscProperty && params.startDate && params.endDate) {
     try {
-      const { credentials } = await resolveSiteCredentials(
-        env,
-        params.gscProperty,
-      );
-      const result = await findSeoOpportunities(
-        {
-          siteUrl: params.gscProperty,
-          startDate: params.startDate,
-          endDate: params.endDate,
-          limit: params.opportunityLimit,
-        },
-        credentials,
-        fetcher,
-        now,
+      const resolved = await resolveSiteCredentials(env, params.gscProperty);
+      const siteRow =
+        env.DB && resolved.source === "site"
+          ? await getSiteByUrl(env.DB, params.gscProperty)
+          : null;
+      const result = await withCallHealthTracking(
+        env.DB,
+        siteRow,
+        "search-console",
+        resolved,
+        () =>
+          findSeoOpportunities(
+            {
+              siteUrl: params.gscProperty!,
+              startDate: params.startDate!,
+              endDate: params.endDate!,
+              limit: params.opportunityLimit,
+            },
+            resolved.credentials,
+            fetcher,
+            now,
+          ),
       );
       search = {
         startDate: params.startDate,

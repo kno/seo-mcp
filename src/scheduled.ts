@@ -1,6 +1,8 @@
 import { LIMITS, type Env } from "./config";
 import { searchConsoleQuery } from "./google/search-console";
 import { resolveSiteCredentials } from "./google/credentials";
+import { withCallHealthTracking } from "./google/health";
+import { getSiteByUrl } from "./db/site-store";
 import { storeGscSnapshot } from "./db/gsc-store";
 
 const DAY_MS = 86_400_000;
@@ -52,18 +54,29 @@ export async function runScheduledSnapshots(
   for (const property of properties) {
     attempted += 1;
     try {
-      const { credentials } = await resolveSiteCredentials(env, property);
-      const r = await searchConsoleQuery(
-        {
-          siteUrl: property,
-          startDate,
-          endDate,
-          dimensions: ["query", "page"],
-          rowLimit: LIMITS.maxSnapshotRows,
-        },
-        credentials,
-        fetcher,
-        now,
+      const resolved = await resolveSiteCredentials(env, property);
+      const site =
+        resolved.source === "site"
+          ? await getSiteByUrl(env.DB, property)
+          : null;
+      const r = await withCallHealthTracking(
+        env.DB,
+        site,
+        "search-console",
+        resolved,
+        () =>
+          searchConsoleQuery(
+            {
+              siteUrl: property,
+              startDate,
+              endDate,
+              dimensions: ["query", "page"],
+              rowLimit: LIMITS.maxSnapshotRows,
+            },
+            resolved.credentials,
+            fetcher,
+            now,
+          ),
       );
       await storeGscSnapshot(env.DB, {
         siteUrl: property,

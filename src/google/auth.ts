@@ -2,6 +2,13 @@ import { LIMITS } from "../config";
 import type { GoogleOAuthCredentials } from "./credential-types";
 
 /**
+ * A refresh-token exchange rejected by Google (e.g. `invalid_grant` after
+ * the user revokes the OAuth grant) is always credential-shaped evidence,
+ * unlike a network timeout — see `health.ts#isCredentialRejectedError`.
+ */
+export class GoogleAuthError extends Error {}
+
+/**
  * Keyed by `credentialKey` (never exported, never leaves this module) so
  * that two distinct credential sets can never share a cached access token
  * — the cross-account token-cache leak this design closes. Bounded at
@@ -97,7 +104,7 @@ export async function getGoogleAccessToken(
       error_description?: string;
     };
     if (!response.ok) {
-      throw new Error(
+      throw new GoogleAuthError(
         data.error_description ?? data.error ?? "Google token refresh failed",
       );
     }

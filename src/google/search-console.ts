@@ -12,6 +12,20 @@ export type GscRow = z.infer<typeof gscRowSchema>;
 
 export type GscQueryResult = z.infer<typeof gscQueryResultSchema>;
 
+/**
+ * Carries the upstream HTTP status so callers can distinguish a
+ * credential-shaped rejection (401/403) from any other query failure — see
+ * `health.ts#isCredentialRejectedError`.
+ */
+export class SearchConsoleHttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
+}
+
 type GscDimension = z.infer<typeof gscDimensionSchema>;
 
 interface GscQueryParams {
@@ -70,9 +84,10 @@ export async function searchConsoleQuery(
       error?: { message?: string };
     };
     if (!response.ok) {
-      throw new Error(
+      throw new SearchConsoleHttpError(
         data.error?.message ??
           `Search Console query failed (HTTP ${response.status})`,
+        response.status,
       );
     }
     const rows: GscRow[] = (data.rows ?? [])
